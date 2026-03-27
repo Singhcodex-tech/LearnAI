@@ -37,7 +37,7 @@ if not GROQ_API_KEY:
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "llama-3.1-8b-instant"
-MAX_TOPIC_LENGTH = 200
+MAX_TOPIC_LENGTH = 200  
 
 # ---------------------------------------------------------------------------
 # In-memory session store

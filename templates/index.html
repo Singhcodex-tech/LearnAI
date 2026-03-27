@@ -246,6 +246,19 @@
     .timer-badge.warning { color: var(--gold); }
     .timer-badge.long    { color: var(--red); }
 
+    .kbd-hint {
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--text-3);
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: .25rem .55rem;
+      letter-spacing: .05em;
+      cursor: default;
+      user-select: none;
+    }
+
     /* Progress bar */
     .progress-bar-wrap {
       height: 3px;
@@ -830,6 +843,7 @@
     <div class="hud-right">
       <div class="slide-counter" id="slide-counter">1 / 10</div>
       <div class="timer-badge" id="timer-badge">⏱ 0s</div>
+      <div class="kbd-hint" title="Use arrow keys to navigate slides">← →</div>
     </div>
   </div>
 
@@ -1510,12 +1524,46 @@ function fmtTime(s) {
   return `${Math.floor(s/60)}m ${s%60}s`;
 }
 
-// Keyboard navigation (left/right arrows when quiz not active)
+// =====================================================================
+// KEYBOARD NAVIGATION — seamless arrow key slide switching
+// =====================================================================
 document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowRight' && state.quizDone && state.currentIndex < state.slides.length - 1) {
-    nextSlide();
+  // Only act when the learning screen is active
+  const learningScreen = document.getElementById('screen-learning');
+  if (!learningScreen.classList.contains('active')) return;
+
+  // Don't intercept if user is typing in an input / textarea
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+  if (e.key === 'ArrowRight') {
+    if (state.currentIndex < state.slides.length - 1) {
+      // Silently record minimal feedback so state stays consistent, then advance
+      _skipAndAdvance();
+    } else {
+      // Last slide — go to stats
+      showStats();
+    }
+  }
+
+  if (e.key === 'ArrowLeft') {
+    if (state.currentIndex > 0) {
+      stopTimer();
+      state.currentIndex--;
+      loadSlide(state.currentIndex);
+    }
   }
 });
+
+// Advance to next slide without requiring understanding or quiz
+function _skipAndAdvance() {
+  stopTimer();
+  // Mark quiz done so internal state is consistent
+  state.quizDone = true;
+  state.currentIndex++;
+  loadSlide(state.currentIndex);
+  document.getElementById('learning-body').scrollTop = 0;
+}
 </script>
 
 </body>
