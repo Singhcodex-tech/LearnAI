@@ -246,18 +246,27 @@
     .timer-badge.warning { color: var(--gold); }
     .timer-badge.long    { color: var(--red); }
 
-    .kbd-hint {
-      font-family: var(--mono);
-      font-size: .7rem;
-      color: var(--text-3);
-      background: var(--card);
+    /* ---- Slide navigation arrow buttons ---- */
+    .slide-nav-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px;
+      border-radius: 8px;
       border: 1px solid var(--border2);
-      border-radius: 6px;
-      padding: .25rem .55rem;
-      letter-spacing: .05em;
-      cursor: default;
+      background: var(--card);
+      color: var(--text-2);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .18s, border-color .18s, color .18s, opacity .18s;
+      flex-shrink: 0;
       user-select: none;
     }
+    .slide-nav-btn:hover:not(:disabled) {
+      background: var(--surface);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .slide-nav-btn:active:not(:disabled) { transform: scale(.93); }
+    .slide-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
 
     /* Progress bar */
     .progress-bar-wrap {
@@ -841,9 +850,10 @@
   <div class="hud">
     <div class="hud-topic" id="hud-topic">Topic</div>
     <div class="hud-right">
+      <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
       <div class="slide-counter" id="slide-counter">1 / 10</div>
+      <button class="slide-nav-btn" id="btn-next" onclick="navNext()" title="Next slide (→)">&#8594;</button>
       <div class="timer-badge" id="timer-badge">⏱ 0s</div>
-      <div class="kbd-hint" title="Use arrow keys to navigate slides">← →</div>
     </div>
   </div>
 
@@ -1080,6 +1090,9 @@ function loadSlide(index, overrideSlide = null) {
 
   // Scroll to top
   document.getElementById('learning-body').scrollTop = 0;
+
+  // Update nav arrow states
+  updateNavButtons();
 
   // Start timer
   startTimer();
@@ -1525,45 +1538,46 @@ function fmtTime(s) {
 }
 
 // =====================================================================
-// KEYBOARD NAVIGATION — seamless arrow key slide switching
+// VISIBLE NAV BUTTONS + KEYBOARD NAVIGATION
 // =====================================================================
-document.addEventListener('keydown', e => {
-  // Only act when the learning screen is active
-  const learningScreen = document.getElementById('screen-learning');
-  if (!learningScreen.classList.contains('active')) return;
+function updateNavButtons() {
+  const prev = document.getElementById('btn-prev');
+  const next = document.getElementById('btn-next');
+  if (!prev || !next) return;
+  prev.disabled = state.currentIndex <= 0;
+  next.disabled = state.currentIndex >= state.slides.length - 1;
+}
 
-  // Don't intercept if user is typing in an input / textarea
-  const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-  if (e.key === 'ArrowRight') {
-    if (state.currentIndex < state.slides.length - 1) {
-      // Silently record minimal feedback so state stays consistent, then advance
-      _skipAndAdvance();
-    } else {
-      // Last slide — go to stats
-      showStats();
-    }
-  }
-
-  if (e.key === 'ArrowLeft') {
-    if (state.currentIndex > 0) {
-      stopTimer();
-      state.currentIndex--;
-      loadSlide(state.currentIndex);
-    }
-  }
-});
-
-// Advance to next slide without requiring understanding or quiz
-function _skipAndAdvance() {
+function navPrev() {
+  if (state.currentIndex <= 0) return;
   stopTimer();
-  // Mark quiz done so internal state is consistent
+  state.currentIndex--;
+  loadSlide(state.currentIndex);
+  document.getElementById('learning-body').scrollTop = 0;
+  updateNavButtons();
+}
+
+function navNext() {
+  if (state.currentIndex >= state.slides.length - 1) {
+    showStats();
+    return;
+  }
+  stopTimer();
   state.quizDone = true;
   state.currentIndex++;
   loadSlide(state.currentIndex);
   document.getElementById('learning-body').scrollTop = 0;
+  updateNavButtons();
 }
+
+document.addEventListener('keydown', e => {
+  const learningScreen = document.getElementById('screen-learning');
+  if (!learningScreen || !learningScreen.classList.contains('active')) return;
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); navNext(); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); navPrev(); }
+});
 </script>
 
 </body>
