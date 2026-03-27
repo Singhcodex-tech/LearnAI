@@ -594,6 +594,157 @@ def stats(session_id):
 
 
 # ---------------------------------------------------------------------------
+# Visual generation
+# ---------------------------------------------------------------------------
+
+def generate_visual_for_slide(slide: dict, retry: bool = False) -> dict | None:
+    """
+    Decide the best visual type for a slide and return structured data
+    that the frontend can render as an SVG/HTML diagram.
+
+    Returned dict shape:
+    {
+      "type": "flowchart" | "cycle" | "comparison" | "timeline" | "pyramid" | "mindmap",
+      "title": "...",
+      "data": { ...type-specific payload... }
+    }
+
+    Flowchart  → { "nodes": [{"id","label","sub","type"}], "edges": [{"from","to","label"}] }
+    Cycle      → { "steps": [{"label","sub"}] }
+    Comparison → { "items": [{"label","points":[]}], "headers": ["A","B"] }
+    Timeline   → { "events": [{"year","label","sub"}] }
+    Pyramid    → { "levels": [{"label","sub","width_pct"}] }   top→bottom order
+    Mindmap    → { "center": "...", "branches": [{"label","items":[]}] }
+    """
+    prompt = f"""You are a visual-learning engine. Given a slide, choose the BEST diagram type and return ONLY a valid JSON object — no prose, no markdown fences.
+
+Slide title: {slide['title']}
+Slide content:
+{json.dumps(slide['points'], indent=2)}
+
+Choose ONE type from: flowchart, cycle, comparison, timeline, pyramid, mindmap.
+
+Guidelines:
+- flowchart   → sequential steps / cause-effect / process with decisions
+- cycle       → repeating loop (water cycle, cell cycle, feedback loop)
+- comparison  → two or more things being contrasted
+- timeline    → events ordered by date / historical sequence
+- pyramid     → hierarchical importance (Maslow, OSI layers, taxonomies)
+- mindmap     → broad topic with multiple independent sub-branches
+
+Return this exact JSON shape (fill in for your chosen type, omit unused keys):
+
+{{
+  "type": "<chosen_type>",
+  "title": "<short diagram title, max 8 words>",
+  "data": {{
+
+    // --- flowchart ---
+    "nodes": [
+      {{"id": "n1", "label": "max 4 words", "sub": "optional 1 line", "type": "start|step|decision|end"}}
+    ],
+    "edges": [
+      {{"from": "n1", "to": "n2", "label": ""}}
+    ],
+
+    // --- cycle ---
+    "steps": [
+      {{"label": "Step name", "sub": "one-line detail"}}
+    ],
+
+    // --- comparison ---
+    "headers": ["Name A", "Name B"],
+    "items": [
+      {{"label": "Criterion", "a": "value for A", "b": "value for B"}}
+    ],
+
+    // --- timeline ---
+    "events": [
+      {{"year": "1900", "label": "Event name", "sub": "brief detail"}}
+    ],
+
+    // --- pyramid ---
+    "levels": [
+      {{"label": "Top level", "sub": "detail", "width_pct": 30}},
+      {{"label": "Mid level", "sub": "detail", "width_pct": 60}},
+      {{"label": "Base level", "sub": "detail", "width_pct": 90}}
+    ],
+
+    // --- mindmap ---
+    "center": "Central concept",
+    "branches": [
+      {{"label": "Branch", "items": ["item1", "item2"]}}
+    ]
+  }}
+}}
+
+STRICT RULES:
+- Return ONLY the JSON object. Absolutely no text outside it.
+- 5 to 8 nodes/steps/events/levels/branches maximum.
+- All labels max 5 words. Sub-labels max 8 words.
+- flowchart must have exactly one "start" and one "end" node.
+- cycle must have 4 to 7 steps.
+- comparison must have 2 headers and 4 to 6 items.
+"""
+
+    raw = _call_groq(prompt, max_tokens=1200)
+    if not raw:
+        return None
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        obj = extract_json_object(raw)
+        if not obj:
+            if not retry:
+                return generate_visual_for_slide(slide, retry=True)
+            return None
+        try:
+            data = json.loads(obj)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(data, dict):
+        return None
+    if data.get("type") not in {"flowchart", "cycle", "comparison", "timeline", "pyramid", "mindmap"}:
+        return None
+    if not isinstance(data.get("data"), dict):
+        return None
+
+    return data
+
+
+@app.route("/visual", methods=["POST"])
+@limiter.limit("15 per minute")
+def visual():
+    """
+    Generate a visual diagram for a specific slide.
+    Body:  { "session_id": "...", "slide_index": 0 }
+    Returns: { "visual": { "type": "...", "title": "...", "data": {...} } }
+    """
+    req_data = request.get_json(silent=True)
+    if not req_data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = req_data.get("session_id", "")
+    slide_index = req_data.get("slide_index", 0)
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slides = session["slides"]
+    if not (0 <= slide_index < len(slides)):
+        return jsonify({"error": "Invalid slide index"}), 400
+
+    result = generate_visual_for_slide(slides[slide_index])
+    if not result:
+        return jsonify({"error": "Failed to generate visual. Please try again."}), 500
+
+    return jsonify({"visual": result})
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
