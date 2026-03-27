@@ -246,6 +246,56 @@
     .timer-badge.warning { color: var(--gold); }
     .timer-badge.long    { color: var(--red); }
 
+    /* ---- HUD inline search ---- */
+    .hud-search-form {
+      display: flex; align-items: center; gap: .4rem;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: .25rem .25rem .25rem .75rem;
+      transition: border-color .2s, box-shadow .2s;
+      flex-shrink: 0;
+    }
+    .hud-search-form:focus-within {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(232,160,32,.1);
+    }
+    .hud-search-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: .82rem;
+      font-weight: 500;
+      width: 180px;
+      min-width: 0;
+    }
+    .hud-search-input::placeholder { color: var(--text-3); }
+    .hud-search-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px;
+      border-radius: 7px;
+      border: none;
+      background: var(--gold);
+      color: #080b12;
+      font-size: .85rem;
+      cursor: pointer;
+      transition: background .2s, transform .1s;
+      flex-shrink: 0;
+    }
+    .hud-search-btn:hover { background: #f5b030; }
+    .hud-search-btn:active { transform: scale(.93); }
+    .hud-search-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* collapse input on very small screens */
+    @media (max-width: 600px) {
+      .hud-search-input { width: 100px; font-size: .75rem; }
+    }
+    @media (max-width: 420px) {
+      .hud-search-input { width: 70px; }
+    }
+
     /* ---- Slide navigation arrow buttons ---- */
     .slide-nav-btn {
       display: flex; align-items: center; justify-content: center;
@@ -998,6 +1048,18 @@
   <div class="hud">
     <div class="hud-topic" id="hud-topic">Topic</div>
     <div class="hud-right">
+      <!-- Inline new-topic search -->
+      <div class="hud-search-form" id="hud-search-form">
+        <input
+          class="hud-search-input"
+          id="hud-search-input"
+          type="text"
+          maxlength="200"
+          placeholder="New topic…"
+          autocomplete="off"
+        />
+        <button class="hud-search-btn" id="hud-search-btn" title="Search new topic">🔍</button>
+      </div>
       <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
       <div class="slide-counter" id="slide-counter">1 / 10</div>
       <button class="slide-nav-btn" id="btn-next" onclick="navNext()" title="Next slide (→)">&#8594;</button>
@@ -1169,6 +1231,68 @@ function setLoading(title, sub) {
   document.getElementById('loading-text').textContent = title;
   document.getElementById('loading-sub').textContent  = sub;
 }
+
+// =====================================================================
+// HUD INLINE SEARCH — search a new topic without leaving the page
+// =====================================================================
+(function () {
+  const hudInput = document.getElementById('hud-search-input');
+  const hudBtn   = document.getElementById('hud-search-btn');
+
+  async function hudSearch() {
+    const topic = hudInput.value.trim();
+    if (!topic) { showToast('Enter a topic to search.'); return; }
+
+    // Reset state fully
+    stopTimer();
+    state.sessionId = null; state.slides = []; state.currentIndex = 0;
+    state.performance = []; state.adaptiveProfile = null;
+    state.visualLoaded = false; state.visualOpen = false;
+
+    // Clear hud input
+    hudInput.value = '';
+
+    // Also sync the start-screen input so it stays consistent
+    topicInput.value = topic;
+    charCount.textContent = topic.length;
+
+    state.topic = topic;
+    setLoading('Generating your lecture…', 'Crafting 10–12 slides on: ' + topic);
+    showScreen('screen-loading');
+    hudBtn.disabled = true;
+
+    try {
+      const res = await fetch('/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate slides.');
+
+      state.sessionId = data.session_id;
+      state.slides    = data.slides;
+      state.currentIndex = 0;
+      state.performance  = [];
+      state.adaptiveProfile = null;
+
+      document.getElementById('hud-topic').textContent = topic;
+      showScreen('screen-learning');
+      loadSlide(0);
+
+    } catch (err) {
+      showScreen('screen-learning');   // stay on learning screen, don't go back to start
+      showToast(err.message);
+    } finally {
+      hudBtn.disabled = false;
+    }
+  }
+
+  hudBtn.addEventListener('click', hudSearch);
+  hudInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); hudSearch(); }
+  });
+})();
 
 // =====================================================================
 // SLIDE RENDERING
