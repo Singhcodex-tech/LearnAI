@@ -1,531 +1,2183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Slide Visual Renderer — Integration Demo</title>
-<style>
-/* ─── RESET ─── */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#0e0e16;color:#e8e8f4;min-height:100vh;padding:32px 16px}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adaptive Learning Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ===================== RESET & BASE ===================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ─── DEMO SHELL ─── */
-.demo-wrap{max-width:780px;margin:0 auto}
-.demo-header{text-align:center;margin-bottom:36px}
-.demo-header h1{font-size:28px;font-weight:700;letter-spacing:-.5px;margin-bottom:8px}
-.demo-header p{color:#7878a0;font-size:15px}
-.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;background:rgba(120,100,255,.15);color:#a090ff;border:1px solid rgba(120,100,255,.3);border-radius:20px;padding:3px 10px;margin-bottom:12px}
+    :root {
+      --bg:       #080b12;
+      --surface:  #0f1420;
+      --card:     #141926;
+      --border:   #1e2535;
+      --border2:  #2a3347;
+      --gold:     #e8a020;
+      --gold-dim: #7a5510;
+      --teal:     #20c5b0;
+      --teal-dim: #0e5f57;
+      --red:      #e05454;
+      --red-dim:  #5c2020;
+      --green:    #3ec87a;
+      --green-dim:#134d2f;
+      --text:     #eae6df;
+      --text-2:   #8b93a8;
+      --text-3:   #4a5268;
+      --mono:     'JetBrains Mono', monospace;
+    }
 
-/* ─── SLIDE CARD ─── */
-.slide-card{background:#14141f;border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;margin-bottom:28px}
-.slide-head{padding:20px 24px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
-.slide-head h2{font-size:18px;font-weight:600;letter-spacing:-.2px}
-.slide-body{padding:20px 24px}
-.slide-points{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:24px}
-.slide-points li{display:flex;gap:10px;font-size:14px;line-height:1.6;color:#c0c0dc}
-.slide-points li::before{content:'';width:6px;height:6px;border-radius:50%;background:#6655cc;flex-shrink:0;margin-top:7px}
+    html { scroll-behavior: smooth; }
 
-/* ─── VISUAL SECTION ─── */
-.visual-section{border-top:1px solid rgba(255,255,255,.06);padding:20px 24px 24px}
-.visual-label{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#5050780;margin-bottom:14px;display:flex;align-items:center;gap:8px;color:#606080}
-.visual-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.06)}
-.visual-box{background:#0e0e18;border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden}
-.visual-loading{display:flex;align-items:center;gap:10px;padding:28px 20px;color:#50508a;font-size:13px}
-.spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(100,90,220,.2);border-top-color:#7b6aee;animation:spin .7s linear infinite;flex-shrink:0}
-@keyframes spin{to{transform:rotate(360deg)}}
-.visual-error{padding:16px 20px;font-size:13px;color:#e07070;background:rgba(200,60,60,.07);border-radius:8px;margin:8px}
+    body {
+      font-family: 'Syne', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
 
-/* ─── SVG VISUALS ─── */
-.visual-svg-wrap{padding:16px;overflow-x:auto}
-.visual-svg-wrap svg{display:block;margin:0 auto;max-width:100%}
+    /* ===================== NOISE OVERLAY ===================== */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; opacity: .5;
+    }
 
-/* ─── BUTTONS ─── */
-.btn-visual{display:inline-flex;align-items:center;gap:6px;background:rgba(120,100,255,.12);color:#a090ff;border:1px solid rgba(120,100,255,.25);border-radius:9px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;transition:background .2s}
-.btn-visual:hover{background:rgba(120,100,255,.22)}
-</style>
+    /* ===================== SCREENS ===================== */
+    .screen {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity .4s ease;
+      z-index: 1;
+    }
+    .screen.active { opacity: 1; pointer-events: all; }
+
+    /* ===================== START SCREEN ===================== */
+    #screen-start { flex-direction: column; }
+
+    .brand-mark {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      letter-spacing: -.02em;
+      color: var(--text);
+      margin-bottom: .4rem;
+      line-height: 1;
+    }
+    .brand-mark span { color: var(--gold); font-style: italic; }
+
+    .brand-sub {
+      font-size: .8rem;
+      font-weight: 600;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 3rem;
+    }
+
+    .start-card {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 2.5rem;
+      width: min(480px, 90vw);
+      position: relative;
+      overflow: hidden;
+    }
+    .start-card::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(232,160,32,.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .start-label {
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: .75rem;
+    }
+
+    .topic-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: .9rem 1.1rem;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 500;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+      resize: none;
+      height: 80px;
+    }
+    .topic-input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(232,160,32,.1);
+    }
+    .topic-input::placeholder { color: var(--text-3); }
+
+    .char-count {
+      text-align: right;
+      font-size: .72rem;
+      color: var(--text-3);
+      margin-top: .4rem;
+      font-family: var(--mono);
+    }
+
+    .btn-primary {
+      width: 100%;
+      margin-top: 1.25rem;
+      padding: .95rem;
+      background: var(--gold);
+      color: #080b12;
+      border: none; border-radius: 10px;
+      font-family: 'Syne', sans-serif;
+      font-size: .9rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .2s, transform .1s, opacity .2s;
+    }
+    .btn-primary:hover { background: #f5b030; }
+    .btn-primary:active { transform: scale(.98); }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+    .feature-pills {
+      display: flex; gap: .5rem; flex-wrap: wrap;
+      margin-top: 1.5rem; justify-content: center;
+    }
+    .pill {
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: .3rem .75rem;
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      color: var(--text-3);
+    }
+
+    /* ===================== LOADING ===================== */
+    #screen-loading {
+      flex-direction: column; gap: 1.5rem; text-align: center;
+    }
+
+    .loading-ring {
+      width: 60px; height: 60px;
+      border: 3px solid var(--border2);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.5rem;
+      color: var(--text);
+    }
+    .loading-sub {
+      font-size: .8rem;
+      color: var(--text-3);
+      font-family: var(--mono);
+    }
+
+    /* ===================== LEARNING SCREEN ===================== */
+    #screen-learning {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    /* --- Top HUD --- */
+    .hud {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .hud-topic {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1rem;
+      color: var(--gold);
+      flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .hud-right {
+      display: flex; align-items: center; gap: 1rem;
+      flex-shrink: 0;
+    }
+
+    .slide-counter {
+      font-family: var(--mono);
+      font-size: .75rem;
+      color: var(--text-3);
+    }
+
+    .timer-badge {
+      display: flex; align-items: center; gap: .4rem;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: .35rem .7rem;
+      font-family: var(--mono);
+      font-size: .8rem;
+      color: var(--teal);
+    }
+    .timer-badge.warning { color: var(--gold); }
+    .timer-badge.long    { color: var(--red); }
+
+    /* ---- Slide navigation arrow buttons ---- */
+    .slide-nav-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--card);
+      color: var(--text-2);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .18s, border-color .18s, color .18s, opacity .18s;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    .slide-nav-btn:hover:not(:disabled) {
+      background: var(--surface);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .slide-nav-btn:active:not(:disabled) { transform: scale(.93); }
+    .slide-nav-btn:disabled { opacity: .3; cursor: not-allowed; }
+
+    /* Progress bar */
+    .progress-bar-wrap {
+      height: 3px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold), var(--teal));
+      transition: width .5s ease;
+    }
+
+    /* --- Slide body --- */
+    .learning-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem 1.5rem;
+      display: flex; flex-direction: column; gap: 1.5rem;
+    }
+
+    /* Adaptive banner */
+    .adaptive-banner {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .75rem 1rem;
+      border-radius: 10px;
+      font-size: .8rem;
+      font-weight: 600;
+      border: 1px solid;
+      animation: fadeSlideIn .4s ease;
+    }
+    .adaptive-banner.simplify {
+      background: rgba(224, 84, 84, .07);
+      border-color: rgba(224, 84, 84, .25);
+      color: #f08080;
+    }
+    .adaptive-banner.advanced {
+      background: rgba(62, 200, 122, .07);
+      border-color: rgba(62, 200, 122, .25);
+      color: #60d490;
+    }
+    .adaptive-banner.reteach {
+      background: rgba(32, 197, 176, .07);
+      border-color: rgba(32, 197, 176, .25);
+      color: var(--teal);
+    }
+
+    /* Slide card */
+    .slide-card {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 2rem;
+      animation: fadeSlideIn .4s ease;
+    }
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .slide-number-tag {
+      font-family: var(--mono);
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: .75rem;
+    }
+    .slide-number-tag.reteach-tag { color: var(--teal-dim); }
+
+    .slide-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.3rem, 3vw, 1.9rem);
+      color: var(--text);
+      line-height: 1.25;
+      margin-bottom: 1.5rem;
+    }
+
+    .slide-points { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
+
+    .slide-point {
+      display: flex; gap: .85rem;
+      padding: .85rem 1rem;
+      background: var(--surface);
+      border-radius: 10px;
+      border-left: 3px solid var(--gold-dim);
+      font-size: .92rem;
+      line-height: 1.6;
+      color: var(--text-2);
+      animation: pointReveal .35s ease both;
+    }
+    .slide-point.reteach-point { border-left-color: var(--teal-dim); }
+
+    @keyframes pointReveal {
+      from { opacity: 0; transform: translateX(-10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .point-bullet {
+      flex-shrink: 0;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--gold);
+      margin-top: .55rem;
+    }
+    .reteach-point .point-bullet { background: var(--teal); }
+
+    /* --- Understanding buttons --- */
+    .understanding-section {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 1.5rem;
+      animation: fadeSlideIn .4s ease .1s both;
+    }
+
+    .understanding-label {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 1rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .understanding-label::before {
+      content: '';
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--gold);
+    }
+
+    .understanding-btns {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem;
+    }
+
+    .u-btn {
+      padding: .8rem .5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: 'Syne', sans-serif;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex; flex-direction: column; align-items: center; gap: .35rem;
+    }
+    .u-btn .icon { font-size: 1.3rem; }
+    .u-btn:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .u-btn.yes:hover, .u-btn.yes.selected {
+      background: rgba(62,200,122,.1);
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .u-btn.somewhat:hover, .u-btn.somewhat.selected {
+      background: rgba(232,160,32,.1);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+    .u-btn.no:hover, .u-btn.no.selected {
+      background: rgba(224,84,84,.1);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    /* ===================== QUIZ SECTION ===================== */
+    .quiz-section {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 1.5rem;
+      animation: fadeSlideIn .45s ease;
+    }
+
+    .quiz-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .quiz-label {
+      font-size: .75rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .quiz-label::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--teal);
+    }
+    .quiz-progress-dots {
+      display: flex; gap: .4rem;
+    }
+    .q-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--border2);
+      transition: background .3s;
+    }
+    .q-dot.correct { background: var(--green); }
+    .q-dot.wrong   { background: var(--red); }
+    .q-dot.active  { background: var(--gold); }
+
+    .quiz-question-wrap { display: none; }
+    .quiz-question-wrap.active { display: block; }
+
+    .quiz-q-text {
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .quiz-q-index {
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--text-3);
+      margin-bottom: .5rem;
+    }
+
+    .quiz-options { display: flex; flex-direction: column; gap: .5rem; }
+
+    .quiz-option {
+      padding: .8rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .18s;
+      text-align: left;
+    }
+    .quiz-option:hover:not([disabled]) {
+      border-color: var(--border2);
+      background: rgba(255,255,255,.04);
+    }
+    .quiz-option.selected { border-color: var(--gold); background: rgba(232,160,32,.08); color: var(--text); }
+    .quiz-option.correct  { border-color: var(--green); background: rgba(62,200,122,.1); color: var(--green); }
+    .quiz-option.wrong    { border-color: var(--red); background: rgba(224,84,84,.1); color: var(--red); }
+    .quiz-option[disabled]{ cursor: default; }
+
+    .quiz-explanation {
+      margin-top: .85rem;
+      padding: .75rem 1rem;
+      border-radius: 8px;
+      background: rgba(32,197,176,.07);
+      border-left: 3px solid var(--teal);
+      font-size: .82rem;
+      color: var(--text-2);
+      line-height: 1.5;
+      animation: fadeSlideIn .3s ease;
+    }
+
+    .quiz-nav {
+      display: flex; justify-content: flex-end; margin-top: 1rem;
+    }
+    .btn-quiz-next {
+      padding: .65rem 1.4rem;
+      border-radius: 8px;
+      background: var(--teal);
+      color: #080b12;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .8rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-quiz-next:hover { background: #35d8c2; }
+
+    /* Quiz result */
+    .quiz-result {
+      text-align: center; padding: .75rem 0 0;
+    }
+    .quiz-score-display {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2.5rem;
+      line-height: 1;
+      margin-bottom: .3rem;
+    }
+    .quiz-score-display.good { color: var(--green); }
+    .quiz-score-display.ok   { color: var(--gold); }
+    .quiz-score-display.bad  { color: var(--red); }
+    .quiz-score-label {
+      font-size: .75rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 1rem;
+    }
+
+    .quiz-result-actions {
+      display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap;
+    }
+    .btn-next-slide {
+      padding: .8rem 1.8rem;
+      border-radius: 10px;
+      background: var(--gold);
+      color: #080b12;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .btn-next-slide:hover { background: #f5b030; }
+
+    .btn-reteach {
+      padding: .8rem 1.8rem;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--teal);
+      border: 1px solid var(--teal);
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-reteach:hover {
+      background: rgba(32,197,176,.1);
+    }
+
+    /* ===================== STATS SCREEN ===================== */
+    #screen-stats {
+      align-items: stretch;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .stats-header {
+      text-align: center; margin-bottom: 2.5rem;
+    }
+    .stats-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.8rem, 5vw, 2.8rem);
+      margin-bottom: .4rem;
+    }
+    .stats-title span { color: var(--gold); font-style: italic; }
+    .stats-subtitle { font-size: .85rem; color: var(--text-3); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      max-width: 900px;
+      margin-inline: auto; width: 100%;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      padding: 1.5rem;
+      text-align: center;
+      animation: fadeSlideIn .4s ease both;
+    }
+    .stat-card:nth-child(1) { animation-delay: .05s; }
+    .stat-card:nth-child(2) { animation-delay: .1s; }
+    .stat-card:nth-child(3) { animation-delay: .15s; }
+    .stat-card:nth-child(4) { animation-delay: .2s; }
+
+    .stat-value {
+      font-family: 'DM Serif Display', serif;
+      font-size: 2.4rem;
+      line-height: 1;
+      margin-bottom: .3rem;
+    }
+    .stat-value.gold  { color: var(--gold); }
+    .stat-value.teal  { color: var(--teal); }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red   { color: var(--red); }
+
+    .stat-key {
+      font-size: .68rem; font-weight: 700;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    /* Performance table */
+    .perf-table-wrap {
+      max-width: 900px; margin-inline: auto; width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      animation: fadeSlideIn .4s ease .25s both;
+    }
+
+    .perf-table-title {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      padding: .6rem 1rem;
+      text-align: left;
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: .75rem 1rem;
+      font-size: .82rem;
+      color: var(--text-2);
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: .2rem .55rem;
+      border-radius: 6px;
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .badge.good  { background: rgba(62,200,122,.12); color: var(--green); }
+    .badge.ok    { background: rgba(232,160,32,.12); color: var(--gold); }
+    .badge.bad   { background: rgba(224,84,84,.12);  color: var(--red); }
+
+    /* Mini bar chart */
+    .mini-bar {
+      width: 80px; height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .mini-bar-fill {
+      height: 100%; border-radius: 4px;
+      transition: width .6s ease;
+    }
+
+    .adaptive-note {
+      max-width: 900px; margin-inline: auto; width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      animation: fadeSlideIn .4s ease .3s both;
+    }
+    .adaptive-note-title {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3); margin-bottom: .75rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .adaptive-note-title::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--teal);
+    }
+    .adaptive-note-body {
+      font-size: .88rem;
+      color: var(--text-2);
+      line-height: 1.65;
+    }
+    .weak-tag {
+      display: inline-block;
+      background: rgba(224,84,84,.1);
+      border: 1px solid rgba(224,84,84,.25);
+      color: var(--red);
+      border-radius: 6px;
+      padding: .15rem .5rem;
+      font-size: .75rem;
+      font-weight: 600;
+      margin: .15rem;
+    }
+
+    .stats-footer {
+      max-width: 900px; margin-inline: auto; width: 100%;
+      display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap;
+      padding-bottom: 2rem;
+      animation: fadeSlideIn .4s ease .35s both;
+    }
+
+    .btn-restart {
+      padding: .85rem 2rem;
+      border-radius: 10px;
+      background: var(--gold);
+      color: #080b12;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem; font-weight: 800;
+      letter-spacing: .06em; text-transform: uppercase;
+      cursor: pointer; transition: background .2s;
+    }
+    .btn-restart:hover { background: #f5b030; }
+
+    /* ===================== ERROR TOAST ===================== */
+    #toast {
+      position: fixed; bottom: 2rem; left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--red-dim);
+      border: 1px solid var(--red);
+      color: #f8a0a0;
+      padding: .75rem 1.5rem;
+      border-radius: 10px;
+      font-size: .85rem; font-weight: 600;
+      z-index: 99; transition: transform .3s ease;
+      max-width: 90vw; text-align: center;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ===================== SCROLLBAR ===================== */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    /* ===================== VISUAL PANEL ===================== */
+    .visual-toggle-btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      margin-top: 1.25rem;
+      padding: .6rem 1.2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: 'Syne', sans-serif;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .visual-toggle-btn:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+      background: rgba(32,197,176,.07);
+    }
+    .visual-toggle-btn.active {
+      border-color: var(--teal);
+      color: var(--teal);
+      background: rgba(32,197,176,.1);
+    }
+    .visual-toggle-btn .vt-icon { font-size: 1rem; }
+
+    .visual-panel {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      overflow: hidden;
+      animation: fadeSlideIn .4s ease;
+    }
+
+    .visual-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .visual-panel-label {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .visual-panel-label::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--teal);
+    }
+    .visual-type-badge {
+      font-size: .65rem; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      padding: .2rem .6rem;
+      border-radius: 20px;
+      background: rgba(32,197,176,.1);
+      border: 1px solid rgba(32,197,176,.3);
+      color: var(--teal);
+    }
+
+    .visual-panel-body {
+      padding: 1.5rem;
+      min-height: 260px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .visual-loading {
+      display: flex; flex-direction: column; align-items: center; gap: .75rem;
+      color: var(--text-3); font-size: .82rem;
+    }
+
+    .visual-error {
+      text-align: center; color: var(--text-3); font-size: .82rem; padding: 1rem;
+    }
+    .visual-error button {
+      margin-top: .75rem;
+      padding: .5rem 1.2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text-2);
+      font-family: 'Syne', sans-serif;
+      font-size: .75rem; font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .visual-error button:hover { border-color: var(--teal); color: var(--teal); }
+
+    /* ---- SVG diagram base ---- */
+    .viz-svg {
+      width: 100%; max-width: 680px;
+      font-family: 'Syne', sans-serif;
+      overflow: visible;
+    }
+
+    /* Flowchart */
+    .fc-node rect, .fc-node polygon {
+      fill: var(--surface); stroke: var(--border2); stroke-width: 1.5;
+    }
+    .fc-node.start rect, .fc-node.end rect {
+      fill: rgba(32,197,176,.1); stroke: var(--teal); rx: 20;
+    }
+    .fc-node.decision polygon {
+      fill: rgba(232,160,32,.08); stroke: var(--gold);
+    }
+    .fc-node text { fill: var(--text); font-size: 11px; font-weight: 600; }
+    .fc-node .sub-text { fill: var(--text-3); font-size: 9px; font-weight: 400; }
+    .fc-edge { fill: none; stroke: var(--border2); stroke-width: 1.5; marker-end: url(#arrow); }
+    .fc-edge-label { fill: var(--text-3); font-size: 9px; }
+
+    /* Cycle */
+    .cycle-arc { fill: none; stroke-width: 2; }
+    .cycle-node circle { stroke-width: 2; }
+    .cycle-node text { font-size: 11px; font-weight: 700; }
+    .cycle-node .sub-text { font-size: 9px; font-weight: 400; fill: var(--text-3); }
+    .cycle-arrow { fill: none; stroke-width: 1.5; marker-end: url(#arrow-sm); }
+
+    /* Comparison */
+    .cmp-header text { font-size: 13px; font-weight: 800; }
+    .cmp-row rect { fill: var(--surface); }
+    .cmp-row:nth-child(odd) rect { fill: rgba(255,255,255,.02); }
+    .cmp-cell text { font-size: 10px; fill: var(--text-2); }
+    .cmp-label text { font-size: 10px; font-weight: 700; fill: var(--text-3); }
+    .cmp-divider { stroke: var(--border2); stroke-width: 1; }
+
+    /* Timeline */
+    .tl-line { stroke: var(--border2); stroke-width: 2; }
+    .tl-dot circle { stroke-width: 2; }
+    .tl-event text { font-size: 10px; font-weight: 700; fill: var(--text); }
+    .tl-event .year { font-size: 9px; font-weight: 800; fill: var(--gold); font-family: 'JetBrains Mono', monospace; }
+    .tl-event .sub { font-size: 8.5px; fill: var(--text-3); }
+
+    /* Pyramid */
+    .pyr-level polygon { stroke-width: 1.5; }
+    .pyr-level text { font-size: 11px; font-weight: 700; }
+    .pyr-level .sub { font-size: 9px; font-weight: 400; fill: var(--text-3); }
+
+    /* Mindmap */
+    .mm-center ellipse { fill: rgba(232,160,32,.12); stroke: var(--gold); stroke-width: 2; }
+    .mm-center text { font-size: 12px; font-weight: 800; fill: var(--gold); }
+    .mm-branch line { stroke: var(--border2); stroke-width: 1.5; }
+    .mm-branch-node rect { fill: var(--surface); stroke: var(--border2); stroke-width: 1.5; rx: 6; }
+    .mm-branch-node text { font-size: 10px; font-weight: 700; fill: var(--text); }
+    .mm-leaf text { font-size: 9px; fill: var(--text-3); }
+    .mm-leaf line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 2; }
+
+    /* Responsive tweaks */
+    @media (max-width: 500px) {
+      .understanding-btns { grid-template-columns: 1fr; }
+      .hud { padding: .75rem 1rem; }
+      .learning-body { padding: 1rem; }
+    }
+  </style>
 </head>
 <body>
-<div class="demo-wrap">
-  <div class="demo-header">
-    <div class="tag">Integration Demo</div>
-    <h1>Auto Visual After Bullet Points</h1>
-    <p>This shows exactly how to call <code style="color:#a090ff">/visual</code> and render the result below each slide.</p>
+
+<!-- ===================== START SCREEN ===================== -->
+<div id="screen-start" class="screen active">
+  <div style="text-align:center; padding: 1rem;">
+    <div class="brand-mark">Adaptive<span>Learn</span></div>
+    <div class="brand-sub">AI-Powered Lecture Engine</div>
+    <div class="start-card">
+      <div class="start-label">What do you want to study today?</div>
+      <textarea
+        class="topic-input"
+        id="topic-input"
+        placeholder="e.g. Quantum Entanglement, French Revolution, Neural Networks…"
+        maxlength="200"
+      ></textarea>
+      <div class="char-count"><span id="char-count">0</span> / 200</div>
+      <button class="btn-primary" id="start-btn">Generate Lecture →</button>
+      <div class="feature-pills">
+        <span class="pill">📊 Adaptive Quizzes</span>
+        <span class="pill">⏱ Time Tracking</span>
+        <span class="pill">🔁 Re-Teaching</span>
+        <span class="pill">🧠 Learner Profile</span>
+      </div>
+    </div>
   </div>
-  <div id="slides-container"></div>
 </div>
 
-<script>
-// ═══════════════════════════════════════════════════════════════
-//  CONFIGURATION — point this at your Flask server
-// ═══════════════════════════════════════════════════════════════
-const API_BASE = 'http://localhost:5000';   // ← change in production
+<!-- ===================== LOADING SCREEN ===================== -->
+<div id="screen-loading" class="screen">
+  <div class="loading-ring"></div>
+  <div class="loading-text" id="loading-text">Generating your lecture…</div>
+  <div class="loading-sub" id="loading-sub">Crafting slides for your topic</div>
+</div>
 
-// ═══════════════════════════════════════════════════════════════
-//  DEMO DATA  (replace with real session_id + slides from /generate)
-// ═══════════════════════════════════════════════════════════════
-const DEMO_SESSION_ID = 'demo-session';
-const DEMO_SLIDES = [
-  {
-    title: 'The Water Cycle',
-    points: [
-      'Evaporation converts liquid water to vapour using solar energy at temperatures above 0 °C.',
-      'Transpiration releases water vapour through plant stomata, contributing ~10 % of atmospheric moisture.',
-      'Condensation occurs when vapour cools below the dew point, forming clouds or fog.',
-      'Precipitation returns water to Earth as rain, snow, sleet, or hail depending on temperature.',
-      'Runoff and infiltration channel water back to oceans or underground aquifers completing the loop.'
-    ]
-  },
-  {
-    title: 'Photosynthesis vs Cellular Respiration',
-    points: [
-      'Photosynthesis converts CO₂ + H₂O + light energy into glucose (C₆H₁₂O₆) and O₂ in chloroplasts.',
-      'Cellular respiration breaks down glucose in mitochondria releasing ~36 ATP molecules per glucose.',
-      'Photosynthesis is an endothermic anabolic process; respiration is exothermic and catabolic.',
-      'Both processes share the ATP currency and use electron transport chains.',
-      'Net equation of respiration: C₆H₁₂O₆ + 6O₂ → 6CO₂ + 6H₂O + ATP.'
-    ]
-  },
-  {
-    title: 'Stages of Mitosis',
-    points: [
-      'Prophase: chromatin condenses into visible chromosomes; mitotic spindle begins forming.',
-      'Metaphase: chromosomes align at the cell equator (metaphase plate) attached to spindle fibres.',
-      'Anaphase: sister chromatids are pulled to opposite poles by shortening spindle microtubules.',
-      'Telophase: nuclear envelopes reform around each chromosome set; chromosomes decondense.',
-      'Cytokinesis: cytoplasm divides producing two genetically identical daughter cells.'
-    ]
-  }
-];
+<!-- ===================== LEARNING SCREEN ===================== -->
+<div id="screen-learning" class="screen">
 
-// ═══════════════════════════════════════════════════════════════
-//  RENDER ALL SLIDES
-// ═══════════════════════════════════════════════════════════════
-function renderSlides() {
-  const container = document.getElementById('slides-container');
-  DEMO_SLIDES.forEach((slide, idx) => {
-    const card = document.createElement('div');
-    card.className = 'slide-card';
-    card.id = `slide-${idx}`;
-    card.innerHTML = `
-      <div class="slide-head"><h2>${escHtml(slide.title)}</h2></div>
-      <div class="slide-body">
-        <ul class="slide-points">
-          ${slide.points.map(p => `<li>${escHtml(p)}</li>`).join('')}
-        </ul>
-        <button class="btn-visual" onclick="loadVisual(${idx})">
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-          </svg>
-          Generate Visual
+  <!-- HUD -->
+  <div class="hud">
+    <div class="hud-topic" id="hud-topic">Topic</div>
+    <div class="hud-right">
+      <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
+      <div class="slide-counter" id="slide-counter">1 / 10</div>
+      <button class="slide-nav-btn" id="btn-next" onclick="navNext()" title="Next slide (→)">&#8594;</button>
+      <div class="timer-badge" id="timer-badge">⏱ 0s</div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-bar-wrap">
+    <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+  </div>
+
+  <!-- Scrollable body -->
+  <div class="learning-body" id="learning-body">
+    <!-- Adaptive banner (conditionally shown) -->
+    <div id="adaptive-banner" class="adaptive-banner" style="display:none;"></div>
+
+    <!-- Slide card -->
+    <div id="slide-card" class="slide-card"></div>
+
+    <!-- Visual panel (shown on demand) -->
+    <div id="visual-panel" style="display:none;"></div>
+
+    <!-- Understanding buttons -->
+    <div id="understanding-section" class="understanding-section">
+      <div class="understanding-label">Did you understand this slide?</div>
+      <div class="understanding-btns">
+        <button class="u-btn yes" data-val="yes">
+          <span class="icon">✅</span>Yes, clearly
+        </button>
+        <button class="u-btn somewhat" data-val="somewhat">
+          <span class="icon">🤔</span>Somewhat
+        </button>
+        <button class="u-btn no" data-val="no">
+          <span class="icon">❌</span>Not really
         </button>
       </div>
-      <div class="visual-section" id="visual-${idx}" style="display:none">
-        <div class="visual-label">AI-Generated Visual</div>
-        <div class="visual-box" id="visual-box-${idx}"></div>
-      </div>`;
-    container.appendChild(card);
-  });
+    </div>
+
+    <!-- Quiz section (shown after understanding choice) -->
+    <div id="quiz-section" class="quiz-section" style="display:none;"></div>
+
+  </div><!-- /learning-body -->
+</div>
+
+<!-- ===================== STATS SCREEN ===================== -->
+<div id="screen-stats" class="screen">
+  <div style="width:100%; max-width:900px; margin:0 auto;">
+    <div class="stats-header">
+      <div class="stats-title">Session <span>Complete</span></div>
+      <div class="stats-subtitle" id="stats-topic-label"></div>
+    </div>
+
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <div class="adaptive-note" id="adaptive-note" style="display:none;">
+      <div class="adaptive-note-title">AI Learner Insights</div>
+      <div class="adaptive-note-body" id="adaptive-note-body"></div>
+    </div>
+
+    <div class="perf-table-wrap" id="perf-table-wrap" style="display:none;">
+      <div class="perf-table-title">Slide-by-Slide Breakdown</div>
+      <div style="overflow-x:auto;">
+        <table id="perf-table"></table>
+      </div>
+    </div>
+
+    <div class="stats-footer">
+      <button class="btn-restart" onclick="restartSession()">← Study Another Topic</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// =====================================================================
+// STATE
+// =====================================================================
+const state = {
+  sessionId: null,
+  topic: '',
+  slides: [],
+  currentIndex: 0,
+  timerInterval: null,
+  timerSeconds: 0,
+  slideStartTime: 0,
+  performance: [],            // local mirror of server-side records
+  understandingChoice: null,  // 'yes' | 'somewhat' | 'no'
+  quizQuestions: [],
+  quizAnswers: [],            // chosen option index per question
+  quizCurrentQ: 0,
+  quizDone: false,
+  adaptiveProfile: null,
+  visualLoaded: false,        // has the visual been fetched for current slide?
+  visualOpen: false,          // is the visual panel currently visible?
+};
+
+// =====================================================================
+// SCREEN MANAGEMENT
+// =====================================================================
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  CALL /visual AND RENDER
-// ═══════════════════════════════════════════════════════════════
-async function loadVisual(slideIndex) {
-  const section = document.getElementById(`visual-${slideIndex}`);
-  const box     = document.getElementById(`visual-box-${slideIndex}`);
-  section.style.display = 'block';
-  box.innerHTML = `<div class="visual-loading"><div class="spinner"></div>Generating visual…</div>`;
+// =====================================================================
+// TOAST
+// =====================================================================
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// =====================================================================
+// START SCREEN
+// =====================================================================
+const topicInput = document.getElementById('topic-input');
+const charCount  = document.getElementById('char-count');
+
+topicInput.addEventListener('input', () => {
+  charCount.textContent = topicInput.value.length;
+});
+
+document.getElementById('start-btn').addEventListener('click', startSession);
+
+topicInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startSession(); }
+});
+
+async function startSession() {
+  const topic = topicInput.value.trim();
+  if (!topic) { showToast('Please enter a topic first.'); return; }
+
+  state.topic = topic;
+  setLoading('Generating your lecture…', 'Crafting 10–12 slides on: ' + topic);
+  showScreen('screen-loading');
 
   try {
-    const res = await fetch(`${API_BASE}/visual`, {
+    const res = await fetch('/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: DEMO_SESSION_ID, slide_index: slideIndex })
+      body: JSON.stringify({ topic }),
     });
+    const data = await res.json();
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server error ${res.status}`);
-    }
+    if (!res.ok) throw new Error(data.error || 'Failed to generate slides.');
 
-    const json = await res.json();
-    const visual = json.visual;
+    state.sessionId = data.session_id;
+    state.slides    = data.slides;
+    state.currentIndex = 0;
+    state.performance  = [];
+    state.adaptiveProfile = null;
 
-    // ── For this demo we generate the visual CLIENT-SIDE from mock data ──
-    // In production remove the mock below and just call renderVisual(visual, box)
-    renderVisual(visual, box);
+    document.getElementById('hud-topic').textContent = topic;
+    showScreen('screen-learning');
+    loadSlide(0);
 
-  } catch (e) {
-    // DEMO FALLBACK: generate mock visual so you can see the renderer working
-    // without a live server. Remove in production.
-    console.warn('Server unreachable, using mock data for demo:', e.message);
-    const mock = MOCK_VISUALS[slideIndex];
-    if (mock) renderVisual(mock, box);
-    else box.innerHTML = `<div class="visual-error">⚠ ${escHtml(e.message)}</div>`;
+  } catch (err) {
+    showScreen('screen-start');
+    showToast(err.message);
   }
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  MOCK DATA (demo only — delete when using real API)
-// ═══════════════════════════════════════════════════════════════
-const MOCK_VISUALS = [
-  {
-    type: 'cycle',
-    title: 'The Water Cycle',
-    data: {
-      steps: [
-        { label: 'Evaporation',   sub: 'Solar energy vaporises water' },
-        { label: 'Transpiration', sub: 'Plants release water vapour' },
-        { label: 'Condensation',  sub: 'Vapour cools into clouds' },
-        { label: 'Precipitation', sub: 'Rain, snow falls to Earth' },
-        { label: 'Runoff',        sub: 'Water returns to oceans' }
-      ]
-    }
-  },
-  {
-    type: 'comparison',
-    title: 'Photosynthesis vs Respiration',
-    data: {
-      headers: ['Photosynthesis', 'Respiration'],
-      items: [
-        { label: 'Location',   a: 'Chloroplasts',     b: 'Mitochondria' },
-        { label: 'Reactants',  a: 'CO₂ + H₂O + light', b: 'Glucose + O₂' },
-        { label: 'Products',   a: 'Glucose + O₂',     b: 'CO₂ + H₂O + ATP' },
-        { label: 'Energy',     a: 'Stored (anabolic)', b: 'Released (catabolic)' },
-        { label: 'Direction',  a: 'Endothermic',       b: 'Exothermic' }
-      ]
-    }
-  },
-  {
-    type: 'flowchart',
-    title: 'Stages of Mitosis',
-    data: {
-      nodes: [
-        { id:'n1', label:'Cell enters mitosis', sub:'DNA already replicated',  type:'start'    },
-        { id:'n2', label:'Prophase',            sub:'Chromosomes condense',     type:'step'     },
-        { id:'n3', label:'Metaphase',           sub:'Align at equator',         type:'step'     },
-        { id:'n4', label:'Anaphase',            sub:'Chromatids pulled apart',  type:'step'     },
-        { id:'n5', label:'Telophase',           sub:'Nuclei reform',            type:'step'     },
-        { id:'n6', label:'Two daughter cells',  sub:'Genetically identical',    type:'end'      }
-      ],
-      edges: [
-        { from:'n1', to:'n2', label:'' },
-        { from:'n2', to:'n3', label:'' },
-        { from:'n3', to:'n4', label:'' },
-        { from:'n4', to:'n5', label:'' },
-        { from:'n5', to:'n6', label:'' }
-      ]
-    }
-  }
-];
+function setLoading(title, sub) {
+  document.getElementById('loading-text').textContent = title;
+  document.getElementById('loading-sub').textContent  = sub;
+}
 
-// ═══════════════════════════════════════════════════════════════
-//  VISUAL DISPATCH
-// ═══════════════════════════════════════════════════════════════
-function renderVisual(visual, box) {
-  const wrap = document.createElement('div');
-  wrap.className = 'visual-svg-wrap';
-  let svg = '';
-  try {
-    switch (visual.type) {
-      case 'flowchart':   svg = drawFlowchart(visual);  break;
-      case 'cycle':       svg = drawCycle(visual);      break;
-      case 'comparison':  svg = drawComparison(visual); break;
-      case 'timeline':    svg = drawTimeline(visual);   break;
-      case 'pyramid':     svg = drawPyramid(visual);    break;
-      case 'mindmap':     svg = drawMindmap(visual);    break;
-      default:            throw new Error('Unknown visual type: ' + visual.type);
+// =====================================================================
+// SLIDE RENDERING
+// =====================================================================
+function loadSlide(index, overrideSlide = null) {
+  const slide = overrideSlide || state.slides[index];
+  const isReteach = !!slide.reteach;
+
+  // Reset quiz/understanding state
+  state.understandingChoice = null;
+  state.quizQuestions = [];
+  state.quizAnswers   = [];
+  state.quizCurrentQ  = 0;
+  state.quizDone      = false;
+
+  // Update HUD
+  const total = state.slides.length;
+  document.getElementById('slide-counter').textContent = `${index + 1} / ${total}`;
+  document.getElementById('progress-bar').style.width = `${((index) / total) * 100}%`;
+
+  // Adaptive banner
+  const banner = document.getElementById('adaptive-banner');
+  if (isReteach) {
+    banner.style.display = 'flex';
+    banner.className = 'adaptive-banner reteach';
+    banner.innerHTML = '<span>🔁</span> Simplified re-explanation — easier language and more examples.';
+  } else if (state.adaptiveProfile) {
+    const hint = state.adaptiveProfile.difficulty_hint;
+    if (hint === 'simplify' && index > 0) {
+      banner.style.display = 'flex';
+      banner.className = 'adaptive-banner simplify';
+      banner.innerHTML = '<span>📉</span> Adjusted for your pace — more examples and clearer language ahead.';
+    } else if (hint === 'advanced' && index > 0) {
+      banner.style.display = 'flex';
+      banner.className = 'adaptive-banner advanced';
+      banner.innerHTML = '<span>🚀</span> You\'re doing great — content has been elevated to match your performance.';
+    } else {
+      banner.style.display = 'none';
     }
-  } catch(e) {
-    box.innerHTML = `<div class="visual-error">⚠ Render error: ${escHtml(e.message)}</div>`;
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // Build slide card
+  const card = document.getElementById('slide-card');
+  card.innerHTML = `
+    <div class="slide-number-tag ${isReteach ? 'reteach-tag' : ''}">
+      ${isReteach ? '🔁 Re-Teaching — ' : ''}Slide ${index + 1}
+    </div>
+    <div class="slide-title">${escHtml(slide.title)}</div>
+    <ul class="slide-points">
+      ${slide.points.map((p, i) => `
+        <li class="slide-point ${isReteach ? 'reteach-point' : ''}"
+            style="animation-delay:${i * 0.07}s">
+          <span class="point-bullet"></span>
+          <span>${escHtml(p)}</span>
+        </li>
+      `).join('')}
+    </ul>
+    <div style="margin-top:1rem;">
+      <button class="visual-toggle-btn" id="visual-toggle-btn" onclick="toggleVisual()">
+        <span class="vt-icon">📊</span> Show Visual Diagram
+      </button>
+    </div>
+  `;
+
+  // Reset visual panel
+  const vp = document.getElementById('visual-panel');
+  vp.style.display = 'none';
+  vp.innerHTML = '';
+  state.visualLoaded = false;
+  state.visualOpen = false;
+
+  // Reset understanding section
+  const us = document.getElementById('understanding-section');
+  us.style.display = 'block';
+  us.querySelectorAll('.u-btn').forEach(b => b.classList.remove('selected'));
+  us.querySelectorAll('.u-btn').forEach(b => b.disabled = false);
+
+  // Hide quiz
+  const qs = document.getElementById('quiz-section');
+  qs.style.display = 'none';
+  qs.innerHTML = '';
+
+  // Scroll to top
+  document.getElementById('learning-body').scrollTop = 0;
+
+  // Update nav arrow states
+  updateNavButtons();
+
+  // Start timer
+  startTimer();
+}
+
+// =====================================================================
+// TIMER
+// =====================================================================
+function startTimer() {
+  clearInterval(state.timerInterval);
+  state.timerSeconds = 0;
+  state.slideStartTime = Date.now();
+
+  const badge = document.getElementById('timer-badge');
+  badge.className = 'timer-badge';
+
+  state.timerInterval = setInterval(() => {
+    state.timerSeconds++;
+    const s = state.timerSeconds;
+    const display = s < 60 ? `${s}s` : `${Math.floor(s/60)}m ${s%60}s`;
+    badge.innerHTML = `⏱ ${display}`;
+    if (s > 90)  badge.className = 'timer-badge warning';
+    if (s > 180) badge.className = 'timer-badge long';
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(state.timerInterval);
+  return Math.round((Date.now() - state.slideStartTime) / 1000);
+}
+
+// =====================================================================
+// UNDERSTANDING BUTTONS
+// =====================================================================
+document.querySelectorAll('.u-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (state.understandingChoice) return; // already chosen
+    const val = btn.dataset.val;
+    state.understandingChoice = val;
+
+    // Visual feedback
+    document.querySelectorAll('.u-btn').forEach(b => b.disabled = true);
+    btn.classList.add('selected');
+
+    // Fetch quiz
+    await loadQuiz();
+  });
+});
+
+// =====================================================================
+// QUIZ
+// =====================================================================
+async function loadQuiz() {
+  const qs = document.getElementById('quiz-section');
+  qs.style.display = 'block';
+  qs.innerHTML = `
+    <div class="quiz-header">
+      <div class="quiz-label">Quick Quiz</div>
+      <div class="quiz-progress-dots" id="q-dots"></div>
+    </div>
+    <div style="text-align:center; padding:1rem; color:var(--text-3); font-size:.85rem;">
+      <div class="loading-ring" style="width:32px;height:32px;margin:0 auto .5rem;"></div>
+      Generating adaptive quiz…
+    </div>
+  `;
+  qs.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  try {
+    const res = await fetch('/quiz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Failed to generate quiz.');
+
+    state.quizQuestions = data.questions;
+    state.quizAnswers   = new Array(data.questions.length).fill(null);
+    state.quizCurrentQ  = 0;
+    renderQuestion(0);
+
+  } catch (err) {
+    qs.innerHTML = `<div style="color:var(--text-3);font-size:.85rem;padding:.5rem;">${err.message}</div>`;
+    showNavigationButtons(0);
+  }
+}
+
+function renderQuestion(qIndex) {
+  const qs = document.getElementById('quiz-section');
+  const questions = state.quizQuestions;
+  const q = questions[qIndex];
+
+  const dotsHtml = questions.map((_, i) => {
+    let cls = '';
+    if (i < qIndex) {
+      cls = state.quizAnswers[i] === questions[i].correct ? 'correct' : 'wrong';
+    } else if (i === qIndex) {
+      cls = 'active';
+    }
+    return `<div class="q-dot ${cls}"></div>`;
+  }).join('');
+
+  qs.innerHTML = `
+    <div class="quiz-header">
+      <div class="quiz-label">Quick Quiz</div>
+      <div class="quiz-progress-dots">${dotsHtml}</div>
+    </div>
+    <div class="quiz-question-wrap active" id="q-wrap">
+      <div class="quiz-q-index">Question ${qIndex + 1} of ${questions.length}</div>
+      <div class="quiz-q-text">${escHtml(q.question)}</div>
+      <div class="quiz-options" id="q-options">
+        ${q.options.map((opt, i) => `
+          <button class="quiz-option" data-idx="${i}">${escHtml(opt)}</button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  // Option click
+  qs.querySelectorAll('.quiz-option').forEach(btn => {
+    btn.addEventListener('click', () => handleAnswer(qIndex, parseInt(btn.dataset.idx)));
+  });
+}
+
+function handleAnswer(qIndex, chosen) {
+  const q = state.quizQuestions[qIndex];
+  state.quizAnswers[qIndex] = chosen;
+
+  // Disable all options and highlight
+  const opts = document.querySelectorAll('.quiz-option');
+  opts.forEach(b => { b.disabled = true; });
+  opts[chosen].classList.add(chosen === q.correct ? 'correct' : 'wrong');
+  if (chosen !== q.correct) opts[q.correct].classList.add('correct');
+
+  // Explanation
+  const optWrap = document.getElementById('q-options');
+  const expDiv = document.createElement('div');
+  expDiv.className = 'quiz-explanation';
+  expDiv.innerHTML = `<strong>${chosen === q.correct ? '✅ Correct!' : '❌ Incorrect.'}</strong> ${escHtml(q.explanation)}`;
+  optWrap.after(expDiv);
+
+  // Next button
+  const nav = document.createElement('div');
+  nav.className = 'quiz-nav';
+
+  const isLast = qIndex === state.quizQuestions.length - 1;
+  const btn = document.createElement('button');
+  btn.className = 'btn-quiz-next';
+  btn.textContent = isLast ? 'See Results →' : 'Next Question →';
+  btn.addEventListener('click', () => {
+    if (isLast) {
+      showQuizResult();
+    } else {
+      renderQuestion(qIndex + 1);
+    }
+  });
+  nav.appendChild(btn);
+  document.getElementById('q-wrap').appendChild(nav);
+
+  document.getElementById('quiz-section').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function showQuizResult() {
+  const questions = state.quizQuestions;
+  const correct = state.quizAnswers.filter((a, i) => a === questions[i].correct).length;
+  const score = correct / questions.length;
+  const pct = Math.round(score * 100);
+
+  const colorClass = score >= 0.8 ? 'good' : score >= 0.5 ? 'ok' : 'bad';
+  const understood = state.understandingChoice === 'yes' ||
+                     (state.understandingChoice === 'somewhat' && score >= 0.5);
+
+  // Send feedback to server
+  sendFeedback(score, understood);
+
+  const qs = document.getElementById('quiz-section');
+
+  const dots = questions.map((q, i) => {
+    const cls = state.quizAnswers[i] === q.correct ? 'correct' : 'wrong';
+    return `<div class="q-dot ${cls}"></div>`;
+  }).join('');
+
+  let actionsHtml = '';
+  const hasNext = state.currentIndex < state.slides.length - 1;
+
+  if (score < 0.5 || state.understandingChoice === 'no') {
+    actionsHtml += `<button class="btn-reteach" onclick="triggerReteach()">🔁 Simplify & Re-teach</button>`;
+  }
+  if (hasNext) {
+    actionsHtml += `<button class="btn-next-slide" onclick="nextSlide()">Next Slide →</button>`;
+  } else {
+    actionsHtml += `<button class="btn-next-slide" onclick="showStats()">📊 View My Results</button>`;
+  }
+
+  qs.innerHTML = `
+    <div class="quiz-header">
+      <div class="quiz-label">Quiz Results</div>
+      <div class="quiz-progress-dots">${dots}</div>
+    </div>
+    <div class="quiz-result">
+      <div class="quiz-score-display ${colorClass}">${pct}%</div>
+      <div class="quiz-score-label">${correct} / ${questions.length} correct</div>
+      <div class="quiz-result-actions">${actionsHtml}</div>
+    </div>
+  `;
+
+  qs.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// =====================================================================
+// FEEDBACK
+// =====================================================================
+async function sendFeedback(quizScore, understood) {
+  const timeSpent = stopTimer();
+  const slide = state.slides[state.currentIndex];
+
+  const record = {
+    session_id: state.sessionId,
+    slide_index: state.currentIndex,
+    slide_title: slide.title,
+    time_spent: timeSpent,
+    understood,
+    quiz_score: quizScore,
+    quiz_answers: state.quizAnswers,
+  };
+
+  try {
+    const res = await fetch('/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      state.adaptiveProfile = data.profile;
+      state.performance.push(record);
+    }
+  } catch (_) {}
+}
+
+// =====================================================================
+// NAVIGATION
+// =====================================================================
+function nextSlide() {
+  state.currentIndex++;
+  loadSlide(state.currentIndex);
+  document.getElementById('learning-body').scrollTop = 0;
+}
+
+async function triggerReteach() {
+  const qs = document.getElementById('quiz-section');
+  qs.innerHTML = `
+    <div style="text-align:center;padding:1.5rem;color:var(--text-3);">
+      <div class="loading-ring" style="width:32px;height:32px;margin:0 auto .75rem;"></div>
+      Generating simplified explanation…
+    </div>
+  `;
+  qs.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  try {
+    const res = await fetch('/reteach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Reteach failed.');
+
+    qs.innerHTML = '';
+    loadSlide(state.currentIndex, data.slide);
+
+  } catch (err) {
+    showToast(err.message);
+    qs.innerHTML = '';
+    // Show next slide button anyway
+    const hasNext = state.currentIndex < state.slides.length - 1;
+    qs.innerHTML = `
+      <div style="text-align:center;padding:1rem;">
+        ${hasNext
+          ? `<button class="btn-next-slide" onclick="nextSlide()">Next Slide →</button>`
+          : `<button class="btn-next-slide" onclick="showStats()">📊 View My Results</button>`
+        }
+      </div>
+    `;
+  }
+}
+
+// =====================================================================
+// STATS SCREEN
+// =====================================================================
+async function showStats() {
+  stopTimer();
+
+  setLoading('Analysing your session…', 'Crunching the numbers');
+  showScreen('screen-loading');
+
+  try {
+    const res = await fetch(`/stats/${state.sessionId}`);
+    const data = await res.json();
+    renderStats(data);
+    showScreen('screen-stats');
+  } catch (_) {
+    // fallback with local data
+    renderStatsLocal();
+    showScreen('screen-stats');
+  }
+}
+
+function renderStats(data) {
+  const profile  = data.profile;
+  const perf     = data.performance;
+
+  document.getElementById('stats-topic-label').textContent = `Topic: ${data.topic}`;
+
+  // Stat cards
+  const avgQuiz  = profile.avg_quiz_score !== null ? Math.round(profile.avg_quiz_score * 100) + '%' : '—';
+  const understood = profile.understood_rate !== null ? Math.round(profile.understood_rate * 100) + '%' : '—';
+  const avgTime  = profile.avg_time_seconds !== null ? fmtTime(profile.avg_time_seconds) : '—';
+  const completed = perf.length + ' / ' + data.total_slides;
+
+  const quizColor = profile.avg_quiz_score >= .8 ? 'green' : profile.avg_quiz_score >= .5 ? 'gold' : 'red';
+  const undColor  = profile.understood_rate >= .8 ? 'green' : profile.understood_rate >= .5 ? 'gold' : 'red';
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value gold">${completed}</div>
+      <div class="stat-key">Slides Completed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value ${quizColor}">${avgQuiz}</div>
+      <div class="stat-key">Avg Quiz Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value ${undColor}">${understood}</div>
+      <div class="stat-key">Slides Understood</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value teal">${avgTime}</div>
+      <div class="stat-key">Avg Time / Slide</div>
+    </div>
+  `;
+
+  // Adaptive insights
+  const note = document.getElementById('adaptive-note');
+  const noteBody = document.getElementById('adaptive-note-body');
+  if (profile.summary && profile.summary !== 'new learner – no data yet') {
+    note.style.display = 'block';
+    let html = `<p><strong>AI Diagnosis:</strong> ${escHtml(profile.summary)}.</p>`;
+    if (profile.weak_slides && profile.weak_slides.length > 0) {
+      html += `<p style="margin-top:.5rem;">Topics to review: `;
+      html += profile.weak_slides.map(t => `<span class="weak-tag">${escHtml(t)}</span>`).join(' ');
+      html += '</p>';
+    }
+    if (profile.difficulty_hint === 'simplify') {
+      html += `<p style="margin-top:.5rem;color:var(--text-3);">💡 Next time, try breaking this topic into smaller sub-topics for better retention.</p>`;
+    } else if (profile.difficulty_hint === 'advanced') {
+      html += `<p style="margin-top:.5rem;color:var(--text-3);">🚀 You're ready for advanced material — try a more specific sub-topic next.</p>`;
+    }
+    noteBody.innerHTML = html;
+  } else {
+    note.style.display = 'none';
+  }
+
+  // Performance table
+  if (perf.length > 0) {
+    const tableWrap = document.getElementById('perf-table-wrap');
+    tableWrap.style.display = 'block';
+
+    const table = document.getElementById('perf-table');
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Slide</th>
+          <th>Time</th>
+          <th>Quiz</th>
+          <th>Understood</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${perf.map((p, i) => {
+          const qPct = Math.round(p.quiz_score * 100);
+          const qClass = p.quiz_score >= .8 ? 'good' : p.quiz_score >= .5 ? 'ok' : 'bad';
+          const uClass = p.understood ? 'good' : 'bad';
+          const barColor = p.quiz_score >= .8 ? 'var(--green)' : p.quiz_score >= .5 ? 'var(--gold)' : 'var(--red)';
+          return `
+            <tr>
+              <td style="color:var(--text-3);font-family:var(--mono);">${i+1}</td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.slide_title)}</td>
+              <td style="font-family:var(--mono);">${fmtTime(p.time_spent)}</td>
+              <td>
+                <div class="mini-bar">
+                  <div class="mini-bar-fill" style="width:${qPct}%;background:${barColor};"></div>
+                </div>
+              </td>
+              <td><span class="badge ${uClass}">${p.understood ? 'Yes' : 'No'}</span></td>
+              <td><span class="badge ${qClass}">${qPct}%</span></td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    `;
+  }
+}
+
+function renderStatsLocal() {
+  document.getElementById('stats-topic-label').textContent = `Topic: ${state.topic}`;
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value gold">${state.performance.length}</div>
+      <div class="stat-key">Slides Reviewed</div>
+    </div>
+  `;
+}
+
+function restartSession() {
+  // Reset all state
+  state.sessionId = null; state.slides = []; state.currentIndex = 0;
+  state.performance = []; state.adaptiveProfile = null;
+  topicInput.value = '';
+  charCount.textContent = '0';
+  showScreen('screen-start');
+}
+
+// =====================================================================
+// VISUAL DIAGRAM ENGINE
+// =====================================================================
+
+async function toggleVisual() {
+  const btn = document.getElementById('visual-toggle-btn');
+  const vp  = document.getElementById('visual-panel');
+
+  if (state.visualOpen) {
+    // Collapse
+    vp.style.display = 'none';
+    state.visualOpen = false;
+    if (btn) { btn.classList.remove('active'); btn.innerHTML = '<span class="vt-icon">📊</span> Show Visual Diagram'; }
     return;
   }
-  wrap.innerHTML = svg;
-  box.innerHTML = '';
-  box.appendChild(wrap);
-}
 
-// ═══════════════════════════════════════════════════════════════
-//  SHARED SVG HELPERS
-// ═══════════════════════════════════════════════════════════════
-const DEFS = `<defs>
-  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-    <path d="M2 1L8 5L2 9" fill="none" stroke="#4a4a7a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  </marker>
-</defs>`;
+  // Expand
+  state.visualOpen = true;
+  vp.style.display = 'block';
+  if (btn) { btn.classList.add('active'); btn.innerHTML = '<span class="vt-icon">📊</span> Hide Visual Diagram'; }
 
-function svgWrap(w, h, body) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${DEFS}${body}</svg>`;
-}
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+  if (state.visualLoaded) return; // already fetched
 
-// Title bar at top of every visual
-function titleBar(w, title, typeLabel) {
-  const colors = {flowchart:'#7b61ff',cycle:'#00c9a7',comparison:'#ff7c7c',timeline:'#f4a62a',pyramid:'#a78bfa',mindmap:'#34d399'};
-  const c = colors[typeLabel] || '#7b61ff';
-  return `<rect x="0" y="0" width="${w}" height="38" fill="${c}18" rx="0"/>
-    <text x="14" y="24" font-family="Segoe UI,sans-serif" font-size="13" font-weight="600" fill="${c}">${esc(title)}</text>
-    <text x="${w-14}" y="24" font-family="Segoe UI,sans-serif" font-size="11" fill="${c}99" text-anchor="end">${typeLabel.toUpperCase()}</text>`;
-}
+  // Show loading state
+  vp.innerHTML = `
+    <div class="visual-panel">
+      <div class="visual-panel-header">
+        <div class="visual-panel-label">Visual Diagram</div>
+      </div>
+      <div class="visual-panel-body">
+        <div class="visual-loading">
+          <div class="loading-ring" style="width:32px;height:32px;"></div>
+          <span>Generating visual…</span>
+        </div>
+      </div>
+    </div>
+  `;
+  vp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-// ═══════════════════════════════════════════════════════════════
-//  FLOWCHART
-// ═══════════════════════════════════════════════════════════════
-function drawFlowchart(v) {
-  const { nodes, edges } = v.data;
-  const NW = 200, NH = 54, GAPX = 60, GAPY = 80, PAD = 40;
-  const W = 680;
+  try {
+    const res = await fetch('/visual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Visual generation failed.');
 
-  // topological levels
-  const out = {}, levels = {};
-  nodes.forEach(n => out[n.id] = []);
-  edges.forEach(e => out[e.from] && out[e.from].push(e.to));
-  const start = nodes.find(n => n.type === 'start') || nodes[0];
+    state.visualLoaded = true;
+    renderVisualPanel(vp, data.visual);
 
-  function setL(id, l) {
-    if ((levels[id]??-1) >= l) return;
-    levels[id] = l;
-    (out[id]||[]).forEach(t => setL(t, l+1));
+  } catch (err) {
+    vp.innerHTML = `
+      <div class="visual-panel">
+        <div class="visual-panel-header">
+          <div class="visual-panel-label">Visual Diagram</div>
+        </div>
+        <div class="visual-panel-body">
+          <div class="visual-error">
+            ⚠️ ${escHtml(err.message)}
+            <br>
+            <button onclick="state.visualLoaded=false; toggleVisual(); toggleVisual();">Retry</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
-  setL(start.id, 0);
-  nodes.forEach(n => { if (levels[n.id]==null) levels[n.id]=0; });
+}
 
-  const byL = {};
-  nodes.forEach(n => { const l=levels[n.id]||0; (byL[l]=byL[l]||[]).push(n); });
-  const maxL = Math.max(...Object.keys(byL).map(Number));
+function renderVisualPanel(container, visual) {
+  const typeLabel = visual.type.charAt(0).toUpperCase() + visual.type.slice(1);
+  const svgHtml = buildDiagramSVG(visual);
 
-  const pos = {};
-  Object.entries(byL).forEach(([l,grp]) => {
-    grp.forEach((n,i) => {
-      const total = grp.length * NW + (grp.length-1)*20;
-      const sx = (W - total)/2;
-      pos[n.id] = { x: sx + i*(NW+20) + NW/2, y: PAD + 38 + l*(NH+GAPY) };
+  container.innerHTML = `
+    <div class="visual-panel">
+      <div class="visual-panel-header">
+        <div class="visual-panel-label">Visual Diagram</div>
+        <span class="visual-type-badge">${typeLabel}</span>
+      </div>
+      <div class="visual-panel-body" style="overflow-x:auto;">
+        ${svgHtml}
+      </div>
+    </div>
+  `;
+}
+
+// ---- Diagram dispatcher ----
+function buildDiagramSVG(visual) {
+  const { type, data } = visual;
+  switch (type) {
+    case 'flowchart':   return buildFlowchart(data);
+    case 'cycle':       return buildCycle(data);
+    case 'comparison':  return buildComparison(data);
+    case 'timeline':    return buildTimeline(data);
+    case 'pyramid':     return buildPyramid(data);
+    case 'mindmap':     return buildMindmap(data);
+    default:            return `<p style="color:var(--text-3)">Unknown diagram type: ${escHtml(type)}</p>`;
+  }
+}
+
+/* ============================================================
+   FLOWCHART
+   ============================================================ */
+function buildFlowchart(data) {
+  const nodes = (data.nodes || []).slice(0, 8);
+  const edges = data.edges || [];
+  const W = 640, NODE_W = 160, NODE_H = 52, GAP_Y = 80;
+
+  // Simple top-down layout: assign rows by topological order
+  const order = [];
+  const visited = new Set();
+  const adjMap = {};
+  nodes.forEach(n => { adjMap[n.id] = []; });
+  edges.forEach(e => { if (adjMap[e.from]) adjMap[e.from].push(e.to); });
+
+  function topo(id) {
+    if (visited.has(id)) return;
+    visited.add(id);
+    (adjMap[id] || []).forEach(topo);
+    order.unshift(id);
+  }
+  nodes.forEach(n => topo(n.id));
+
+  const rowOf = {};
+  const colOf = {};
+  // BFS for row assignment
+  const rowCount = {};
+  order.forEach((id, i) => { rowOf[id] = i; });
+  // Single column layout for simplicity
+  nodes.forEach((n, i) => { colOf[n.id] = 0; });
+
+  const H = nodes.length * (NODE_H + GAP_Y) + 40;
+  const cx = W / 2;
+
+  let defs = `<defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2a3347"/>
+    </marker>
+  </defs>`;
+
+  let edgeSvg = '';
+  edges.forEach(e => {
+    const fi = nodes.findIndex(n => n.id === e.from);
+    const ti = nodes.findIndex(n => n.id === e.to);
+    if (fi < 0 || ti < 0) return;
+    const x1 = cx, y1 = 20 + fi * (NODE_H + GAP_Y) + NODE_H;
+    const x2 = cx, y2 = 20 + ti * (NODE_H + GAP_Y);
+    const my = (y1 + y2) / 2;
+    const path = `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2 - 4}`;
+    edgeSvg += `<path class="fc-edge" d="${path}"/>`;
+    if (e.label) {
+      edgeSvg += `<text class="fc-edge-label" x="${cx + 6}" y="${my}" dominant-baseline="middle">${escHtml(e.label)}</text>`;
+    }
+  });
+
+  let nodeSvg = '';
+  nodes.forEach((n, i) => {
+    const x = cx - NODE_W / 2;
+    const y = 20 + i * (NODE_H + GAP_Y);
+    const type = n.type || 'step';
+    const isDecision = type === 'decision';
+    const isStartEnd = type === 'start' || type === 'end';
+    const rx = isStartEnd ? 26 : 8;
+    const borderColor = isStartEnd ? 'var(--teal)' : isDecision ? 'var(--gold)' : 'var(--border2)';
+    const bgFill = isStartEnd ? 'rgba(32,197,176,.1)' : isDecision ? 'rgba(232,160,32,.07)' : 'var(--surface)';
+
+    nodeSvg += `
+      <g class="fc-node ${type}">
+        <rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="${rx}"
+          style="fill:${bgFill};stroke:${borderColor};stroke-width:1.5;"/>
+        <text x="${cx}" y="${y + (n.sub ? NODE_H/2 - 6 : NODE_H/2 + 1)}" text-anchor="middle"
+          dominant-baseline="middle" style="fill:var(--text);font-size:11px;font-weight:700;font-family:Syne,sans-serif;">
+          ${escHtml(n.label || '')}
+        </text>
+        ${n.sub ? `<text x="${cx}" y="${y + NODE_H/2 + 10}" text-anchor="middle"
+          dominant-baseline="middle" class="sub-text" style="fill:var(--text-3);font-size:9px;font-family:Syne,sans-serif;">
+          ${escHtml(n.sub)}
+        </text>` : ''}
+      </g>`;
+  });
+
+  return `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    ${defs}${edgeSvg}${nodeSvg}
+  </svg>`;
+}
+
+/* ============================================================
+   CYCLE
+   ============================================================ */
+function buildCycle(data) {
+  const steps = (data.steps || []).slice(0, 7);
+  const n = steps.length;
+  if (!n) return '<p style="color:var(--text-3)">No cycle data.</p>';
+
+  const W = 560, H = 560, CX = W / 2, CY = H / 2, R = 190, NR = 44;
+  const colors = ['var(--gold)','var(--teal)','var(--green)','#8b5cf6','#f97316','#ec4899','#06b6d4'];
+
+  let arcs = '', nodes = '';
+  steps.forEach((step, i) => {
+    const angle = (2 * Math.PI * i / n) - Math.PI / 2;
+    const nextAngle = (2 * Math.PI * (i + 1) / n) - Math.PI / 2;
+    const x = CX + R * Math.cos(angle);
+    const y = CY + R * Math.sin(angle);
+    const nx = CX + R * Math.cos(nextAngle);
+    const ny = CY + R * Math.sin(nextAngle);
+    const color = colors[i % colors.length];
+
+    // Arc segment
+    const largeArc = (1 / n) > 0.5 ? 1 : 0;
+    arcs += `<path d="M ${CX + (R-20)*Math.cos(angle)} ${CY + (R-20)*Math.sin(angle)}
+      A ${R-20} ${R-20} 0 ${largeArc} 1 ${CX + (R-20)*Math.cos(nextAngle)} ${CY + (R-20)*Math.sin(nextAngle)}"
+      fill="none" stroke="${color}" stroke-width="2" opacity="0.3"/>`;
+
+    // Arrow
+    const midA = angle + (Math.PI * 2 / n) * 0.85;
+    const ax = CX + R * Math.cos(midA), ay = CY + R * Math.sin(midA);
+    arcs += `<circle cx="${ax}" cy="${ay}" r="3" fill="${color}" opacity="0.5"/>`;
+
+    // Node circle
+    nodes += `
+      <g class="cycle-node">
+        <circle cx="${x}" cy="${y}" r="${NR}" style="fill:rgba(255,255,255,.03);stroke:${color};stroke-width:2;"/>
+        <text x="${x}" y="${y - (step.sub ? 7 : 0)}" text-anchor="middle" dominant-baseline="middle"
+          style="fill:${color};font-size:10px;font-weight:800;font-family:Syne,sans-serif;">
+          ${escHtml((step.label || '').substring(0, 18))}
+        </text>
+        ${step.sub ? `<text x="${x}" y="${y + 10}" text-anchor="middle" dominant-baseline="middle"
+          style="fill:var(--text-3);font-size:8px;font-family:Syne,sans-serif;">
+          ${escHtml((step.sub || '').substring(0, 22))}
+        </text>` : ''}
+      </g>`;
+  });
+
+  // Center label
+  const centerLabel = `<text x="${CX}" y="${CY}" text-anchor="middle" dominant-baseline="middle"
+    style="fill:var(--text-3);font-size:11px;font-weight:600;font-family:Syne,sans-serif;">CYCLE</text>`;
+
+  return `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    ${arcs}${nodes}${centerLabel}
+  </svg>`;
+}
+
+/* ============================================================
+   COMPARISON TABLE
+   ============================================================ */
+function buildComparison(data) {
+  const headers = data.headers || ['A', 'B'];
+  const items = (data.items || []).slice(0, 6);
+  const W = 640, ROW_H = 40, HEADER_H = 48, PAD = 16;
+  const colW = (W - 160) / headers.length;
+  const H = HEADER_H + items.length * ROW_H + PAD * 2;
+  const colors = ['var(--gold)', 'var(--teal)', 'var(--green)', '#8b5cf6'];
+
+  let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Header bg
+  svg += `<rect x="0" y="0" width="${W}" height="${HEADER_H}" rx="8" style="fill:var(--surface);"/>`;
+  // Label column header
+  svg += `<text x="${PAD}" y="${HEADER_H/2}" dominant-baseline="middle"
+    style="fill:var(--text-3);font-size:10px;font-weight:700;font-family:Syne,sans-serif;letter-spacing:.1em;text-transform:uppercase;">CRITERION</text>`;
+
+  headers.forEach((h, ci) => {
+    const x = 160 + ci * colW + colW / 2;
+    const color = colors[ci % colors.length];
+    svg += `<text x="${x}" y="${HEADER_H/2}" text-anchor="middle" dominant-baseline="middle"
+      style="fill:${color};font-size:13px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(h)}</text>`;
+  });
+
+  // Rows
+  items.forEach((item, ri) => {
+    const y = HEADER_H + ri * ROW_H;
+    const bg = ri % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent';
+    svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" style="fill:${bg};"/>`;
+    // Divider
+    svg += `<line x1="0" y1="${y + ROW_H}" x2="${W}" y2="${y + ROW_H}" stroke="var(--border)" stroke-width="0.5"/>`;
+    // Label
+    svg += `<text x="${PAD}" y="${y + ROW_H/2}" dominant-baseline="middle"
+      style="fill:var(--text-3);font-size:10px;font-weight:700;font-family:Syne,sans-serif;">${escHtml((item.label||'').substring(0,20))}</text>`;
+    // Vertical divider
+    svg += `<line x1="155" y1="${HEADER_H}" x2="155" y2="${H}" stroke="var(--border)" stroke-width="0.8"/>`;
+    // Values
+    headers.forEach((h, ci) => {
+      const val = ci === 0 ? (item.a || '') : (item.b || item['b'] || (item.points && item.points[ci]) || '');
+      const x = 160 + ci * colW + colW / 2;
+      svg += `<text x="${x}" y="${y + ROW_H/2}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:var(--text-2);font-size:9.5px;font-family:Syne,sans-serif;">${escHtml(String(val).substring(0,30))}</text>`;
+      if (ci < headers.length - 1) {
+        svg += `<line x1="${160 + (ci+1)*colW}" y1="${HEADER_H}" x2="${160 + (ci+1)*colW}" y2="${H}" stroke="var(--border)" stroke-width="0.5"/>`;
+      }
     });
   });
 
-  const H = PAD + 38 + (maxL+1)*(NH+GAPY) + PAD;
-  const COL = { start:'#00c9a7', end:'#ff7c7c', decision:'#7b61ff', step:'#3a3a5c' };
-  const STROKE = { start:'#00c9a7', end:'#ff7c7c', decision:'#7b61ff', step:'#5050a0' };
-  const TEXT = { start:'#00c9a7', end:'#ff7c7c', decision:'#c4b8ff', step:'#c0c0e0' };
-
-  let body = titleBar(W, v.title, 'flowchart');
-
-  edges.forEach(e => {
-    const fp=pos[e.from], tp=pos[e.to];
-    if (!fp||!tp) return;
-    const x1=fp.x, y1=fp.y+NH/2, x2=tp.x, y2=tp.y-NH/2-4;
-    const mid=(y1+y2)/2;
-    const d = Math.abs(x1-x2)<4 ? `M${x1},${y1}L${x2},${y2}`
-                                  : `M${x1},${y1}C${x1},${mid} ${x2},${mid} ${x2},${y2}`;
-    body += `<path d="${d}" fill="none" stroke="#3a3a6a" stroke-width="1.5" marker-end="url(#arr)"/>`;
-  });
-
-  nodes.forEach(n => {
-    const p=pos[n.id]; if(!p) return;
-    const x=p.x-NW/2, y=p.y-NH/2;
-    const t=n.type||'step', rx = (t==='start'||t==='end') ? 27 : 8;
-    const hasS = n.sub && n.sub.trim();
-    body += `<rect x="${x}" y="${y}" width="${NW}" height="${NH}" rx="${rx}" fill="${COL[t]||COL.step}22" stroke="${STROKE[t]||STROKE.step}" stroke-width="1.2"/>`;
-    body += `<text x="${p.x}" y="${p.y+(hasS?-8:1)}" font-family="Segoe UI,sans-serif" font-size="13" font-weight="600" fill="${TEXT[t]||TEXT.step}" text-anchor="middle" dominant-baseline="central">${esc(n.label)}</text>`;
-    if(hasS) body += `<text x="${p.x}" y="${p.y+11}" font-family="Segoe UI,sans-serif" font-size="11" fill="#50508a" text-anchor="middle" dominant-baseline="central">${esc(n.sub)}</text>`;
-  });
-
-  return svgWrap(W, H, body);
+  svg += `</svg>`;
+  return svg;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  CYCLE
-// ═══════════════════════════════════════════════════════════════
-function drawCycle(v) {
-  const steps = v.data.steps || [];
-  const W=680, H=460, CX=340, CY=258, R=155;
-  const n=steps.length, BOX_W=150, BOX_H=52;
+/* ============================================================
+   TIMELINE
+   ============================================================ */
+function buildTimeline(data) {
+  const events = (data.events || []).slice(0, 8);
+  if (!events.length) return '<p style="color:var(--text-3)">No timeline data.</p>';
 
-  let body = titleBar(W, v.title, 'cycle');
+  const W = 640, ROW_H = 72, PAD_TOP = 24, LINE_X = 100;
+  const H = PAD_TOP + events.length * ROW_H + 24;
+  const colors = ['var(--gold)','var(--teal)','var(--green)','#8b5cf6','#f97316','#ec4899','var(--gold)','var(--teal)'];
 
-  // Draw circular arrows between nodes
-  steps.forEach((_,i) => {
-    const a1 = -Math.PI/2 + (i/n)*2*Math.PI + 0.18;
-    const a2 = -Math.PI/2 + ((i+1)/n)*2*Math.PI - 0.18;
-    const x1 = CX + R*Math.cos(a1), y1 = CY + R*Math.sin(a1);
-    const x2 = CX + R*Math.cos(a2), y2 = CY + R*Math.sin(a2);
-    const large = (a2-a1) > Math.PI ? 1 : 0;
-    body += `<path d="M${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2}" fill="none" stroke="#3a3a6a" stroke-width="1.5" marker-end="url(#arr)"/>`;
+  let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
+  // Vertical line
+  svg += `<line x1="${LINE_X}" y1="${PAD_TOP}" x2="${LINE_X}" y2="${H - 24}" stroke="var(--border2)" stroke-width="2"/>`;
+
+  events.forEach((ev, i) => {
+    const y = PAD_TOP + i * ROW_H + ROW_H / 2;
+    const color = colors[i % colors.length];
+
+    // Dot
+    svg += `<circle cx="${LINE_X}" cy="${y}" r="7" style="fill:${color};opacity:.85;"/>`;
+    svg += `<circle cx="${LINE_X}" cy="${y}" r="13" style="fill:${color};opacity:.12;"/>`;
+
+    // Year / label
+    svg += `<text x="${LINE_X - 20}" y="${y - 6}" text-anchor="end" dominant-baseline="middle"
+      style="fill:${color};font-size:9px;font-weight:800;font-family:'JetBrains Mono',monospace;">${escHtml(String(ev.year||''))}</text>`;
+
+    // Event label
+    svg += `<text x="${LINE_X + 22}" y="${y - (ev.sub ? 7 : 0)}" dominant-baseline="middle"
+      style="fill:var(--text);font-size:11px;font-weight:700;font-family:Syne,sans-serif;">${escHtml((ev.label||'').substring(0,40))}</text>`;
+
+    if (ev.sub) {
+      svg += `<text x="${LINE_X + 22}" y="${y + 10}" dominant-baseline="middle"
+        style="fill:var(--text-3);font-size:9px;font-family:Syne,sans-serif;">${escHtml((ev.sub||'').substring(0,50))}</text>`;
+    }
   });
 
-  // Cycle center label
-  body += `<circle cx="${CX}" cy="${CY}" r="48" fill="#14142a" stroke="#3a3a60" stroke-width="1"/>
-    <text x="${CX}" y="${CY}" font-family="Segoe UI,sans-serif" font-size="12" fill="#6060a0" text-anchor="middle" dominant-baseline="central">CYCLE</text>`;
-
-  // Step boxes
-  const PALETTE = ['#7b61ff','#00c9a7','#f4a62a','#ff7c7c','#a78bfa','#34d399','#60a5fa'];
-  steps.forEach((s,i) => {
-    const angle = -Math.PI/2 + (i/n)*2*Math.PI;
-    const bx = CX + (R+56)*Math.cos(angle) - BOX_W/2;
-    const by = CY + (R+56)*Math.sin(angle) - BOX_H/2;
-    const c = PALETTE[i % PALETTE.length];
-    const hasS = s.sub && s.sub.trim();
-    body += `<rect x="${bx}" y="${by}" width="${BOX_W}" height="${BOX_H}" rx="8" fill="${c}20" stroke="${c}" stroke-width="1.2"/>`;
-    body += `<text x="${bx+BOX_W/2}" y="${by+(hasS?BOX_H/2-8:BOX_H/2)}" font-family="Segoe UI,sans-serif" font-size="12" font-weight="600" fill="${c}" text-anchor="middle" dominant-baseline="central">${esc(s.label)}</text>`;
-    if(hasS) body += `<text x="${bx+BOX_W/2}" y="${by+BOX_H/2+9}" font-family="Segoe UI,sans-serif" font-size="10" fill="#50508a" text-anchor="middle" dominant-baseline="central">${esc(s.sub)}</text>`;
-  });
-
-  return svgWrap(W, H, body);
+  svg += `</svg>`;
+  return svg;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  COMPARISON TABLE
-// ═══════════════════════════════════════════════════════════════
-function drawComparison(v) {
-  const { headers=[], items=[] } = v.data;
-  const W=680, ROW_H=44, HDR_H=52, TOP=38;
-  const H = TOP + HDR_H + items.length*ROW_H + 20;
-  const C1=34, C2=220, C3=450, CW=200;
+/* ============================================================
+   PYRAMID
+   ============================================================ */
+function buildPyramid(data) {
+  const levels = (data.levels || []).slice(0, 7);
+  if (!levels.length) return '<p style="color:var(--text-3)">No pyramid data.</p>';
 
-  let body = titleBar(W, v.title, 'comparison');
-  // header row
-  body += `<rect x="${C1}" y="${TOP}" width="${C2-C1-4}" height="${HDR_H}" rx="8" fill="#1e1e32"/>
-    <rect x="${C2}" y="${TOP}" width="${CW}" height="${HDR_H}" rx="8" fill="#7b61ff22" stroke="#7b61ff" stroke-width="1"/>
-    <rect x="${C3}" y="${TOP}" width="${CW}" height="${HDR_H}" rx="8" fill="#00c9a722" stroke="#00c9a7" stroke-width="1"/>`;
-  body += `<text x="${(C1+C2-4)/2}" y="${TOP+HDR_H/2}" font-family="Segoe UI,sans-serif" font-size="12" fill="#50508a" text-anchor="middle" dominant-baseline="central">Criterion</text>`;
-  body += `<text x="${C2+CW/2}" y="${TOP+HDR_H/2}" font-family="Segoe UI,sans-serif" font-size="13" font-weight="600" fill="#a090ff" text-anchor="middle" dominant-baseline="central">${esc(headers[0]||'A')}</text>`;
-  body += `<text x="${C3+CW/2}" y="${TOP+HDR_H/2}" font-family="Segoe UI,sans-serif" font-size="13" font-weight="600" fill="#00c9a7" text-anchor="middle" dominant-baseline="central">${esc(headers[1]||'B')}</text>`;
+  const W = 620, BASE_W = 520, TOP_W = 50, ROW_H = 52, PAD_TOP = 20;
+  const H = PAD_TOP + levels.length * ROW_H + 30;
+  const CX = W / 2;
+  const colors = [
+    ['rgba(232,160,32,.85)','#e8a020'],
+    ['rgba(32,197,176,.75)','#20c5b0'],
+    ['rgba(62,200,122,.65)','#3ec87a'],
+    ['rgba(139,92,246,.6)','#8b5cf6'],
+    ['rgba(249,115,22,.6)','#f97316'],
+    ['rgba(236,72,153,.55)','#ec4899'],
+    ['rgba(6,182,212,.5)','#06b6d4'],
+  ];
 
-  items.forEach((item,i) => {
-    const y = TOP + HDR_H + i*ROW_H;
-    const bg = i%2===0 ? '#13131e' : '#15152a';
-    body += `<rect x="${C1}" y="${y}" width="${W-C1*2}" height="${ROW_H}" fill="${bg}"/>`;
-    body += `<text x="${(C1+C2-4)/2}" y="${y+ROW_H/2}" font-family="Segoe UI,sans-serif" font-size="12" font-weight="600" fill="#8080b0" text-anchor="middle" dominant-baseline="central">${esc(item.label)}</text>`;
-    body += `<text x="${C2+CW/2}" y="${y+ROW_H/2}" font-family="Segoe UI,sans-serif" font-size="12" fill="#c0b8ff" text-anchor="middle" dominant-baseline="central">${esc(item.a)}</text>`;
-    body += `<text x="${C3+CW/2}" y="${y+ROW_H/2}" font-family="Segoe UI,sans-serif" font-size="12" fill="#80e8d8" text-anchor="middle" dominant-baseline="central">${esc(item.b)}</text>`;
-    // divider
-    body += `<line x1="${C1}" y1="${y+ROW_H}" x2="${W-C1}" y2="${y+ROW_H}" stroke="#1e1e30" stroke-width="1"/>`;
-  });
-
-  return svgWrap(W, H, body);
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  TIMELINE
-// ═══════════════════════════════════════════════════════════════
-function drawTimeline(v) {
-  const events = v.data.events || [];
-  const W=680, PAD=48, EVENT_GAP=110, TOP=38;
-  const H = TOP + PAD + events.length * EVENT_GAP + 40;
-  const LX=90, TX=140;
-
-  let body = titleBar(W, v.title, 'timeline');
-  // vertical line
-  body += `<line x1="${LX}" y1="${TOP+30}" x2="${LX}" y2="${H-20}" stroke="#2a2a4a" stroke-width="2"/>`;
-
-  const COLORS=['#7b61ff','#00c9a7','#f4a62a','#ff7c7c','#a78bfa','#34d399','#60a5fa'];
-  events.forEach((ev,i) => {
-    const y = TOP + PAD + i*EVENT_GAP;
-    const c = COLORS[i % COLORS.length];
-    const hasS = ev.sub && ev.sub.trim();
-    body += `<circle cx="${LX}" cy="${y}" r="8" fill="${c}" stroke="#0e0e18" stroke-width="2"/>`;
-    body += `<text x="${LX-16}" y="${y}" font-family="Segoe UI,sans-serif" font-size="11" font-weight="700" fill="${c}" text-anchor="end" dominant-baseline="central">${esc(ev.year)}</text>`;
-    body += `<rect x="${TX}" y="${y-22}" width="${W-TX-24}" height="${hasS?46:36}" rx="7" fill="${c}18" stroke="${c}44" stroke-width="1"/>`;
-    body += `<text x="${TX+12}" y="${y+(hasS?-6:3)}" font-family="Segoe UI,sans-serif" font-size="13" font-weight="600" fill="${c}" dominant-baseline="central">${esc(ev.label)}</text>`;
-    if(hasS) body += `<text x="${TX+12}" y="${y+14}" font-family="Segoe UI,sans-serif" font-size="11" fill="#606080" dominant-baseline="central">${esc(ev.sub)}</text>`;
-  });
-
-  return svgWrap(W, H, body);
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  PYRAMID
-// ═══════════════════════════════════════════════════════════════
-function drawPyramid(v) {
-  const levels = v.data.levels || [];
-  const W=680, TOP=38, LH=48, GAP=6, PAD=30;
-  const H = TOP + PAD + levels.length*(LH+GAP) + PAD;
-  const COLORS=['#7b61ff','#a78bfa','#c4b5fd','#e9d5ff','#ede9fe','#f5f3ff'];
-
-  let body = titleBar(W, v.title, 'pyramid');
+  let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
 
   levels.forEach((lv, i) => {
-    const wp = lv.width_pct || (30 + i*(60/Math.max(levels.length-1,1)));
-    const bw = (W-PAD*2) * wp / 100;
-    const bx = (W - bw)/2;
-    const by = TOP + PAD + i*(LH+GAP);
-    const c = COLORS[i % COLORS.length];
-    const hasS = lv.sub && lv.sub.trim();
-    body += `<rect x="${bx}" y="${by}" width="${bw}" height="${LH}" rx="5" fill="${c}28" stroke="${c}88" stroke-width="1.2"/>`;
-    body += `<text x="${W/2}" y="${by+(hasS?LH/2-8:LH/2)}" font-family="Segoe UI,sans-serif" font-size="13" font-weight="600" fill="${c}" text-anchor="middle" dominant-baseline="central">${esc(lv.label)}</text>`;
-    if(hasS) body += `<text x="${W/2}" y="${by+LH/2+9}" font-family="Segoe UI,sans-serif" font-size="11" fill="#60608a" text-anchor="middle" dominant-baseline="central">${esc(lv.sub)}</text>`;
+    const widthPct = lv.width_pct || ((i + 1) / levels.length * 90 + 10);
+    const rowW = TOP_W + (BASE_W - TOP_W) * (widthPct / 100);
+    const x = CX - rowW / 2;
+    const y = PAD_TOP + i * ROW_H;
+    const [fill, stroke] = colors[i % colors.length];
+
+    svg += `<rect x="${x}" y="${y}" width="${rowW}" height="${ROW_H - 3}" rx="4"
+      style="fill:${fill};stroke:${stroke};stroke-width:1;opacity:.9;"/>`;
+
+    svg += `<text x="${CX}" y="${y + ROW_H/2 - (lv.sub ? 7 : 0)}" text-anchor="middle" dominant-baseline="middle"
+      style="fill:#fff;font-size:11px;font-weight:800;font-family:Syne,sans-serif;">${escHtml((lv.label||'').substring(0,30))}</text>`;
+
+    if (lv.sub) {
+      svg += `<text x="${CX}" y="${y + ROW_H/2 + 8}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:rgba(255,255,255,.7);font-size:8.5px;font-family:Syne,sans-serif;">${escHtml((lv.sub||'').substring(0,35))}</text>`;
+    }
   });
 
-  return svgWrap(W, H, body);
+  svg += `</svg>`;
+  return svg;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  MINDMAP
-// ═══════════════════════════════════════════════════════════════
-function drawMindmap(v) {
-  const { center='', branches=[] } = v.data;
-  const W=680, CX=340, CY=220;
-  const R_BRANCH=145, R_ITEM=230;
-  const H=460;
-  const COLORS=['#7b61ff','#00c9a7','#f4a62a','#ff7c7c','#a78bfa','#34d399'];
+/* ============================================================
+   MINDMAP
+   ============================================================ */
+function buildMindmap(data) {
+  const center = data.center || 'Topic';
+  const branches = (data.branches || []).slice(0, 6);
+  const W = 680, H = 520, CX = W / 2, CY = H / 2;
+  const branchR = 190, itemR = 280;
+  const colors = ['var(--gold)','var(--teal)','var(--green)','#8b5cf6','#f97316','#ec4899'];
 
-  let body = titleBar(W, v.title, 'mindmap');
+  let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
 
-  // center circle
-  body += `<circle cx="${CX}" cy="${CY}" r="52" fill="#1a1a2e" stroke="#4040a0" stroke-width="1.5"/>`;
-  const words = center.split(' ');
-  const lines = [];
-  let cur='';
-  words.forEach(w=>{ if((cur+' '+w).trim().length>12 && cur){lines.push(cur);cur=w;}else{cur=(cur?cur+' ':'')+w;} });
-  if(cur) lines.push(cur);
-  lines.forEach((ln,li)=>{
-    const ly = CY + (li - (lines.length-1)/2)*16;
-    body += `<text x="${CX}" y="${ly}" font-family="Segoe UI,sans-serif" font-size="13" font-weight="700" fill="#a0a0e0" text-anchor="middle" dominant-baseline="central">${esc(ln)}</text>`;
-  });
+  // Center ellipse
+  svg += `<ellipse cx="${CX}" cy="${CY}" rx="68" ry="32" style="fill:rgba(232,160,32,.12);stroke:var(--gold);stroke-width:2;"/>`;
+  svg += `<text x="${CX}" y="${CY}" text-anchor="middle" dominant-baseline="middle"
+    style="fill:var(--gold);font-size:12px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(center.substring(0,18))}</text>`;
 
-  branches.forEach((br,i) => {
-    const angle = (i/branches.length)*2*Math.PI - Math.PI/2;
-    const c = COLORS[i % COLORS.length];
-    const bx = CX + R_BRANCH*Math.cos(angle), by = CY + R_BRANCH*Math.sin(angle);
+  branches.forEach((br, bi) => {
+    const angle = (2 * Math.PI * bi / branches.length) - Math.PI / 2;
+    const color = colors[bi % colors.length];
+    const bx = CX + branchR * Math.cos(angle);
+    const by = CY + branchR * Math.sin(angle);
+    const bw = 120, bh = 30;
 
-    // line from center to branch
-    const ex=CX+52*Math.cos(angle), ey=CY+52*Math.sin(angle);
-    body += `<line x1="${ex}" y1="${ey}" x2="${bx}" y2="${by}" stroke="${c}88" stroke-width="1.5"/>`;
+    // Line center → branch
+    svg += `<line x1="${CX + 68 * Math.cos(angle)}" y1="${CY + 32 * Math.sin(angle)}"
+      x2="${bx}" y2="${by}" stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
 
-    // branch label box
-    const BW=120,BH=32;
-    const bboxX=bx-BW/2, bboxY=by-BH/2;
-    body += `<rect x="${bboxX}" y="${bboxY}" width="${BW}" height="${BH}" rx="16" fill="${c}22" stroke="${c}" stroke-width="1"/>`;
-    body += `<text x="${bx}" y="${by}" font-family="Segoe UI,sans-serif" font-size="12" font-weight="600" fill="${c}" text-anchor="middle" dominant-baseline="central">${esc(br.label)}</text>`;
+    // Branch node
+    svg += `<rect x="${bx - bw/2}" y="${by - bh/2}" width="${bw}" height="${bh}" rx="6"
+      style="fill:var(--surface);stroke:${color};stroke-width:1.5;"/>`;
+    svg += `<text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="middle"
+      style="fill:${color};font-size:10px;font-weight:800;font-family:Syne,sans-serif;">${escHtml((br.label||'').substring(0,16))}</text>`;
 
-    // sub-items
-    const items = br.items || [];
-    items.forEach((item, j) => {
-      const spread = (items.length-1)*0.28;
-      const ia = angle - spread/2 + j*(items.length>1 ? spread/(items.length-1) : 0);
-      const ix = CX + R_ITEM*Math.cos(ia), iy = CY + R_ITEM*Math.sin(ia);
-      body += `<line x1="${bx}" y1="${by}" x2="${ix}" y2="${iy}" stroke="${c}44" stroke-width="1" stroke-dasharray="4 3"/>`;
-      body += `<circle cx="${ix}" cy="${iy}" r="4" fill="${c}88"/>`;
-      const ta = Math.cos(ia) > 0 ? 'start' : 'end';
-      const tx = ix + (Math.cos(ia)>0?8:-8);
-      body += `<text x="${tx}" y="${iy}" font-family="Segoe UI,sans-serif" font-size="11" fill="#8080b0" text-anchor="${ta}" dominant-baseline="central">${esc(item)}</text>`;
+    // Sub-items
+    const items = (br.items || []).slice(0, 3);
+    items.forEach((item, ii) => {
+      const spread = (items.length - 1) * 28;
+      const offsetY = -spread / 2 + ii * 28;
+      const ix = bx + (Math.cos(angle) > 0 ? 80 : -80);
+      const iy = by + offsetY;
+
+      svg += `<line x1="${bx + (Math.cos(angle) > 0 ? bw/2 : -bw/2)}" y1="${by}"
+        x2="${ix}" y2="${iy}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 2"/>`;
+      svg += `<text x="${ix + (Math.cos(angle) > 0 ? 4 : -4)}" y="${iy}" dominant-baseline="middle"
+        text-anchor="${Math.cos(angle) > 0 ? 'start' : 'end'}"
+        style="fill:var(--text-3);font-size:8.5px;font-family:Syne,sans-serif;">${escHtml(String(item).substring(0,22))}</text>`;
     });
   });
 
-  return svgWrap(W, H, body);
+  svg += `</svg>`;
+  return svg;
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  UTILS
-// ═══════════════════════════════════════════════════════════════
+
 function escHtml(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════════════════════════
-renderSlides();
+function fmtTime(s) {
+  s = Math.round(s);
+  if (s < 60) return s + 's';
+  return `${Math.floor(s/60)}m ${s%60}s`;
+}
+
+// =====================================================================
+// VISIBLE NAV BUTTONS + KEYBOARD NAVIGATION
+// =====================================================================
+function updateNavButtons() {
+  const prev = document.getElementById('btn-prev');
+  const next = document.getElementById('btn-next');
+  if (!prev || !next) return;
+  prev.disabled = state.currentIndex <= 0;
+  next.disabled = state.currentIndex >= state.slides.length - 1;
+}
+
+function navPrev() {
+  if (state.currentIndex <= 0) return;
+  stopTimer();
+  state.currentIndex--;
+  loadSlide(state.currentIndex);
+  document.getElementById('learning-body').scrollTop = 0;
+  updateNavButtons();
+}
+
+function navNext() {
+  if (state.currentIndex >= state.slides.length - 1) {
+    showStats();
+    return;
+  }
+  stopTimer();
+  state.quizDone = true;
+  state.currentIndex++;
+  loadSlide(state.currentIndex);
+  document.getElementById('learning-body').scrollTop = 0;
+  updateNavButtons();
+}
+
+document.addEventListener('keydown', e => {
+  const learningScreen = document.getElementById('screen-learning');
+  if (!learningScreen || !learningScreen.classList.contains('active')) return;
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); navNext(); }
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); navPrev(); }
+});
 </script>
+
 </body>
 </html>
