@@ -943,67 +943,42 @@
 
     /* ---- SVG diagram base ---- */
     .viz-svg {
-      width: 100%; max-width: 760px;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      display: block;
       font-family: 'Syne', sans-serif;
       overflow: visible;
     }
 
     .visual-panel-body {
-      padding: 1.5rem;
+      padding: 1.5rem 1rem;
       min-height: 320px;
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-x: auto;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
     }
 
-    /* Flowchart */
-    .fc-node rect, .fc-node polygon {
-      fill: var(--surface); stroke: var(--border2); stroke-width: 1.5;
+    /* Scroll/scale wrapper — SVG fills width, scrolls on tiny screens */
+    .viz-scroll-wrap {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
     }
-    .fc-node.start rect, .fc-node.end rect {
-      fill: rgba(32,197,176,.1); stroke: var(--teal); rx: 20;
+    .viz-scroll-wrap svg {
+      min-width: 400px;
+      width: 100%;
+      height: auto;
+      display: block;
     }
-    .fc-node.decision polygon {
-      fill: rgba(232,160,32,.08); stroke: var(--gold);
-    }
-    .fc-node text { fill: var(--text); font-size: 11px; font-weight: 600; }
-    .fc-node .sub-text { fill: var(--text-3); font-size: 9px; font-weight: 400; }
-    .fc-edge { fill: none; stroke: var(--border2); stroke-width: 1.5; marker-end: url(#arrow); }
-    .fc-edge-label { fill: var(--text-3); font-size: 9px; }
 
-    /* Cycle */
-    .cycle-arc { fill: none; stroke-width: 2; }
-    .cycle-node circle { stroke-width: 2; }
-    .cycle-node text { font-size: 11px; font-weight: 700; }
-    .cycle-node .sub-text { font-size: 9px; font-weight: 400; fill: var(--text-3); }
-    .cycle-arrow { fill: none; stroke-width: 1.5; marker-end: url(#arrow-sm); }
-
-    /* Comparison */
-    .cmp-header text { font-size: 13px; font-weight: 800; }
-    .cmp-row rect { fill: var(--surface); }
-    .cmp-row:nth-child(odd) rect { fill: rgba(255,255,255,.02); }
-    .cmp-cell text { font-size: 10px; fill: var(--text-2); }
-    .cmp-label text { font-size: 10px; font-weight: 700; fill: var(--text-3); }
-    .cmp-divider { stroke: var(--border2); stroke-width: 1; }
-
-    /* Timeline */
-    .tl-line { stroke: var(--border2); stroke-width: 2; }
-    .tl-dot circle { stroke-width: 2; }
-    .tl-event text { font-size: 10px; font-weight: 700; fill: var(--text); }
-    .tl-event .year { font-size: 9px; font-weight: 800; fill: var(--gold); font-family: 'JetBrains Mono', monospace; }
-    .tl-event .sub { font-size: 8.5px; fill: var(--text-3); }
-
-    /* Pyramid */
-    .pyr-level polygon { stroke-width: 1.5; }
-    .pyr-level text { font-size: 11px; font-weight: 700; }
-    .pyr-level .sub { font-size: 9px; font-weight: 400; fill: var(--text-3); }
-
-    /* Mindmap */
-    .mm-center ellipse { fill: rgba(232,160,32,.12); stroke: var(--gold); stroke-width: 2; }
-    .mm-center text { font-size: 12px; font-weight: 800; fill: var(--gold); }
-    .mm-branch line { stroke: var(--border2); stroke-width: 1.5; }
-    .mm-branch-node rect { fill: var(--surface); stroke: var(--border2); stroke-width: 1.5; rx: 6; }
-    .mm-branch-node text { font-size: 10px; font-weight: 700; fill: var(--text); }
-    .mm-leaf text { font-size: 9px; fill: var(--text-3); }
-    .mm-leaf line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 2; }
+    /* Mindmap gets extra min-width because it's very wide */
+    .viz-scroll-wrap.mindmap-wrap svg { min-width: 640px; }
+    .viz-scroll-wrap.flowchart-wrap svg { min-width: 420px; }
 
     /* ===================== XP BAR ===================== */
     .xp-bar-wrap {
@@ -2430,16 +2405,23 @@ async function toggleVisual() {
 
 function renderVisualPanel(container, visual) {
   const typeLabel = visual.type.charAt(0).toUpperCase() + visual.type.slice(1);
-  const svgHtml = buildDiagramSVG(visual);
+  const svgHtml   = buildDiagramSVG(visual);
+  const wrapClass = `viz-scroll-wrap${visual.type === 'mindmap' ? ' mindmap-wrap' : visual.type === 'flowchart' ? ' flowchart-wrap' : ''}`;
+  const diagramTitle = visual.title
+    ? `<div class="visual-diagram-title">${escHtml(visual.title)}</div>`
+    : '';
 
   container.innerHTML = `
     <div class="visual-panel">
       <div class="visual-panel-header">
-        <div class="visual-panel-label">Visual Diagram</div>
+        <div class="visual-panel-label">📊 Visual Diagram</div>
         <span class="visual-type-badge">${typeLabel}</span>
       </div>
-      <div class="visual-panel-body" style="overflow-x:auto;">
-        ${svgHtml}
+      ${diagramTitle}
+      <div class="visual-panel-body">
+        <div class="${wrapClass}">
+          ${svgHtml}
+        </div>
       </div>
     </div>
   `;
@@ -2460,21 +2442,44 @@ function buildDiagramSVG(visual) {
 }
 
 /* ============================================================
-   FLOWCHART  — polished rebuild
-   Bigger nodes, larger text, glowing connectors, step numbers
+   SVG TEXT WRAP HELPER
+   Splits text into lines of maxChars, returns <tspan> elements
+   ============================================================ */
+function svgTextLines(text, x, startY, lineHeight, maxChars, attrs) {
+  const words = String(text).split(' ');
+  const lines = [];
+  let current = '';
+  words.forEach(w => {
+    if ((current + ' ' + w).trim().length <= maxChars) {
+      current = (current + ' ' + w).trim();
+    } else {
+      if (current) lines.push(current);
+      current = w.length > maxChars ? w.substring(0, maxChars) : w;
+    }
+  });
+  if (current) lines.push(current);
+  return lines.map((line, i) =>
+    `<tspan x="${x}" dy="${i === 0 ? 0 : lineHeight}" ${attrs || ''}>${escHtml(line)}</tspan>`
+  ).join('');
+}
+
+/* ============================================================
+   FLOWCHART  — fully rewritten
+   Full-label support, text wrapping, taller nodes, clean arrows
    ============================================================ */
 function buildFlowchart(data) {
-  const nodes = (data.nodes || []).slice(0, 8);
+  const nodes = (data.nodes || []).slice(0, 9);
   const edges = data.edges || [];
 
-  const W       = 700;
-  const NODE_W  = 260;   // wide enough for real labels
-  const NODE_H  = 68;    // taller nodes
-  const GAP_Y   = 72;    // breathing room between nodes
-  const CX      = W / 2;
-  const PAD_TOP = 24;
+  const W        = 760;
+  const NODE_W   = 320;   // wide enough for real labels
+  const NODE_H   = 80;    // taller nodes for wrapped text
+  const GAP_Y    = 70;    // breathing room between nodes
+  const CX       = W / 2;
+  const PAD_TOP  = 30;
+  const BADGE_W  = 28;
 
-  // Topological sort for order
+  // Topological sort for vertical order
   const adjMap = {};
   nodes.forEach(n => { adjMap[n.id] = []; });
   edges.forEach(e => { if (adjMap[e.from]) adjMap[e.from].push(e.to); });
@@ -2487,20 +2492,21 @@ function buildFlowchart(data) {
   }
   nodes.forEach(n => topo(n.id));
 
-  // Position map: index in topo order → y
   const posY = {};
   order.forEach((id, i) => { posY[id] = PAD_TOP + i * (NODE_H + GAP_Y); });
-  // Any nodes not in order (cycles etc.) get appended
   nodes.forEach((n, i) => { if (posY[n.id] === undefined) posY[n.id] = PAD_TOP + i * (NODE_H + GAP_Y); });
 
-  const H = nodes.length * (NODE_H + GAP_Y) + PAD_TOP + 20;
+  const H = nodes.length * (NODE_H + GAP_Y) + PAD_TOP + 40;
 
   const defs = `<defs>
-    <marker id="fc-arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto">
-      <path d="M0,0 L0,8 L10,4 z" fill="rgba(42,51,71,1)"/>
+    <marker id="fc-arrow" markerWidth="12" markerHeight="12" refX="9" refY="5" orient="auto">
+      <path d="M0,1 L0,9 L11,5 z" fill="#3a4560"/>
     </marker>
-    <filter id="fc-glow">
-      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+    <marker id="fc-arrow-gold" markerWidth="12" markerHeight="12" refX="9" refY="5" orient="auto">
+      <path d="M0,1 L0,9 L11,5 z" fill="rgba(232,160,32,.7)"/>
+    </marker>
+    <filter id="fc-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
   </defs>`;
@@ -2514,15 +2520,15 @@ function buildFlowchart(data) {
     const y1 = (posY[e.from] ?? 0) + NODE_H;
     const y2 = (posY[e.to]   ?? 0);
     const my = (y1 + y2) / 2;
-    const path = `M${CX},${y1} C${CX},${my} ${CX},${my} ${CX},${y2 - 6}`;
-    // Glow line (thicker, dimmer)
-    edgeSvg += `<path d="${path}" fill="none" stroke="rgba(232,160,32,.18)" stroke-width="6"/>`;
-    // Main line
-    edgeSvg += `<path d="${path}" fill="none" stroke="#2a3347" stroke-width="2"
+    const path = `M${CX},${y1} C${CX},${my + 10} ${CX},${my - 10} ${CX},${y2 - 8}`;
+    edgeSvg += `<path d="${path}" fill="none" stroke="rgba(232,160,32,.18)" stroke-width="7"/>`;
+    edgeSvg += `<path d="${path}" fill="none" stroke="#3a4560" stroke-width="2.5"
       marker-end="url(#fc-arrow)"/>`;
     if (e.label) {
-      edgeSvg += `<text x="${CX + 8}" y="${my}"
-        style="fill:#4a5268;font-size:11px;font-weight:600;font-family:Syne,sans-serif;dominant-baseline:middle;">
+      edgeSvg += `<rect x="${CX + 6}" y="${my - 11}" width="${e.label.length * 7 + 12}" height="20" rx="5"
+        style="fill:#0f1420;stroke:#2a3347;stroke-width:1;"/>`;
+      edgeSvg += `<text x="${CX + 12}" y="${my + 1}"
+        style="fill:#6b7a99;font-size:11px;font-weight:600;font-family:Syne,sans-serif;dominant-baseline:middle;">
         ${escHtml(e.label)}
       </text>`;
     }
@@ -2534,55 +2540,108 @@ function buildFlowchart(data) {
     const y    = posY[n.id] ?? (PAD_TOP + stepNum * (NODE_H + GAP_Y));
     const x    = CX - NODE_W / 2;
     const type = n.type || 'step';
-    const isStart = type === 'start';
-    const isEnd   = type === 'end';
+    const isStart    = type === 'start';
+    const isEnd      = type === 'end';
     const isDecision = type === 'decision';
 
-    // Colours by type
-    let borderColor, bgColor, textColor, glowColor;
+    let borderColor, bgColor, textColor, glowColor, accentColor;
     if (isStart) {
-      borderColor = '#20c5b0'; bgColor = 'rgba(32,197,176,.13)'; textColor = '#20c5b0'; glowColor = 'rgba(32,197,176,.25)';
+      borderColor = '#20c5b0'; bgColor = 'rgba(32,197,176,.12)'; textColor = '#20c5b0';
+      glowColor = 'rgba(32,197,176,.2)'; accentColor = '#20c5b0';
     } else if (isEnd) {
-      borderColor = '#3ec87a'; bgColor = 'rgba(62,200,122,.13)'; textColor = '#3ec87a'; glowColor = 'rgba(62,200,122,.25)';
+      borderColor = '#3ec87a'; bgColor = 'rgba(62,200,122,.12)'; textColor = '#3ec87a';
+      glowColor = 'rgba(62,200,122,.2)'; accentColor = '#3ec87a';
     } else if (isDecision) {
-      borderColor = '#e8a020'; bgColor = 'rgba(232,160,32,.1)'; textColor = '#e8a020'; glowColor = 'rgba(232,160,32,.22)';
+      borderColor = '#e8a020'; bgColor = 'rgba(232,160,32,.09)'; textColor = '#e8a020';
+      glowColor = 'rgba(232,160,32,.18)'; accentColor = '#e8a020';
     } else {
-      borderColor = '#2a3347'; bgColor = '#141926'; textColor = '#eae6df'; glowColor = 'rgba(255,255,255,.04)';
+      borderColor = '#2a3860'; bgColor = '#141926'; textColor = '#dde2f0';
+      glowColor = 'rgba(100,130,255,.07)'; accentColor = '#5a7aff';
     }
 
-    const rx = (isStart || isEnd) ? 34 : isDecision ? 12 : 10;
+    const rx = (isStart || isEnd) ? NODE_H / 2 : isDecision ? 14 : 12;
 
-    // Shadow/glow halo
-    nodeSvg += `<rect x="${x - 3}" y="${y - 3}" width="${NODE_W + 6}" height="${NODE_H + 6}" rx="${rx + 2}"
+    // Outer glow halo
+    nodeSvg += `<rect x="${x - 4}" y="${y - 4}" width="${NODE_W + 8}" height="${NODE_H + 8}" rx="${rx + 3}"
       style="fill:${glowColor};"/>`;
-
     // Main box
     nodeSvg += `<rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="${rx}"
       style="fill:${bgColor};stroke:${borderColor};stroke-width:2;"/>`;
 
-    // Step number badge (skip for start/end)
+    // Left accent stripe for step nodes
     if (!isStart && !isEnd) {
-      nodeSvg += `<rect x="${x + 10}" y="${y + NODE_H/2 - 11}" width="22" height="22" rx="6"
-        style="fill:rgba(255,255,255,.05);stroke:${borderColor};stroke-width:1;"/>`;
-      nodeSvg += `<text x="${x + 21}" y="${y + NODE_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
-        style="fill:${borderColor};font-size:10px;font-weight:800;font-family:'JetBrains Mono',monospace;">${stepNum}</text>`;
+      nodeSvg += `<rect x="${x}" y="${y + 10}" width="4" height="${NODE_H - 20}" rx="2"
+        style="fill:${accentColor};opacity:.7;"/>`;
     }
 
-    // Label — larger font, wraps into sub if present
-    const labelX = (isStart || isEnd) ? CX : x + 44;
-    const labelAnchor = (isStart || isEnd) ? 'middle' : 'start';
-    nodeSvg += `<text x="${labelX}" y="${y + (n.sub ? NODE_H/2 - 9 : NODE_H/2 + 1)}"
-      text-anchor="${labelAnchor}" dominant-baseline="middle"
-      style="fill:${textColor};font-size:14px;font-weight:700;font-family:Syne,sans-serif;">
-      ${escHtml((n.label || '').substring(0, 28))}
-    </text>`;
+    // Step number badge (skip for start/end)
+    const hasBadge = !isStart && !isEnd;
+    if (hasBadge) {
+      nodeSvg += `<rect x="${x + 12}" y="${y + NODE_H/2 - 13}" width="${BADGE_W}" height="${BADGE_W}" rx="7"
+        style="fill:rgba(255,255,255,.06);stroke:${borderColor};stroke-width:1.2;"/>`;
+      nodeSvg += `<text x="${x + 12 + BADGE_W/2}" y="${y + NODE_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:${accentColor};font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;">${stepNum}</text>`;
+    }
 
-    if (n.sub) {
-      nodeSvg += `<text x="${labelX}" y="${y + NODE_H/2 + 13}"
-        text-anchor="${labelAnchor}" dominant-baseline="middle"
-        style="fill:#8b93a8;font-size:11px;font-family:Syne,sans-serif;">
-        ${escHtml((n.sub || '').substring(0, 36))}
-      </text>`;
+    // Text area start X (leave room for badge or centre for start/end)
+    const textX  = (isStart || isEnd) ? CX : x + 54;
+    const anchor = (isStart || isEnd) ? 'middle' : 'start';
+    const maxW   = (isStart || isEnd) ? 36 : 30; // chars per line
+
+    const label  = String(n.label || '');
+    const sub    = String(n.sub   || '');
+
+    // Calculate vertical offset based on whether sub exists
+    if (sub) {
+      // Label on top half, sub on bottom half
+      const labelLines = [];
+      const words = label.split(' ');
+      let cur = '';
+      words.forEach(w => {
+        if ((cur + ' ' + w).trim().length <= maxW) cur = (cur + ' ' + w).trim();
+        else { if (cur) labelLines.push(cur); cur = w.substring(0, maxW); }
+      });
+      if (cur) labelLines.push(cur);
+
+      const totalLabelH = labelLines.length * 16;
+      const subY = y + NODE_H/2 + 6;
+      const labelStartY = y + NODE_H/2 - totalLabelH - 4;
+
+      labelLines.forEach((line, li) => {
+        nodeSvg += `<text x="${textX}" y="${labelStartY + li * 17}" text-anchor="${anchor}" dominant-baseline="middle"
+          style="fill:${textColor};font-size:14px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+      });
+
+      // Sub label (smaller, muted)
+      const subWords = sub.split(' ');
+      let subLine = '';
+      const subLines = [];
+      subWords.forEach(w => {
+        if ((subLine + ' ' + w).trim().length <= 40) subLine = (subLine + ' ' + w).trim();
+        else { if (subLine) subLines.push(subLine); subLine = w.substring(0, 40); }
+      });
+      if (subLine) subLines.push(subLine);
+      subLines.slice(0, 2).forEach((line, li) => {
+        nodeSvg += `<text x="${textX}" y="${subY + li * 14}" text-anchor="${anchor}" dominant-baseline="middle"
+          style="fill:#8b93a8;font-size:11px;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+      });
+
+    } else {
+      // Centre label vertically
+      const words = label.split(' ');
+      const labelLines = [];
+      let cur = '';
+      words.forEach(w => {
+        if ((cur + ' ' + w).trim().length <= maxW) cur = (cur + ' ' + w).trim();
+        else { if (cur) labelLines.push(cur); cur = w.substring(0, maxW); }
+      });
+      if (cur) labelLines.push(cur);
+      const blockH = (labelLines.length - 1) * 20;
+      const startY = y + NODE_H/2 - blockH/2;
+      labelLines.forEach((line, li) => {
+        nodeSvg += `<text x="${textX}" y="${startY + li * 20}" text-anchor="${anchor}" dominant-baseline="middle"
+          style="fill:${textColor};font-size:15px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+      });
     }
   });
 
@@ -2592,16 +2651,16 @@ function buildFlowchart(data) {
 }
 
 /* ============================================================
-   CYCLE  — polished rebuild
+   CYCLE  — improved rebuild with full label support
    ============================================================ */
 function buildCycle(data) {
   const steps = (data.steps || []).slice(0, 7);
   const n = steps.length;
   if (!n) return '<p style="color:var(--text-3)">No cycle data.</p>';
 
-  const W = 620, H = 620, CX = W / 2, CY = H / 2;
-  const R  = 210;   // spoke radius — bigger
-  const NR = 54;    // node circle radius — bigger
+  const W = 720, H = 720, CX = W / 2, CY = H / 2;
+  const R  = 240;   // spoke radius
+  const NR = 58;    // node circle radius
   const colors = ['#e8a020','#20c5b0','#3ec87a','#8b5cf6','#f97316','#ec4899','#06b6d4'];
 
   let arcs = '', nodes = '';
@@ -2615,7 +2674,7 @@ function buildCycle(data) {
 
     // Arc between nodes
     const largeArc = (1 / n) > 0.5 ? 1 : 0;
-    const arcR = R - 22;
+    const arcR = R - 26;
     arcs += `<path d="M ${CX + arcR*Math.cos(angle)} ${CY + arcR*Math.sin(angle)}
       A ${arcR} ${arcR} 0 ${largeArc} 1 ${CX + arcR*Math.cos(nextAngle)} ${CY + arcR*Math.sin(nextAngle)}"
       fill="none" stroke="${color}" stroke-width="2.5" opacity="0.25"/>`;
@@ -2627,33 +2686,51 @@ function buildCycle(data) {
     arcs += `<circle cx="${ax}" cy="${ay}" r="5" fill="${color}" opacity="0.55"/>`;
 
     // Glow halo
-    nodes += `<circle cx="${x}" cy="${y}" r="${NR + 8}"
-      style="fill:${color};opacity:.08;"/>`;
+    nodes += `<circle cx="${x}" cy="${y}" r="${NR + 10}"
+      style="fill:${color};opacity:.07;"/>`;
     // Node circle
     nodes += `<circle cx="${x}" cy="${y}" r="${NR}"
       style="fill:#0f1420;stroke:${color};stroke-width:2.5;"/>`;
 
     // Step number
-    nodes += `<text x="${x}" y="${y - (step.sub ? 14 : 6)}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:${color};font-size:10px;font-weight:800;font-family:'JetBrains Mono',monospace;opacity:.6;">${i + 1}</text>`;
+    nodes += `<text x="${x}" y="${y - NR + 18}" text-anchor="middle" dominant-baseline="middle"
+      style="fill:${color};font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;opacity:.7;">${i + 1}</text>`;
 
-    // Label — bigger font
-    nodes += `<text x="${x}" y="${y + (step.sub ? 2 : 6)}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:${color};font-size:13px;font-weight:800;font-family:Syne,sans-serif;">
-      ${escHtml((step.label || '').substring(0, 14))}
-    </text>`;
+    // Label — wrap inside circle
+    const label = String(step.label || '');
+    const sub   = String(step.sub   || '');
+    const labelWords = label.split(' ');
+    const maxChars = 11; // chars per line inside the circle
+    const labelLines = [];
+    let cur = '';
+    labelWords.forEach(w => {
+      if ((cur + ' ' + w).trim().length <= maxChars) cur = (cur + ' ' + w).trim();
+      else { if (cur) labelLines.push(cur); cur = w.substring(0, maxChars); }
+    });
+    if (cur) labelLines.push(cur);
+    const lSlice = labelLines.slice(0, 3);
 
-    if (step.sub) {
-      nodes += `<text x="${x}" y="${y + 19}" text-anchor="middle" dominant-baseline="middle"
-        style="fill:#8b93a8;font-size:10px;font-family:Syne,sans-serif;">
-        ${escHtml((step.sub || '').substring(0, 18))}
-      </text>`;
+    const hasSub = sub.length > 0;
+    const blockH = (lSlice.length - 1) * 16;
+    // If sub exists push label up
+    const labelCY = hasSub ? y - blockH/2 - 8 : y - blockH/2 + 3;
+
+    lSlice.forEach((line, li) => {
+      nodes += `<text x="${x}" y="${labelCY + li * 16}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:${color};font-size:12px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    });
+
+    if (hasSub) {
+      // sub — one short line
+      const subTrimmed = sub.length > 16 ? sub.substring(0, 15) + '…' : sub;
+      nodes += `<text x="${x}" y="${y + blockH/2 + 14}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:#8b93a8;font-size:10px;font-family:Syne,sans-serif;">${escHtml(subTrimmed)}</text>`;
     }
   });
 
   // Center label
   const centerLabel = `
-    <ellipse cx="${CX}" cy="${CY}" rx="52" ry="26" style="fill:rgba(255,255,255,.03);stroke:#2a3347;stroke-width:1.5;"/>
+    <ellipse cx="${CX}" cy="${CY}" rx="56" ry="28" style="fill:rgba(255,255,255,.03);stroke:#2a3347;stroke-width:1.5;"/>
     <text x="${CX}" y="${CY}" text-anchor="middle" dominant-baseline="middle"
       style="fill:#4a5268;font-size:12px;font-weight:700;font-family:Syne,sans-serif;letter-spacing:.1em;">CYCLE</text>`;
 
@@ -2662,15 +2739,24 @@ function buildCycle(data) {
   </svg>`;
 }
 
+
+
 /* ============================================================
-   COMPARISON TABLE  — polished rebuild
+   COMPARISON TABLE  — improved with full value display
    ============================================================ */
 function buildComparison(data) {
   const headers = data.headers || ['A', 'B'];
   const items   = (data.items || []).slice(0, 6);
-  const W       = 680, ROW_H = 52, HEADER_H = 56, PAD = 18;
-  const colW    = (W - 170) / headers.length;
-  const H       = HEADER_H + items.length * ROW_H + PAD;
+  const W       = 760, CRIT_W = 190, PAD = 18;
+  const colW    = (W - CRIT_W) / headers.length;
+  const HEADER_H = 60;
+  // Dynamic row height based on longest value
+  const maxValLen = Math.max(...items.map(it => {
+    const vals = headers.map((_, ci) => ci === 0 ? (it.a||'') : (it.b||(it.points&&it.points[ci])||''));
+    return Math.max(...vals.map(v => String(v).length));
+  }), 1);
+  const ROW_H = maxValLen > 30 ? 68 : maxValLen > 18 ? 58 : 50;
+  const H = HEADER_H + items.length * ROW_H + PAD;
   const colors  = ['#e8a020', '#20c5b0', '#3ec87a', '#8b5cf6'];
 
   let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
@@ -2684,12 +2770,14 @@ function buildComparison(data) {
     style="fill:#4a5268;font-size:11px;font-weight:700;font-family:Syne,sans-serif;letter-spacing:.1em;text-transform:uppercase;">Criterion</text>`;
 
   headers.forEach((h, ci) => {
-    const x     = 170 + ci * colW + colW / 2;
+    const x     = CRIT_W + ci * colW + colW / 2;
     const color = colors[ci % colors.length];
-    svg += `<rect x="${170 + ci * colW + 8}" y="10" width="${colW - 16}" height="${HEADER_H - 20}" rx="8"
+    svg += `<rect x="${CRIT_W + ci * colW + 8}" y="10" width="${colW - 16}" height="${HEADER_H - 20}" rx="8"
       style="fill:${color};opacity:.1;"/>`;
+    // Header text wrap
+    const hStr = String(h);
     svg += `<text x="${x}" y="${HEADER_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:${color};font-size:15px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(h)}</text>`;
+      style="fill:${color};font-size:15px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(hStr.substring(0, 22))}</text>`;
   });
 
   // Rows
@@ -2699,22 +2787,49 @@ function buildComparison(data) {
     svg += `<rect x="0" y="${y}" width="${W}" height="${ROW_H}" style="fill:${bg};"/>`;
     svg += `<line x1="0" y1="${y + ROW_H}" x2="${W}" y2="${y + ROW_H}" stroke="#1e2535" stroke-width="0.8"/>`;
 
-    // Criterion label
-    svg += `<text x="${PAD}" y="${y + ROW_H/2 + 1}" dominant-baseline="middle"
-      style="fill:#8b93a8;font-size:12px;font-weight:700;font-family:Syne,sans-serif;">${escHtml((item.label||'').substring(0,22))}</text>`;
+    // Criterion label — wrap up to 2 lines
+    const critStr = String(item.label || '');
+    const critWords = critStr.split(' ');
+    const critLines = [];
+    let cCur = '';
+    critWords.forEach(w => {
+      if ((cCur + ' ' + w).trim().length <= 20) cCur = (cCur + ' ' + w).trim();
+      else { if (cCur) critLines.push(cCur); cCur = w; }
+    });
+    if (cCur) critLines.push(cCur);
+    critLines.slice(0, 2).forEach((line, li) => {
+      const blockH = (Math.min(critLines.length, 2) - 1) * 14;
+      svg += `<text x="${PAD}" y="${y + ROW_H/2 - blockH/2 + li * 14 + 1}" dominant-baseline="middle"
+        style="fill:#8b93a8;font-size:12px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    });
 
     // Vertical divider
-    svg += `<line x1="165" y1="${HEADER_H}" x2="165" y2="${H}" stroke="#1e2535" stroke-width="1"/>`;
+    svg += `<line x1="${CRIT_W - 2}" y1="${HEADER_H}" x2="${CRIT_W - 2}" y2="${H}" stroke="#1e2535" stroke-width="1"/>`;
 
     // Values
     headers.forEach((h, ci) => {
-      const val   = ci === 0 ? (item.a || '') : (item.b || (item.points && item.points[ci]) || '');
-      const x     = 170 + ci * colW + colW / 2;
-      const color = colors[ci % colors.length];
-      svg += `<text x="${x}" y="${y + ROW_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
-        style="fill:#eae6df;font-size:12px;font-family:Syne,sans-serif;font-weight:500;">${escHtml(String(val).substring(0,32))}</text>`;
+      const val   = ci === 0 ? String(item.a || '') : String(item.b || (item.points && item.points[ci]) || '');
+      const x     = CRIT_W + ci * colW + colW / 2;
+
+      // Wrap value text
+      const vWords = val.split(' ');
+      const vLines = [];
+      let vCur = '';
+      const maxVC = Math.floor(colW / 8) - 2;
+      vWords.forEach(w => {
+        if ((vCur + ' ' + w).trim().length <= Math.max(maxVC, 14)) vCur = (vCur + ' ' + w).trim();
+        else { if (vCur) vLines.push(vCur); vCur = w; }
+      });
+      if (vCur) vLines.push(vCur);
+      const vSlice = vLines.slice(0, 2);
+      const blockH = (vSlice.length - 1) * 15;
+      vSlice.forEach((line, li) => {
+        svg += `<text x="${x}" y="${y + ROW_H/2 - blockH/2 + li * 15 + 1}" text-anchor="middle" dominant-baseline="middle"
+          style="fill:#eae6df;font-size:12px;font-family:Syne,sans-serif;font-weight:500;">${escHtml(line)}</text>`;
+      });
+
       if (ci < headers.length - 1) {
-        svg += `<line x1="${170 + (ci+1)*colW}" y1="${HEADER_H}" x2="${170 + (ci+1)*colW}" y2="${H}"
+        svg += `<line x1="${CRIT_W + (ci+1)*colW}" y1="${HEADER_H}" x2="${CRIT_W + (ci+1)*colW}" y2="${H}"
           stroke="#1e2535" stroke-width="0.6"/>`;
       }
     });
@@ -2725,13 +2840,13 @@ function buildComparison(data) {
 }
 
 /* ============================================================
-   TIMELINE  — polished rebuild
+   TIMELINE  — improved with full label support
    ============================================================ */
 function buildTimeline(data) {
   const events = (data.events || []).slice(0, 8);
   if (!events.length) return '<p style="color:var(--text-3)">No timeline data.</p>';
 
-  const W = 680, ROW_H = 88, PAD_TOP = 28, LINE_X = 120;
+  const W = 760, ROW_H = 96, PAD_TOP = 28, LINE_X = 130;
   const H = PAD_TOP + events.length * ROW_H + 28;
   const colors = ['#e8a020','#20c5b0','#3ec87a','#8b5cf6','#f97316','#ec4899','#e8a020','#20c5b0'];
 
@@ -2746,36 +2861,62 @@ function buildTimeline(data) {
     const color = colors[i % colors.length];
 
     // Glow pulse ring
-    svg += `<circle cx="${LINE_X}" cy="${y}" r="20" style="fill:${color};opacity:.08;"/>`;
-    svg += `<circle cx="${LINE_X}" cy="${y}" r="13" style="fill:${color};opacity:.15;"/>`;
+    svg += `<circle cx="${LINE_X}" cy="${y}" r="22" style="fill:${color};opacity:.07;"/>`;
+    svg += `<circle cx="${LINE_X}" cy="${y}" r="14" style="fill:${color};opacity:.14;"/>`;
     // Main dot
-    svg += `<circle cx="${LINE_X}" cy="${y}" r="8" style="fill:${color};"/>`;
+    svg += `<circle cx="${LINE_X}" cy="${y}" r="9" style="fill:${color};"/>`;
     // Inner dot
-    svg += `<circle cx="${LINE_X}" cy="${y}" r="3.5" style="fill:#080b12;"/>`;
+    svg += `<circle cx="${LINE_X}" cy="${y}" r="4" style="fill:#080b12;"/>`;
 
     // Year badge (left of line)
-    const yr = String(ev.year || '').substring(0, 8);
-    const yrW = Math.max(50, yr.length * 9 + 14);
-    svg += `<rect x="${LINE_X - yrW - 10}" y="${y - 14}" width="${yrW}" height="28" rx="8"
-      style="fill:rgba(255,255,255,.04);stroke:${color};stroke-width:1.2;"/>`;
-    svg += `<text x="${LINE_X - 10 - yrW/2}" y="${y + 1}" text-anchor="middle" dominant-baseline="middle"
+    const yr = String(ev.year || '').substring(0, 10);
+    const yrW = Math.max(56, yr.length * 9 + 16);
+    svg += `<rect x="${LINE_X - yrW - 12}" y="${y - 15}" width="${yrW}" height="30" rx="8"
+      style="fill:rgba(255,255,255,.04);stroke:${color};stroke-width:1.3;"/>`;
+    svg += `<text x="${LINE_X - 12 - yrW/2}" y="${y + 1}" text-anchor="middle" dominant-baseline="middle"
       style="fill:${color};font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;">${escHtml(yr)}</text>`;
 
     // Connector tick
-    svg += `<line x1="${LINE_X + 8}" y1="${y}" x2="${LINE_X + 22}" y2="${y}"
+    svg += `<line x1="${LINE_X + 9}" y1="${y}" x2="${LINE_X + 24}" y2="${y}"
       stroke="${color}" stroke-width="1.5" opacity="0.5"/>`;
 
-    // Event label — larger
-    svg += `<text x="${LINE_X + 28}" y="${y + (ev.sub ? -10 : 1)}" dominant-baseline="middle"
-      style="fill:#eae6df;font-size:14px;font-weight:700;font-family:Syne,sans-serif;">
-      ${escHtml((ev.label || '').substring(0, 42))}
-    </text>`;
+    // Event label — full text, wrap up to 2 lines
+    const label = String(ev.label || '');
+    const sub   = String(ev.sub   || '');
+    const maxCharsLabel = 42;
+    const lWords = label.split(' ');
+    const lLines = [];
+    let lCur = '';
+    lWords.forEach(w => {
+      if ((lCur + ' ' + w).trim().length <= maxCharsLabel) lCur = (lCur + ' ' + w).trim();
+      else { if (lCur) lLines.push(lCur); lCur = w; }
+    });
+    if (lCur) lLines.push(lCur);
+    const lSlice = lLines.slice(0, 2);
 
-    if (ev.sub) {
-      svg += `<text x="${LINE_X + 28}" y="${y + 12}" dominant-baseline="middle"
-        style="fill:#8b93a8;font-size:11px;font-family:Syne,sans-serif;">
-        ${escHtml((ev.sub || '').substring(0, 55))}
-      </text>`;
+    const hasSub = sub.length > 0;
+    const blockH = (lSlice.length - 1) * 18;
+    const labelY = hasSub ? y - blockH/2 - 11 : y - blockH/2 + 1;
+
+    lSlice.forEach((line, li) => {
+      svg += `<text x="${LINE_X + 30}" y="${labelY + li * 18}" dominant-baseline="middle"
+        style="fill:#eae6df;font-size:14px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    });
+
+    if (hasSub) {
+      // sub — wrap up to 2 lines
+      const sWords = sub.split(' ');
+      const sLines = [];
+      let sCur = '';
+      sWords.forEach(w => {
+        if ((sCur + ' ' + w).trim().length <= 54) sCur = (sCur + ' ' + w).trim();
+        else { if (sCur) sLines.push(sCur); sCur = w; }
+      });
+      if (sCur) sLines.push(sCur);
+      sLines.slice(0, 2).forEach((line, li) => {
+        svg += `<text x="${LINE_X + 30}" y="${y + blockH/2 + 12 + li * 14}" dominant-baseline="middle"
+          style="fill:#8b93a8;font-size:11px;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+      });
     }
   });
 
@@ -2784,13 +2925,13 @@ function buildTimeline(data) {
 }
 
 /* ============================================================
-   PYRAMID  — polished rebuild
+   PYRAMID  — improved with full label support and taller rows
    ============================================================ */
 function buildPyramid(data) {
   const levels = (data.levels || []).slice(0, 7);
   if (!levels.length) return '<p style="color:var(--text-3)">No pyramid data.</p>';
 
-  const W = 660, BASE_W = 580, TOP_W = 60, ROW_H = 64, PAD_TOP = 20;
+  const W = 720, BASE_W = 640, TOP_W = 60, ROW_H = 76, PAD_TOP = 20;
   const H = PAD_TOP + levels.length * ROW_H + 30;
   const CX = W / 2;
   const colors = [
@@ -2820,22 +2961,38 @@ function buildPyramid(data) {
       style="fill:${fill};stroke:${stroke};stroke-width:1.5;"/>`;
 
     // Level number badge
-    svg += `<rect x="${x + 10}" y="${y + ROW_H/2 - 13}" width="26" height="26" rx="7"
-      style="fill:rgba(0,0,0,.2);"/>`;
-    svg += `<text x="${x + 23}" y="${y + ROW_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:rgba(255,255,255,.8);font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;">${i + 1}</text>`;
+    svg += `<rect x="${x + 10}" y="${y + ROW_H/2 - 15}" width="30" height="30" rx="8"
+      style="fill:rgba(0,0,0,.25);"/>`;
+    svg += `<text x="${x + 25}" y="${y + ROW_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
+      style="fill:rgba(255,255,255,.9);font-size:12px;font-weight:800;font-family:'JetBrains Mono',monospace;">${i + 1}</text>`;
 
-    // Label — larger
-    svg += `<text x="${CX + 10}" y="${y + (lv.sub ? ROW_H/2 - 8 : ROW_H/2 + 2)}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:#fff;font-size:14px;font-weight:800;font-family:Syne,sans-serif;">
-      ${escHtml((lv.label || '').substring(0, 32))}
-    </text>`;
+    // Label — wrapped, up to 2 lines
+    const label = String(lv.label || '');
+    const sub   = String(lv.sub   || '');
+    const maxChars = Math.floor(rowW / 9) - 8;
+    const lWords = label.split(' ');
+    const lLines = [];
+    let lCur = '';
+    lWords.forEach(w => {
+      if ((lCur + ' ' + w).trim().length <= Math.max(maxChars, 16)) lCur = (lCur + ' ' + w).trim();
+      else { if (lCur) lLines.push(lCur); lCur = w; }
+    });
+    if (lCur) lLines.push(lCur);
+    const lSlice = lLines.slice(0, 2);
 
-    if (lv.sub) {
-      svg += `<text x="${CX + 10}" y="${y + ROW_H/2 + 11}" text-anchor="middle" dominant-baseline="middle"
-        style="fill:rgba(255,255,255,.72);font-size:11px;font-family:Syne,sans-serif;">
-        ${escHtml((lv.sub || '').substring(0, 42))}
-      </text>`;
+    const hasSub = sub.length > 0;
+    const blockH = (lSlice.length - 1) * 17;
+    const labelCY = hasSub ? y + ROW_H/2 - blockH/2 - 9 : y + ROW_H/2 - blockH/2 + 1;
+
+    lSlice.forEach((line, li) => {
+      svg += `<text x="${CX + 14}" y="${labelCY + li * 17}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:#fff;font-size:14px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    });
+
+    if (hasSub) {
+      const subTrimmed = sub.length > 50 ? sub.substring(0, 48) + '…' : sub;
+      svg += `<text x="${CX + 14}" y="${y + ROW_H/2 + blockH/2 + 12}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:rgba(255,255,255,.75);font-size:11px;font-family:Syne,sans-serif;">${escHtml(subTrimmed)}</text>`;
     }
   });
 
@@ -2844,105 +3001,157 @@ function buildPyramid(data) {
 }
 
 /* ============================================================
-   MINDMAP  — polished rebuild
-   Bigger canvas, larger fonts, pill sub-items, curved spokes
+   MINDMAP  — fully rewritten
+   Larger canvas, smarter layout, full labels, wrapped sub-items,
+   branch items laid out in a column away from centre
    ============================================================ */
 function buildMindmap(data) {
-  const center   = data.center || 'Topic';
-  const branches = (data.branches || []).slice(0, 6);
-  const W = 900, H = 640, CX = W / 2, CY = H / 2;
+  const center   = String(data.center || 'Topic');
+  const branches = (data.branches || []).slice(0, 7);
+  const n        = branches.length;
 
-  // Spoke radius depends on number of branches
-  const spokeR  = 200;
-  const colors  = ['#e8a020','#20c5b0','#3ec87a','#8b5cf6','#f97316','#ec4899'];
+  // Canvas — much bigger to avoid crowding
+  const W = 1100, H = 860, CX = W / 2, CY = H / 2;
+  const SPOKE_R  = 230;   // distance from centre to branch node centre
+  const ITEM_GAP = 34;    // vertical gap between sub-items
+  const colors   = ['#e8a020','#20c5b0','#3ec87a','#8b5cf6','#f97316','#ec4899','#06b6d4'];
 
   let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
 
-  // Subtle background radial gradient hint
+  // Background gradient halo
   svg += `<defs>
     <radialGradient id="mm-bg" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"   stop-color="rgba(232,160,32,.04)"/>
+      <stop offset="0%"   stop-color="rgba(232,160,32,.05)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
   </defs>`;
-  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${spokeR + 80}" ry="${spokeR + 60}" fill="url(#mm-bg)"/>`;
+  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${SPOKE_R + 100}" ry="${SPOKE_R + 80}" fill="url(#mm-bg)"/>`;
 
-  // Center node — larger ellipse, multi-word wrap
+  // ---- Centre node ----
   const centerWords = center.split(' ');
-  const centerLine1 = centerWords.slice(0, Math.ceil(centerWords.length / 2)).join(' ');
-  const centerLine2 = centerWords.slice(Math.ceil(centerWords.length / 2)).join(' ');
-  const twoLine = centerLine2.length > 0;
+  // wrap into max 2 lines of ~14 chars
+  const cLines = [];
+  let cCur = '';
+  centerWords.forEach(w => {
+    if ((cCur + ' ' + w).trim().length <= 16) cCur = (cCur + ' ' + w).trim();
+    else { if (cCur) cLines.push(cCur); cCur = w.substring(0, 16); }
+  });
+  if (cCur) cLines.push(cCur);
+  const cLineSlice = cLines.slice(0, 3);
 
-  svg += `<ellipse cx="${CX}" cy="${CY}" rx="82" ry="40"
-    style="fill:rgba(232,160,32,.14);stroke:#e8a020;stroke-width:2.5;"/>`;
-  svg += `<ellipse cx="${CX}" cy="${CY}" rx="88" ry="46"
-    style="fill:none;stroke:rgba(232,160,32,.2);stroke-width:1;"/>`;
-  svg += `<text x="${CX}" y="${CY + (twoLine ? -8 : 0)}" text-anchor="middle" dominant-baseline="middle"
-    style="fill:#e8a020;font-size:15px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(centerLine1.substring(0,18))}</text>`;
-  if (twoLine) {
-    svg += `<text x="${CX}" y="${CY + 13}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:#e8a020;font-size:15px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(centerLine2.substring(0,18))}</text>`;
-  }
+  const CRX = 90, CRY = 44;
+  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${CRX + 8}" ry="${CRY + 8}"
+    style="fill:rgba(232,160,32,.06);stroke:rgba(232,160,32,.15);stroke-width:1;"/>`;
+  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${CRX}" ry="${CRY}"
+    style="fill:rgba(232,160,32,.13);stroke:#e8a020;stroke-width:2.5;"/>`;
 
+  cLineSlice.forEach((line, li) => {
+    const totalH = (cLineSlice.length - 1) * 18;
+    const ty = CY - totalH / 2 + li * 18;
+    svg += `<text x="${CX}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
+      style="fill:#e8a020;font-size:15px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+  });
+
+  // ---- Branches ----
   branches.forEach((br, bi) => {
-    const angle  = (2 * Math.PI * bi / branches.length) - Math.PI / 2;
+    const angle  = (2 * Math.PI * bi / n) - Math.PI / 2;
     const color  = colors[bi % colors.length];
-    const bx     = CX + spokeR * Math.cos(angle);
-    const by     = CY + spokeR * Math.sin(angle);
 
-    // Branch label box — auto-size
-    const brLabel = (br.label || '').substring(0, 20);
-    const BW = Math.max(110, brLabel.length * 8 + 24);
-    const BH = 38;
+    // Branch node centre
+    const bx = CX + SPOKE_R * Math.cos(angle);
+    const by = CY + SPOKE_R * Math.sin(angle);
 
-    // Spoke: curved path from center ellipse edge → branch node
-    const ex = CX + 88 * Math.cos(angle);
-    const ey = CY + 46 * Math.sin(angle);
-    const mx = (ex + bx) / 2;
-    const my = (ey + by) / 2;
+    // Branch label — wrap to 2 lines
+    const brLabel = String(br.label || '');
+    const brWords = brLabel.split(' ');
+    const brLines = [];
+    let brCur = '';
+    brWords.forEach(w => {
+      if ((brCur + ' ' + w).trim().length <= 18) brCur = (brCur + ' ' + w).trim();
+      else { if (brCur) brLines.push(brCur); brCur = w.substring(0, 18); }
+    });
+    if (brCur) brLines.push(brCur);
+    const brLineSlice = brLines.slice(0, 2);
 
+    // Branch box size
+    const BW = Math.max(130, Math.max(...brLineSlice.map(l => l.length)) * 9 + 28);
+    const BH = 32 + (brLineSlice.length - 1) * 18;
+
+    // Spoke: from centre ellipse edge → branch node
+    const ex = CX + CRX * Math.cos(angle);
+    const ey = CY + CRY * Math.sin(angle);
+    svg += `<line x1="${ex}" y1="${ey}" x2="${bx}" y2="${by}"
+      stroke="${color}" stroke-width="2.5" opacity="0.6"/>`;
     // Glow spoke
-    svg += `<path d="M${ex},${ey} Q${mx},${my} ${bx},${by}"
-      fill="none" stroke="${color}" stroke-width="5" opacity="0.12"/>`;
-    // Main spoke
-    svg += `<path d="M${ex},${ey} Q${mx},${my} ${bx},${by}"
-      fill="none" stroke="${color}" stroke-width="2" opacity="0.7"/>`;
+    svg += `<line x1="${ex}" y1="${ey}" x2="${bx}" y2="${by}"
+      stroke="${color}" stroke-width="7" opacity="0.1"/>`;
 
-    // Branch node box with glow shadow
-    svg += `<rect x="${bx - BW/2 - 2}" y="${by - BH/2 - 2}" width="${BW + 4}" height="${BH + 4}" rx="12"
+    // Branch node box
+    svg += `<rect x="${bx - BW/2 - 3}" y="${by - BH/2 - 3}" width="${BW + 6}" height="${BH + 6}" rx="14"
       style="fill:${color};opacity:.12;"/>`;
-    svg += `<rect x="${bx - BW/2}" y="${by - BH/2}" width="${BW}" height="${BH}" rx="10"
+    svg += `<rect x="${bx - BW/2}" y="${by - BH/2}" width="${BW}" height="${BH}" rx="12"
       style="fill:#0f1420;stroke:${color};stroke-width:2;"/>`;
-    svg += `<text x="${bx}" y="${by}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:${color};font-size:13px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(brLabel)}</text>`;
 
-    // Sub-items as pill chips fanning outward
-    const items = (br.items || []).slice(0, 4);
-    const isCosPos = Math.cos(angle) >= 0;
-    const isSinPos = Math.sin(angle) >= 0;
+    brLineSlice.forEach((line, li) => {
+      const totalH = (brLineSlice.length - 1) * 18;
+      const ty = by - totalH / 2 + li * 18;
+      svg += `<text x="${bx}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
+        style="fill:${color};font-size:13px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    });
+
+    // ---- Sub-items: stacked vertically away from centre ----
+    const items = (br.items || []).slice(0, 5);
+    if (!items.length) return;
+
+    // Determine which side of the canvas the branch is on
+    const isRight = Math.cos(angle) >= 0;
+    const isBottom = Math.sin(angle) >= 0;
+
+    // Item column anchor: push further outward from branch
+    const ITEM_PUSH = 160;  // distance from branch node to item column centre
+    const ix_centre = bx + ITEM_PUSH * Math.cos(angle);
+    const iy_centre = by + ITEM_PUSH * Math.sin(angle);
+
+    const totalItemsH = items.length * ITEM_GAP;
+    const itemAnchor  = isRight ? 'start' : 'end';
 
     items.forEach((item, ii) => {
-      const itemStr = String(item).substring(0, 22);
-      const IW = Math.max(80, itemStr.length * 7.2 + 20);
-      const IH = 28;
+      const itemStr = String(item);
+      // Wrap item text to 22 chars
+      const itemWords = itemStr.split(' ');
+      const itemLines = [];
+      let iCur = '';
+      itemWords.forEach(w => {
+        if ((iCur + ' ' + w).trim().length <= 22) iCur = (iCur + ' ' + w).trim();
+        else { if (iCur) itemLines.push(iCur); iCur = w.substring(0, 22); }
+      });
+      if (iCur) itemLines.push(iCur);
+      const itemLineSlice = itemLines.slice(0, 2);
 
-      // Fan items outward from branch
-      const fanR = 95 + ii * 5;
-      const fanAngleOffset = (ii - (items.length - 1) / 2) * 0.28;
-      const fanAngle = angle + fanAngleOffset;
-      const ix = bx + fanR * Math.cos(fanAngle);
-      const iy = by + fanR * Math.sin(fanAngle);
+      const IH = 26 + (itemLineSlice.length - 1) * 14;
+      const IW = Math.max(90, Math.max(...itemLineSlice.map(l => l.length)) * 7.5 + 24);
 
-      // Dashed connector branch → item
-      const cx2 = isCosPos ? bx + BW / 2 : bx - BW / 2;
-      svg += `<line x1="${cx2}" y1="${by}" x2="${ix}" y2="${iy}"
-        stroke="${color}" stroke-width="1" stroke-dasharray="4 3" opacity="0.4"/>`;
+      // Vertically distribute items
+      const iy = iy_centre - totalItemsH / 2 + ii * ITEM_GAP;
+      // X: away from centre
+      const ix = ix_centre;
+
+      // Connector: branch node edge → item pill
+      const bEdgeX = isRight ? bx + BW/2 : bx - BW/2;
+      const itemPillX = isRight ? ix - IW/2 : ix + IW/2;
+      svg += `<line x1="${bEdgeX}" y1="${by}" x2="${itemPillX}" y2="${iy}"
+        stroke="${color}" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.45"/>`;
 
       // Item pill
-      svg += `<rect x="${ix - IW/2}" y="${iy - IH/2}" width="${IW}" height="${IH}" rx="14"
-        style="fill:rgba(255,255,255,.04);stroke:${color};stroke-width:1;opacity:.85;"/>`;
-      svg += `<text x="${ix}" y="${iy}" text-anchor="middle" dominant-baseline="middle"
-        style="fill:#eae6df;font-size:11px;font-weight:600;font-family:Syne,sans-serif;">${escHtml(itemStr)}</text>`;
+      svg += `<rect x="${ix - IW/2}" y="${iy - IH/2}" width="${IW}" height="${IH}" rx="13"
+        style="fill:rgba(255,255,255,.04);stroke:${color};stroke-width:1.2;opacity:.9;"/>`;
+
+      itemLineSlice.forEach((line, li) => {
+        const totalH = (itemLineSlice.length - 1) * 14;
+        const ty = iy - totalH / 2 + li * 14;
+        svg += `<text x="${ix}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
+          style="fill:#dde2f0;font-size:11px;font-weight:600;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+      });
     });
   });
 

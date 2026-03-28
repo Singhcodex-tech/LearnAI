@@ -624,10 +624,12 @@ Return this exact JSON shape (fill in for your chosen type, omit unused keys):
 STRICT RULES:
 - Return ONLY the JSON object. Absolutely no text outside it.
 - 5 to 8 nodes/steps/events/levels/branches maximum.
-- All labels max 5 words. Sub-labels max 8 words.
+- Labels: write COMPLETE, MEANINGFUL phrases — do NOT truncate or abbreviate. Use 3 to 8 words per label.
+- Sub-labels: write FULL explanatory phrases, 5 to 12 words. Every word matters — do not cut short.
 - flowchart must have exactly one "start" and one "end" node.
 - cycle must have 4 to 7 steps.
 - comparison must have 2 headers and 4 to 6 items.
+- mindmap: write complete branch labels (3-6 words) and complete sub-items (4-8 words each).
 """
 
     raw = _call_groq(prompt, max_tokens=1200)
