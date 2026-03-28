@@ -36,7 +36,8 @@ if not GROQ_API_KEY:
     )
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "llama-3.3-70b-versatile"   # upgraded for better quality
+MODEL_NAME = "llama-3.3-70b-versatile"       # primary model — best quality
+FALLBACK_MODEL = "llama-3.1-8b-instant"      # fallback if primary fails / rate-limited
 MAX_TOPIC_LENGTH = 200
 
 # ---------------------------------------------------------------------------
@@ -145,8 +146,19 @@ def compute_learner_profile(performance: list, xp: int = 0, streak: int = 0) -> 
 # LLM helpers
 # ---------------------------------------------------------------------------
 
-def _call_groq(prompt: str, max_tokens: int = 2000, system: str | None = None) -> str | None:
-    """Generic Groq call. Returns raw text or None on error."""
+def _call_groq(
+    prompt: str,
+    max_tokens: int = 2000,
+    system: str | None = None,
+    use_fallback: bool = False,
+) -> str | None:
+    """
+    Generic Groq call with automatic fallback to a smaller model.
+    - Tries MODEL_NAME (llama-3.3-70b-versatile) first.
+    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
+    Returns raw text or None on error.
+    """
+    model = FALLBACK_MODEL if use_fallback else MODEL_NAME
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -160,19 +172,30 @@ def _call_groq(prompt: str, max_tokens: int = 2000, system: str | None = None) -
                 "Content-Type": "application/json",
             },
             json={
-                "model": MODEL_NAME,
+                "model": model,
                 "messages": messages,
                 "temperature": 0.3,
                 "max_tokens": max_tokens,
             },
-            timeout=30,
+            timeout=45,   # increased from 30 — 70B is slower
         )
+
+        # Rate-limit or server error → retry with fallback
+        if response.status_code in (429, 503) and not use_fallback:
+            print(f"Groq {response.status_code} on {model} — retrying with fallback model.")
+            return _call_groq(prompt, max_tokens, system, use_fallback=True)
+
         if response.status_code != 200:
             print(f"Groq API error {response.status_code}: {response.text}")
             return None
+
         return response.json()["choices"][0]["message"]["content"]
+
     except requests.exceptions.Timeout:
-        print("ERROR: Groq API request timed out.")
+        if not use_fallback:
+            print(f"Groq timeout on {model} — retrying with fallback model.")
+            return _call_groq(prompt, max_tokens, system, use_fallback=True)
+        print("ERROR: Groq fallback model also timed out.")
         return None
     except Exception as e:
         print(f"ERROR calling Groq: {e}")
@@ -187,6 +210,16 @@ def extract_json_array(text: str) -> str | None:
 def extract_json_object(text: str) -> str | None:
     match = re.search(r'\{.*\}', text, re.DOTALL)
     return match.group(0) if match else None
+
+
+def strip_markdown_fences(text: str) -> str:
+    """
+    Remove ```json ... ``` or ``` ... ``` code fences that the 70B model
+    sometimes adds despite being told not to.
+    """
+    text = re.sub(r'^```(?:json)?\s*', '', text.strip(), flags=re.IGNORECASE)
+    text = re.sub(r'\s*```$', '', text.strip())
+    return text.strip()
 
 
 def validate_slides(slides: list) -> list:
@@ -264,9 +297,11 @@ STRICT RULES:
 - Do NOT output anything outside JSON
 """
 
-    raw_text = _call_groq(prompt, max_tokens=2000)
+    raw_text = _call_groq(prompt, max_tokens=4000)  # 70B generates more verbose JSON — needs higher limit
     if not raw_text:
         return []
+
+    raw_text = strip_markdown_fences(raw_text)
 
     try:
         slides = json.loads(raw_text)
@@ -336,9 +371,11 @@ RULES:
 - Do NOT output anything outside JSON
 """
 
-    raw_text = _call_groq(prompt, max_tokens=1200)
+    raw_text = _call_groq(prompt, max_tokens=1800)  # increased for 70B verbosity
     if not raw_text:
         return []
+
+    raw_text = strip_markdown_fences(raw_text)
 
     try:
         questions = json.loads(raw_text)
@@ -414,6 +451,8 @@ Format:
     raw_text = _call_groq(prompt, max_tokens=1000)
     if not raw_text:
         return None
+
+    raw_text = strip_markdown_fences(raw_text)
 
     try:
         slide_data = json.loads(raw_text)
@@ -594,6 +633,8 @@ STRICT RULES:
     raw = _call_groq(prompt, max_tokens=1200)
     if not raw:
         return None
+
+    raw = strip_markdown_fences(raw)
 
     try:
         data = json.loads(raw)
