@@ -36,17 +36,32 @@ if not GROQ_API_KEY:
     )
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "llama-3.1-8b-instant"
-MAX_TOPIC_LENGTH = 200  
+MODEL_NAME = "llama-3.3-70b-versatile"   # upgraded for better quality
+MAX_TOPIC_LENGTH = 200
+
+# ---------------------------------------------------------------------------
+# XP / Gamification constants
+# ---------------------------------------------------------------------------
+XP_PER_QUIZ_CORRECT = 10      # per correct answer in a 3-question quiz
+XP_PER_SLIDE_UNDERSTOOD = 5
+XP_STREAK_BONUS = 3           # bonus XP for every 5-slide streak
 
 # ---------------------------------------------------------------------------
 # In-memory session store
-# { session_id: { topic, slides, performance: [...], created_at } }
+# {
+#   session_id: {
+#     topic, slides, performance: [...], created_at,
+#     quiz_cache:   { slide_index: [questions] },
+#     visual_cache: { slide_index: visual_dict },
+#     notes:        { slide_index: "text" },
+#     xp: int,
+#     streak_slides: int,   # consecutive slides understood + quiz >= 0.6
+#   }
+# }
 # ---------------------------------------------------------------------------
 sessions: dict = {}
 
-# Clean up sessions older than 2 hours
-SESSION_TTL = 7200
+SESSION_TTL = 7200   # 2 hours
 
 
 def _prune_sessions():
@@ -60,7 +75,7 @@ def _prune_sessions():
 # Learner profile helpers
 # ---------------------------------------------------------------------------
 
-def compute_learner_profile(performance: list) -> dict:
+def compute_learner_profile(performance: list, xp: int = 0, streak: int = 0) -> dict:
     """Aggregate session-wide performance into a compact profile dict."""
     if not performance:
         return {
@@ -70,6 +85,9 @@ def compute_learner_profile(performance: list) -> dict:
             "avg_time_seconds": None,
             "difficulty_hint": "normal",
             "weak_slides": [],
+            "needs_review": [],
+            "xp": xp,
+            "streak_slides": streak,
         }
 
     avg_quiz = sum(p["quiz_score"] for p in performance) / len(performance)
@@ -82,7 +100,13 @@ def compute_learner_profile(performance: list) -> dict:
         if p["quiz_score"] < 0.5 or not p["understood"]
     ]
 
-    # Determine difficulty hint for future AI prompts
+    # Spaced-repetition: flag slides that need a second look
+    needs_review = [
+        {"slide_title": p["slide_title"], "slide_index": p["slide_index"]}
+        for p in performance
+        if p["quiz_score"] < 0.6 or not p["understood"]
+    ]
+
     if avg_quiz < 0.45 or understood_rate < 0.4:
         difficulty_hint = "simplify"
     elif avg_quiz > 0.85 and understood_rate > 0.85:
@@ -111,6 +135,9 @@ def compute_learner_profile(performance: list) -> dict:
         "avg_time_seconds": round(avg_time, 1),
         "difficulty_hint": difficulty_hint,
         "weak_slides": weak_slides,
+        "needs_review": needs_review,
+        "xp": xp,
+        "streak_slides": streak,
     }
 
 
@@ -118,8 +145,13 @@ def compute_learner_profile(performance: list) -> dict:
 # LLM helpers
 # ---------------------------------------------------------------------------
 
-def _call_groq(prompt: str, max_tokens: int = 2000) -> str | None:
+def _call_groq(prompt: str, max_tokens: int = 2000, system: str | None = None) -> str | None:
     """Generic Groq call. Returns raw text or None on error."""
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
     try:
         response = requests.post(
             GROQ_URL,
@@ -129,7 +161,7 @@ def _call_groq(prompt: str, max_tokens: int = 2000) -> str | None:
             },
             json={
                 "model": MODEL_NAME,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": messages,
                 "temperature": 0.3,
                 "max_tokens": max_tokens,
             },
@@ -324,7 +356,6 @@ RULES:
     if not isinstance(questions, list):
         return []
 
-    # Validate structure
     validated = []
     for q in questions:
         if not isinstance(q, dict):
@@ -412,185 +443,72 @@ Format:
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# NEW: Topic summary generation
 # ---------------------------------------------------------------------------
 
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-
-@app.route("/generate", methods=["POST"])
-@limiter.limit("10 per minute")
-def generate():
+def generate_topic_summary(topic: str, slides: list, performance: list) -> str | None:
     """
-    Start a new learning session.
-    Body: { "topic": "..." }
-    Returns: { "session_id": "...", "slides": [...] }
+    Generate a concise end-of-session summary with key takeaways.
+    Personalises the summary based on weak slides if performance data exists.
     """
-    _prune_sessions()
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "Invalid or missing JSON body"}), 400
+    slide_titles = [s["title"] for s in slides]
+    weak_titles = [p["slide_title"] for p in performance if p["quiz_score"] < 0.6 or not p["understood"]]
 
-    topic = str(data.get("topic", "")).strip()
-    if not topic:
-        return jsonify({"error": "No topic provided"}), 400
-    if len(topic) > MAX_TOPIC_LENGTH:
-        return jsonify({"error": f"Topic must be {MAX_TOPIC_LENGTH} characters or fewer"}), 400
+    weak_note = ""
+    if weak_titles:
+        weak_note = f"\nThe learner struggled with: {', '.join(weak_titles[:5])}. Briefly flag those areas for extra study."
 
-    slides = generate_slides(topic)
-    if not slides:
-        return jsonify({"error": "AI failed to generate slides. Please try again."}), 500
+    prompt = f"""
+You are an expert tutor. A student just finished a learning session on "{topic}".
 
-    session_id = str(uuid.uuid4())
-    sessions[session_id] = {
-        "topic": topic,
-        "slides": slides,
-        "performance": [],
-        "created_at": time.time(),
-    }
+The session covered these slides:
+{json.dumps(slide_titles, indent=2)}
+{weak_note}
 
-    return jsonify({"session_id": session_id, "slides": slides})
+Write a clear, motivating end-of-session summary for the student. Include:
+1. A 2-3 sentence overview of what was learned
+2. 5-7 key takeaways as concise bullet points
+3. A short "What to explore next" section with 2-3 related topics
+4. An encouraging closing line
+
+Keep the tone friendly and academic. Plain text — no JSON, no markdown headers.
+"""
+
+    return _call_groq(prompt, max_tokens=800)
 
 
-@app.route("/quiz", methods=["POST"])
-@limiter.limit("20 per minute")
-def quiz():
+# ---------------------------------------------------------------------------
+# NEW: AI Tutor chat (contextual Q&A on current slide)
+# ---------------------------------------------------------------------------
+
+def answer_student_question(question: str, slide: dict, topic: str, profile: dict) -> str | None:
     """
-    Generate adaptive quiz for a specific slide.
-    Body: { "session_id": "...", "slide_index": 0 }
-    Returns: { "questions": [...] }
+    Answer a free-form student question in the context of the current slide.
     """
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
+    difficulty = profile.get("difficulty_hint", "normal")
+    tone_note = {
+        "simplify": "Use simple, jargon-free language with everyday analogies.",
+        "advanced": "Use precise technical language and include deeper details.",
+        "normal": "Use clear, academic language suitable for an undergraduate student.",
+    }.get(difficulty, "")
 
-    session_id = data.get("session_id", "")
-    slide_index = data.get("slide_index", 0)
+    system = (
+        f"You are a friendly, knowledgeable university tutor teaching '{topic}'. "
+        f"{tone_note} Answer only questions related to the course material. "
+        "If the question is off-topic, gently redirect the student."
+    )
 
-    session = sessions.get(session_id)
-    if not session:
-        return jsonify({"error": "Session not found"}), 404
+    prompt = f"""Current slide the student is on:
+Title: {slide['title']}
+Content:
+{json.dumps(slide['points'], indent=2)}
 
-    slides = session["slides"]
-    if not (0 <= slide_index < len(slides)):
-        return jsonify({"error": "Invalid slide index"}), 400
+Student's question: {question}
 
-    profile = compute_learner_profile(session["performance"])
-    questions = generate_quiz_for_slide(slides[slide_index], profile)
+Give a helpful, concise answer (3-6 sentences). If relevant, reference specific points from the slide.
+"""
 
-    if not questions:
-        return jsonify({"error": "Failed to generate quiz. Please try again."}), 500
-
-    return jsonify({"questions": questions})
-
-
-@app.route("/feedback", methods=["POST"])
-@limiter.limit("30 per minute")
-def feedback():
-    """
-    Record learner performance for a slide.
-    Body: {
-        "session_id": "...",
-        "slide_index": 0,
-        "slide_title": "...",
-        "time_spent": 45,       # seconds on slide
-        "understood": true,
-        "quiz_score": 0.67,     # fraction correct (0–1)
-        "quiz_answers": [0, 2, 1]  # learner's chosen option indices
-    }
-    Returns: { "profile": {...}, "message": "..." }
-    """
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
-
-    session_id = data.get("session_id", "")
-    session = sessions.get(session_id)
-    if not session:
-        return jsonify({"error": "Session not found"}), 404
-
-    record = {
-        "slide_index": int(data.get("slide_index", 0)),
-        "slide_title": str(data.get("slide_title", "")).strip(),
-        "time_spent": float(data.get("time_spent", 0)),
-        "understood": bool(data.get("understood", True)),
-        "quiz_score": float(data.get("quiz_score", 1.0)),
-        "quiz_answers": data.get("quiz_answers", []),
-        "timestamp": time.time(),
-    }
-
-    # Prevent duplicate records for the same slide
-    session["performance"] = [
-        p for p in session["performance"]
-        if p["slide_index"] != record["slide_index"]
-    ]
-    session["performance"].append(record)
-
-    profile = compute_learner_profile(session["performance"])
-
-    # Generate a motivational/adaptive message
-    if record["quiz_score"] >= 0.8 and record["understood"]:
-        message = "Excellent work! You have a strong grasp of this topic."
-    elif record["quiz_score"] >= 0.5 or record["understood"]:
-        message = "Good effort. Review any points you found confusing before moving on."
-    else:
-        message = "This topic needs more attention. Try the simplified explanation."
-
-    return jsonify({"profile": profile, "message": message})
-
-
-@app.route("/reteach", methods=["POST"])
-@limiter.limit("10 per minute")
-def reteach():
-    """
-    Return a simplified version of a slide.
-    Body: { "session_id": "...", "slide_index": 0 }
-    Returns: { "slide": { "title": "...", "points": [...], "reteach": true } }
-    """
-    data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
-
-    session_id = data.get("session_id", "")
-    slide_index = data.get("slide_index", 0)
-
-    session = sessions.get(session_id)
-    if not session:
-        return jsonify({"error": "Session not found"}), 404
-
-    slides = session["slides"]
-    if not (0 <= slide_index < len(slides)):
-        return jsonify({"error": "Invalid slide index"}), 400
-
-    simplified = reteach_slide(slides[slide_index])
-    if not simplified:
-        return jsonify({"error": "Failed to generate simplified slide."}), 500
-
-    return jsonify({"slide": simplified})
-
-
-@app.route("/stats/<session_id>", methods=["GET"])
-def stats(session_id):
-    """
-    Return full session analytics.
-    Returns: { "topic", "total_slides", "completed_slides", "profile", "performance" }
-    """
-    session = sessions.get(session_id)
-    if not session:
-        return jsonify({"error": "Session not found"}), 404
-
-    profile = compute_learner_profile(session["performance"])
-
-    return jsonify({
-        "topic": session["topic"],
-        "total_slides": len(session["slides"]),
-        "completed_slides": len(session["performance"]),
-        "profile": profile,
-        "performance": session["performance"],
-        "created_at": session["created_at"],
-    })
+    return _call_groq(prompt, max_tokens=500, system=system)
 
 
 # ---------------------------------------------------------------------------
@@ -601,20 +519,6 @@ def generate_visual_for_slide(slide: dict, retry: bool = False) -> dict | None:
     """
     Decide the best visual type for a slide and return structured data
     that the frontend can render as an SVG/HTML diagram.
-
-    Returned dict shape:
-    {
-      "type": "flowchart" | "cycle" | "comparison" | "timeline" | "pyramid" | "mindmap",
-      "title": "...",
-      "data": { ...type-specific payload... }
-    }
-
-    Flowchart  → { "nodes": [{"id","label","sub","type"}], "edges": [{"from","to","label"}] }
-    Cycle      → { "steps": [{"label","sub"}] }
-    Comparison → { "items": [{"label","points":[]}], "headers": ["A","B"] }
-    Timeline   → { "events": [{"year","label","sub"}] }
-    Pyramid    → { "levels": [{"label","sub","width_pct"}] }   top→bottom order
-    Mindmap    → { "center": "...", "branches": [{"label","items":[]}] }
     """
     prompt = f"""You are a visual-learning engine. Given a slide, choose the BEST diagram type and return ONLY a valid JSON object — no prose, no markdown fences.
 
@@ -714,11 +618,243 @@ STRICT RULES:
     return data
 
 
+# ---------------------------------------------------------------------------
+# XP / Streak helpers
+# ---------------------------------------------------------------------------
+
+def _award_xp(session: dict, quiz_score: float, understood: bool) -> dict:
+    """
+    Update XP and streak in-place and return a dict with the delta info.
+    """
+    correct_answers = round(quiz_score * 3)  # 3-question quiz
+    earned = correct_answers * XP_PER_QUIZ_CORRECT
+    if understood:
+        earned += XP_PER_SLIDE_UNDERSTOOD
+
+    # Streak logic
+    if quiz_score >= 0.6 and understood:
+        session["streak_slides"] = session.get("streak_slides", 0) + 1
+    else:
+        session["streak_slides"] = 0
+
+    # Streak bonus every 5 slides
+    streak = session["streak_slides"]
+    if streak > 0 and streak % 5 == 0:
+        earned += XP_STREAK_BONUS
+
+    session["xp"] = session.get("xp", 0) + earned
+
+    return {
+        "xp_earned": earned,
+        "total_xp": session["xp"],
+        "streak_slides": session["streak_slides"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+@app.route("/health")
+def health():
+    """Simple health check for deployment monitoring."""
+    return jsonify({"status": "ok", "model": MODEL_NAME, "sessions": len(sessions)})
+
+
+@app.route("/generate", methods=["POST"])
+@limiter.limit("10 per minute")
+def generate():
+    """
+    Start a new learning session.
+    Body: { "topic": "..." }
+    Returns: { "session_id": "...", "slides": [...] }
+    """
+    _prune_sessions()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid or missing JSON body"}), 400
+
+    topic = str(data.get("topic", "")).strip()
+    if not topic:
+        return jsonify({"error": "No topic provided"}), 400
+    if len(topic) > MAX_TOPIC_LENGTH:
+        return jsonify({"error": f"Topic must be {MAX_TOPIC_LENGTH} characters or fewer"}), 400
+
+    slides = generate_slides(topic)
+    if not slides:
+        return jsonify({"error": "AI failed to generate slides. Please try again."}), 500
+
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = {
+        "topic": topic,
+        "slides": slides,
+        "performance": [],
+        "created_at": time.time(),
+        "quiz_cache": {},      # { slide_index_str: [questions] }
+        "visual_cache": {},    # { slide_index_str: visual_dict }
+        "notes": {},           # { slide_index_str: "text" }
+        "xp": 0,
+        "streak_slides": 0,
+    }
+
+    return jsonify({"session_id": session_id, "slides": slides})
+
+
+@app.route("/quiz", methods=["POST"])
+@limiter.limit("20 per minute")
+def quiz():
+    """
+    Generate adaptive quiz for a specific slide (cached per slide).
+    Body: { "session_id": "...", "slide_index": 0 }
+    Returns: { "questions": [...] }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    slide_index = data.get("slide_index", 0)
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slides = session["slides"]
+    if not (0 <= slide_index < len(slides)):
+        return jsonify({"error": "Invalid slide index"}), 400
+
+    cache_key = str(slide_index)
+    if cache_key in session["quiz_cache"]:
+        return jsonify({"questions": session["quiz_cache"][cache_key], "cached": True})
+
+    profile = compute_learner_profile(session["performance"], session.get("xp", 0), session.get("streak_slides", 0))
+    questions = generate_quiz_for_slide(slides[slide_index], profile)
+
+    if not questions:
+        return jsonify({"error": "Failed to generate quiz. Please try again."}), 500
+
+    session["quiz_cache"][cache_key] = questions
+    return jsonify({"questions": questions})
+
+
+@app.route("/feedback", methods=["POST"])
+@limiter.limit("30 per minute")
+def feedback():
+    """
+    Record learner performance for a slide and award XP.
+    Body: {
+        "session_id": "...",
+        "slide_index": 0,
+        "slide_title": "...",
+        "time_spent": 45,
+        "understood": true,
+        "quiz_score": 0.67,
+        "quiz_answers": [0, 2, 1]
+    }
+    Returns: { "profile": {...}, "message": "...", "xp": {...} }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    record = {
+        "slide_index": int(data.get("slide_index", 0)),
+        "slide_title": str(data.get("slide_title", "")).strip(),
+        "time_spent": float(data.get("time_spent", 0)),
+        "understood": bool(data.get("understood", True)),
+        "quiz_score": float(data.get("quiz_score", 1.0)),
+        "quiz_answers": data.get("quiz_answers", []),
+        "timestamp": time.time(),
+    }
+
+    session["performance"] = [
+        p for p in session["performance"]
+        if p["slide_index"] != record["slide_index"]
+    ]
+    session["performance"].append(record)
+
+    # Award XP
+    xp_result = _award_xp(session, record["quiz_score"], record["understood"])
+
+    profile = compute_learner_profile(session["performance"], session.get("xp", 0), session.get("streak_slides", 0))
+
+    if record["quiz_score"] >= 0.8 and record["understood"]:
+        message = "Excellent work! You have a strong grasp of this topic."
+    elif record["quiz_score"] >= 0.5 or record["understood"]:
+        message = "Good effort. Review any points you found confusing before moving on."
+    else:
+        message = "This topic needs more attention. Try the simplified explanation."
+
+    return jsonify({"profile": profile, "message": message, "xp": xp_result})
+
+
+@app.route("/reteach", methods=["POST"])
+@limiter.limit("10 per minute")
+def reteach():
+    """
+    Return a simplified version of a slide.
+    Body: { "session_id": "...", "slide_index": 0 }
+    Returns: { "slide": { "title": "...", "points": [...], "reteach": true } }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    slide_index = data.get("slide_index", 0)
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slides = session["slides"]
+    if not (0 <= slide_index < len(slides)):
+        return jsonify({"error": "Invalid slide index"}), 400
+
+    simplified = reteach_slide(slides[slide_index])
+    if not simplified:
+        return jsonify({"error": "Failed to generate simplified slide."}), 500
+
+    return jsonify({"slide": simplified})
+
+
+@app.route("/stats/<session_id>", methods=["GET"])
+def stats(session_id):
+    """
+    Return full session analytics.
+    Returns: { "topic", "total_slides", "completed_slides", "profile", "performance" }
+    """
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    profile = compute_learner_profile(session["performance"], session.get("xp", 0), session.get("streak_slides", 0))
+
+    return jsonify({
+        "topic": session["topic"],
+        "total_slides": len(session["slides"]),
+        "completed_slides": len(session["performance"]),
+        "profile": profile,
+        "performance": session["performance"],
+        "created_at": session["created_at"],
+    })
+
+
 @app.route("/visual", methods=["POST"])
 @limiter.limit("15 per minute")
 def visual():
     """
-    Generate a visual diagram for a specific slide.
+    Generate a visual diagram for a specific slide (cached per slide).
     Body:  { "session_id": "...", "slide_index": 0 }
     Returns: { "visual": { "type": "...", "title": "...", "data": {...} } }
     """
@@ -737,11 +873,128 @@ def visual():
     if not (0 <= slide_index < len(slides)):
         return jsonify({"error": "Invalid slide index"}), 400
 
+    cache_key = str(slide_index)
+    if cache_key in session["visual_cache"]:
+        return jsonify({"visual": session["visual_cache"][cache_key], "cached": True})
+
     result = generate_visual_for_slide(slides[slide_index])
     if not result:
         return jsonify({"error": "Failed to generate visual. Please try again."}), 500
 
+    session["visual_cache"][cache_key] = result
     return jsonify({"visual": result})
+
+
+# ---------------------------------------------------------------------------
+# NEW: AI Tutor chat endpoint
+# ---------------------------------------------------------------------------
+
+@app.route("/chat", methods=["POST"])
+@limiter.limit("20 per minute")
+def chat():
+    """
+    Ask the AI tutor a question about the current slide.
+    Body: {
+        "session_id": "...",
+        "slide_index": 0,
+        "question": "Why does X happen?"
+    }
+    Returns: { "answer": "..." }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    slide_index = data.get("slide_index", 0)
+    question = str(data.get("question", "")).strip()
+
+    if not question:
+        return jsonify({"error": "No question provided"}), 400
+    if len(question) > 500:
+        return jsonify({"error": "Question too long (max 500 characters)"}), 400
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slides = session["slides"]
+    if not (0 <= slide_index < len(slides)):
+        return jsonify({"error": "Invalid slide index"}), 400
+
+    profile = compute_learner_profile(session["performance"], session.get("xp", 0), session.get("streak_slides", 0))
+    answer = answer_student_question(question, slides[slide_index], session["topic"], profile)
+
+    if not answer:
+        return jsonify({"error": "Tutor is unavailable. Please try again."}), 500
+
+    return jsonify({"answer": answer.strip()})
+
+
+# ---------------------------------------------------------------------------
+# NEW: End-of-session topic summary
+# ---------------------------------------------------------------------------
+
+@app.route("/summary", methods=["POST"])
+@limiter.limit("5 per minute")
+def summary():
+    """
+    Generate a personalised end-of-session summary.
+    Body: { "session_id": "..." }
+    Returns: { "summary": "..." }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    text = generate_topic_summary(session["topic"], session["slides"], session["performance"])
+    if not text:
+        return jsonify({"error": "Failed to generate summary. Please try again."}), 500
+
+    return jsonify({"summary": text.strip()})
+
+
+# ---------------------------------------------------------------------------
+# NEW: Per-slide learner notes
+# ---------------------------------------------------------------------------
+
+@app.route("/note", methods=["POST"])
+@limiter.limit("30 per minute")
+def note():
+    """
+    Save or retrieve a learner's personal note for a slide.
+    To SAVE:  { "session_id": "...", "slide_index": 0, "text": "My note..." }
+    To GET:   { "session_id": "...", "slide_index": 0 }
+    Returns: { "note": "..." }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    slide_index = data.get("slide_index", 0)
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slides = session["slides"]
+    if not (0 <= slide_index < len(slides)):
+        return jsonify({"error": "Invalid slide index"}), 400
+
+    cache_key = str(slide_index)
+
+    if "text" in data:
+        text = str(data["text"]).strip()[:2000]   # cap at 2000 chars
+        session["notes"][cache_key] = text
+        return jsonify({"note": text, "saved": True})
+    else:
+        return jsonify({"note": session["notes"].get(cache_key, "")})
 
 
 # ---------------------------------------------------------------------------

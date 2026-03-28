@@ -999,11 +999,278 @@
     .mm-leaf text { font-size: 9px; fill: var(--text-3); }
     .mm-leaf line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 2; }
 
+    /* ===================== XP BAR ===================== */
+    .xp-bar-wrap {
+      display: flex; align-items: center; gap: .5rem;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: .3rem .7rem;
+      flex-shrink: 0;
+    }
+    .xp-label {
+      font-family: var(--mono);
+      font-size: .72rem;
+      font-weight: 700;
+      color: var(--gold);
+      white-space: nowrap;
+    }
+    .xp-streak {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--teal);
+      white-space: nowrap;
+    }
+
+    /* XP pop toast (different from error toast) */
+    #xp-toast {
+      position: fixed; bottom: 5rem; right: 1.5rem;
+      background: rgba(232,160,32,.15);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      padding: .55rem 1.1rem;
+      border-radius: 10px;
+      font-size: .82rem; font-weight: 700;
+      z-index: 100;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s ease, transform .3s ease;
+      transform: translateY(10px);
+    }
+    #xp-toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ===================== AI TUTOR CHAT ===================== */
+    .chat-section {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      overflow: hidden;
+      animation: fadeSlideIn .4s ease .15s both;
+    }
+    .chat-header {
+      display: flex; align-items: center; gap: .6rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .chat-header-label {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3);
+      flex: 1;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .chat-header-label::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--gold);
+    }
+    .chat-toggle-btn {
+      background: none; border: none;
+      color: var(--text-3); font-size: .75rem; font-weight: 600;
+      cursor: pointer; transition: color .2s;
+      font-family: 'Syne', sans-serif;
+    }
+    .chat-toggle-btn:hover { color: var(--gold); }
+
+    .chat-body {
+      padding: 1rem 1.5rem 1.5rem;
+    }
+    .chat-messages {
+      display: flex; flex-direction: column; gap: .75rem;
+      margin-bottom: 1rem;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .chat-bubble {
+      padding: .7rem 1rem;
+      border-radius: 10px;
+      font-size: .85rem; line-height: 1.55;
+      animation: fadeSlideIn .3s ease;
+      max-width: 90%;
+    }
+    .chat-bubble.user {
+      background: rgba(232,160,32,.08);
+      border: 1px solid rgba(232,160,32,.2);
+      color: var(--text);
+      align-self: flex-end;
+    }
+    .chat-bubble.tutor {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      color: var(--text-2);
+      align-self: flex-start;
+      border-left: 3px solid var(--gold);
+    }
+    .chat-bubble.loading {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      color: var(--text-3);
+      font-style: italic;
+      font-size: .82rem;
+    }
+    .chat-input-row {
+      display: flex; gap: .6rem;
+    }
+    .chat-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: .7rem 1rem;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem;
+      outline: none;
+      transition: border-color .2s;
+      resize: none;
+      height: 44px;
+    }
+    .chat-input:focus { border-color: var(--gold); }
+    .chat-input::placeholder { color: var(--text-3); }
+    .chat-send-btn {
+      padding: .7rem 1.2rem;
+      border-radius: 10px;
+      background: var(--gold);
+      color: #080b12;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .8rem; font-weight: 800;
+      cursor: pointer; transition: background .2s, opacity .2s;
+      white-space: nowrap;
+    }
+    .chat-send-btn:hover { background: #f5b030; }
+    .chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ===================== NOTES ===================== */
+    .notes-section {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      overflow: hidden;
+      animation: fadeSlideIn .4s ease .2s both;
+    }
+    .notes-header {
+      display: flex; align-items: center; gap: .6rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .notes-header:hover { background: rgba(255,255,255,.02); }
+    .notes-header-label {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3); flex: 1;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .notes-header-label::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--teal);
+    }
+    .notes-toggle-icon { color: var(--text-3); font-size: .8rem; transition: transform .2s; }
+    .notes-body { padding: 1rem 1.5rem 1.5rem; }
+    .notes-textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: .8rem 1rem;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: .85rem;
+      outline: none;
+      resize: vertical;
+      min-height: 100px;
+      transition: border-color .2s;
+      line-height: 1.55;
+    }
+    .notes-textarea:focus { border-color: var(--teal); }
+    .notes-textarea::placeholder { color: var(--text-3); }
+    .notes-save-row {
+      display: flex; justify-content: flex-end; margin-top: .6rem; gap: .5rem; align-items: center;
+    }
+    .notes-saved-msg {
+      font-size: .75rem; color: var(--green); opacity: 0;
+      transition: opacity .3s;
+      font-weight: 600;
+    }
+    .notes-saved-msg.show { opacity: 1; }
+    .btn-save-note {
+      padding: .55rem 1.2rem;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid var(--teal);
+      color: var(--teal);
+      font-family: 'Syne', sans-serif;
+      font-size: .78rem; font-weight: 700;
+      cursor: pointer; transition: all .2s;
+    }
+    .btn-save-note:hover { background: rgba(32,197,176,.1); }
+
+    /* ===================== SUMMARY PANEL (stats screen) ===================== */
+    .summary-panel {
+      max-width: 900px; margin-inline: auto; width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+      animation: fadeSlideIn .4s ease .28s both;
+    }
+    .summary-panel-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .summary-panel-title {
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .summary-panel-title::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--gold);
+    }
+    .btn-gen-summary {
+      padding: .45rem 1rem;
+      border-radius: 8px;
+      background: var(--gold);
+      color: #080b12;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .75rem; font-weight: 800;
+      cursor: pointer; transition: background .2s, opacity .2s;
+    }
+    .btn-gen-summary:hover { background: #f5b030; }
+    .btn-gen-summary:disabled { opacity: .4; cursor: not-allowed; }
+    .summary-panel-body {
+      padding: 1.25rem 1.5rem;
+      font-size: .88rem;
+      color: var(--text-2);
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+
+    /* ===================== NEEDS-REVIEW TAGS (stats) ===================== */
+    .review-tag {
+      display: inline-block;
+      background: rgba(32,197,176,.08);
+      border: 1px solid rgba(32,197,176,.25);
+      color: var(--teal);
+      border-radius: 6px;
+      padding: .15rem .5rem;
+      font-size: .75rem; font-weight: 600;
+      margin: .15rem;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .review-tag:hover { background: rgba(32,197,176,.18); }
+
     /* Responsive tweaks */
     @media (max-width: 500px) {
       .understanding-btns { grid-template-columns: 1fr; }
       .hud { padding: .75rem 1rem; }
       .learning-body { padding: 1rem; }
+      .xp-bar-wrap { display: none; }
     }
   </style>
 </head>
@@ -1029,6 +1296,9 @@
         <span class="pill">⏱ Time Tracking</span>
         <span class="pill">🔁 Re-Teaching</span>
         <span class="pill">🧠 Learner Profile</span>
+        <span class="pill">🤖 AI Tutor Chat</span>
+        <span class="pill">📝 Slide Notes</span>
+        <span class="pill">⚡ XP & Streaks</span>
       </div>
     </div>
   </div>
@@ -1063,6 +1333,10 @@
       <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
       <div class="slide-counter" id="slide-counter">1 / 10</div>
       <button class="slide-nav-btn" id="btn-next" onclick="navNext()" title="Next slide (→)">&#8594;</button>
+      <div class="xp-bar-wrap" id="xp-bar-wrap" title="XP &amp; Streak">
+        <span class="xp-label" id="xp-display">⚡ 0 XP</span>
+        <span class="xp-streak" id="streak-display"></span>
+      </div>
       <div class="timer-badge" id="timer-badge">⏱ 0s</div>
     </div>
   </div>
@@ -1102,6 +1376,36 @@
     <!-- Quiz section (shown after understanding choice) -->
     <div id="quiz-section" class="quiz-section" style="display:none;"></div>
 
+    <!-- AI Tutor Chat -->
+    <div id="chat-section" class="chat-section" style="display:none;">
+      <div class="chat-header">
+        <div class="chat-header-label">🤖 Ask the AI Tutor</div>
+        <button class="chat-toggle-btn" onclick="closeChatSection()">✕ Close</button>
+      </div>
+      <div class="chat-body">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chat-input" placeholder="Ask anything about this slide…" rows="1"></textarea>
+          <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Ask →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Learner Notes -->
+    <div id="notes-section" class="notes-section" style="display:none;">
+      <div class="notes-header" onclick="toggleNotes()">
+        <div class="notes-header-label">📝 My Notes</div>
+        <span class="notes-toggle-icon" id="notes-toggle-icon">▼</span>
+      </div>
+      <div class="notes-body" id="notes-body" style="display:none;">
+        <textarea class="notes-textarea" id="notes-textarea" placeholder="Write your notes for this slide…"></textarea>
+        <div class="notes-save-row">
+          <span class="notes-saved-msg" id="notes-saved-msg">✓ Saved</span>
+          <button class="btn-save-note" onclick="saveNote()">Save Note</button>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /learning-body -->
 </div>
 
@@ -1115,9 +1419,27 @@
 
     <div class="stats-grid" id="stats-grid"></div>
 
+    <!-- XP & Streak stat -->
+    <div class="stats-grid" id="stats-xp-grid" style="display:none; max-width:900px; margin-inline:auto; width:100%; margin-bottom:1rem;"></div>
+
     <div class="adaptive-note" id="adaptive-note" style="display:none;">
       <div class="adaptive-note-title">AI Learner Insights</div>
       <div class="adaptive-note-body" id="adaptive-note-body"></div>
+    </div>
+
+    <!-- Needs Review -->
+    <div class="adaptive-note" id="needs-review-note" style="display:none;">
+      <div class="adaptive-note-title">📌 Slides to Review (Spaced Repetition)</div>
+      <div class="adaptive-note-body" id="needs-review-body"></div>
+    </div>
+
+    <!-- AI Summary Panel -->
+    <div class="summary-panel" id="summary-panel">
+      <div class="summary-panel-header">
+        <div class="summary-panel-title">✨ AI Session Summary</div>
+        <button class="btn-gen-summary" id="btn-gen-summary" onclick="generateSummary()">Generate Summary</button>
+      </div>
+      <div class="summary-panel-body" id="summary-body" style="display:none;"></div>
     </div>
 
     <div class="perf-table-wrap" id="perf-table-wrap" style="display:none;">
@@ -1135,6 +1457,8 @@
 
 <!-- Toast -->
 <div id="toast"></div>
+<!-- XP pop toast -->
+<div id="xp-toast"></div>
 
 <script>
 // =====================================================================
@@ -1157,6 +1481,11 @@ const state = {
   adaptiveProfile: null,
   visualLoaded: false,        // has the visual been fetched for current slide?
   visualOpen: false,          // is the visual panel currently visible?
+  xp: 0,
+  streakSlides: 0,
+  chatHistory: [],            // [{role:'user'|'tutor', text}] per session
+  notesBySlide: {},           // { slideIndex: "text" }
+  notesOpen: false,
 };
 
 // =====================================================================
@@ -1216,6 +1545,10 @@ async function startSession() {
     state.currentIndex = 0;
     state.performance  = [];
     state.adaptiveProfile = null;
+    state.xp = 0;
+    state.streakSlides = 0;
+    state.chatHistory = [];
+    state.notesBySlide = {};
 
     document.getElementById('hud-topic').textContent = topic;
     showScreen('screen-learning');
@@ -1248,6 +1581,8 @@ function setLoading(title, sub) {
     state.sessionId = null; state.slides = []; state.currentIndex = 0;
     state.performance = []; state.adaptiveProfile = null;
     state.visualLoaded = false; state.visualOpen = false;
+    state.xp = 0; state.streakSlides = 0;
+    state.chatHistory = []; state.notesBySlide = {};
 
     // Clear hud input
     hudInput.value = '';
@@ -1275,6 +1610,10 @@ function setLoading(title, sub) {
       state.currentIndex = 0;
       state.performance  = [];
       state.adaptiveProfile = null;
+      state.xp = 0;
+      state.streakSlides = 0;
+      state.chatHistory = [];
+      state.notesBySlide = {};
 
       document.getElementById('hud-topic').textContent = topic;
       showScreen('screen-learning');
@@ -1376,6 +1715,22 @@ function loadSlide(index, overrideSlide = null) {
   const qs = document.getElementById('quiz-section');
   qs.style.display = 'none';
   qs.innerHTML = '';
+
+  // Show chat section (reset messages for new slide)
+  const chatSection = document.getElementById('chat-section');
+  chatSection.style.display = 'block';
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-input').value = '';
+
+  // Show notes section and load saved note for this slide
+  const notesSection = document.getElementById('notes-section');
+  notesSection.style.display = 'block';
+  const savedNote = state.notesBySlide[index] || '';
+  document.getElementById('notes-textarea').value = savedNote;
+  // Collapse notes body by default on new slide
+  document.getElementById('notes-body').style.display = 'none';
+  document.getElementById('notes-toggle-icon').textContent = '▼';
+  state.notesOpen = false;
 
   // Scroll to top
   document.getElementById('learning-body').scrollTop = 0;
@@ -1619,8 +1974,156 @@ async function sendFeedback(quizScore, understood) {
     if (res.ok) {
       state.adaptiveProfile = data.profile;
       state.performance.push(record);
+      // Update XP
+      if (data.xp) {
+        state.xp = data.xp.total_xp;
+        state.streakSlides = data.xp.streak_slides;
+        updateXPDisplay(data.xp);
+      }
     }
   } catch (_) {}
+}
+
+// =====================================================================
+// XP DISPLAY
+// =====================================================================
+function updateXPDisplay(xpData) {
+  const xpEl = document.getElementById('xp-display');
+  const streakEl = document.getElementById('streak-display');
+  if (xpEl) xpEl.textContent = `⚡ ${xpData.total_xp} XP`;
+  if (streakEl) streakEl.textContent = xpData.streak_slides >= 2 ? `🔥 ${xpData.streak_slides}` : '';
+
+  // Pop toast
+  if (xpData.xp_earned > 0) {
+    const t = document.getElementById('xp-toast');
+    t.textContent = `+${xpData.xp_earned} XP${xpData.streak_slides >= 5 && xpData.streak_slides % 5 === 0 ? ' 🔥 Streak Bonus!' : ''}`;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+}
+
+// =====================================================================
+// AI TUTOR CHAT
+// =====================================================================
+function closeChatSection() {
+  document.getElementById('chat-section').style.display = 'none';
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const question = input.value.trim();
+  if (!question) return;
+
+  const sendBtn = document.getElementById('chat-send-btn');
+  sendBtn.disabled = true;
+  input.value = '';
+
+  const msgs = document.getElementById('chat-messages');
+
+  // Add user bubble
+  msgs.innerHTML += `<div class="chat-bubble user">${escHtml(question)}</div>`;
+
+  // Add loading bubble
+  const loadId = 'chat-loading-' + Date.now();
+  msgs.innerHTML += `<div class="chat-bubble loading" id="${loadId}">Tutor is thinking…</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: state.sessionId,
+        slide_index: state.currentIndex,
+        question,
+      }),
+    });
+    const data = await res.json();
+    const loadEl = document.getElementById(loadId);
+    if (loadEl) loadEl.remove();
+
+    if (!res.ok) throw new Error(data.error || 'Tutor unavailable.');
+
+    msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
+  } catch (err) {
+    const loadEl = document.getElementById(loadId);
+    if (loadEl) loadEl.remove();
+    msgs.innerHTML += `<div class="chat-bubble tutor" style="color:var(--red);">⚠️ ${escHtml(err.message)}</div>`;
+  }
+
+  msgs.scrollTop = msgs.scrollHeight;
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// Allow Enter to send (Shift+Enter for newline)
+document.addEventListener('keydown', e => {
+  const ci = document.getElementById('chat-input');
+  if (document.activeElement === ci && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+// =====================================================================
+// NOTES
+// =====================================================================
+function toggleNotes() {
+  const body = document.getElementById('notes-body');
+  const icon = document.getElementById('notes-toggle-icon');
+  state.notesOpen = !state.notesOpen;
+  body.style.display = state.notesOpen ? 'block' : 'none';
+  icon.textContent = state.notesOpen ? '▲' : '▼';
+}
+
+async function saveNote() {
+  const text = document.getElementById('notes-textarea').value;
+  state.notesBySlide[state.currentIndex] = text;
+
+  const savedMsg = document.getElementById('notes-saved-msg');
+  savedMsg.classList.add('show');
+  setTimeout(() => savedMsg.classList.remove('show'), 2000);
+
+  try {
+    await fetch('/note', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: state.sessionId,
+        slide_index: state.currentIndex,
+        text,
+      }),
+    });
+  } catch (_) {}
+}
+
+// =====================================================================
+// SESSION SUMMARY
+// =====================================================================
+async function generateSummary() {
+  const btn = document.getElementById('btn-gen-summary');
+  const body = document.getElementById('summary-body');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  body.style.display = 'block';
+  body.textContent = 'Generating your personalised summary…';
+
+  try {
+    const res = await fetch('/summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to generate summary.');
+    body.textContent = data.summary;
+    btn.textContent = 'Regenerate';
+    btn.disabled = false;
+  } catch (err) {
+    body.textContent = '⚠️ ' + err.message;
+    btn.textContent = 'Try Again';
+    btn.disabled = false;
+  }
 }
 
 // =====================================================================
@@ -1726,6 +2229,22 @@ function renderStats(data) {
     </div>
   `;
 
+  // XP & Streak cards
+  const xpGrid = document.getElementById('stats-xp-grid');
+  if (profile.xp !== undefined) {
+    xpGrid.style.display = 'grid';
+    xpGrid.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-value gold">⚡ ${profile.xp}</div>
+        <div class="stat-key">Total XP Earned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value teal">🔥 ${profile.streak_slides}</div>
+        <div class="stat-key">Best Streak</div>
+      </div>
+    `;
+  }
+
   // Adaptive insights
   const note = document.getElementById('adaptive-note');
   const noteBody = document.getElementById('adaptive-note-body');
@@ -1747,45 +2266,68 @@ function renderStats(data) {
     note.style.display = 'none';
   }
 
+  // Needs review (spaced repetition)
+  const reviewNote = document.getElementById('needs-review-note');
+  const reviewBody = document.getElementById('needs-review-body');
+  if (profile.needs_review && profile.needs_review.length > 0) {
+    reviewNote.style.display = 'block';
+    reviewBody.innerHTML = `<p style="margin-bottom:.5rem;color:var(--text-3);font-size:.82rem;">These slides scored below 60% — revisit them before your next session:</p>` +
+      profile.needs_review.map(r => `<span class="review-tag">${escHtml(r.slide_title)}</span>`).join(' ');
+  } else {
+    reviewNote.style.display = 'none';
+  }
+
+  // Reset summary panel
+  const summaryBody = document.getElementById('summary-body');
+  summaryBody.style.display = 'none';
+  summaryBody.textContent = '';
+  const summaryBtn = document.getElementById('btn-gen-summary');
+  summaryBtn.disabled = false;
+  summaryBtn.textContent = 'Generate Summary';
+
   // Performance table
   if (perf.length > 0) {
     const tableWrap = document.getElementById('perf-table-wrap');
     tableWrap.style.display = 'block';
 
-    const table = document.getElementById('perf-table');
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Slide</th>
-          <th>Time</th>
-          <th>Quiz</th>
-          <th>Understood</th>
-          <th>Score</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${perf.map((p, i) => {
-          const qPct = Math.round(p.quiz_score * 100);
-          const qClass = p.quiz_score >= .8 ? 'good' : p.quiz_score >= .5 ? 'ok' : 'bad';
-          const uClass = p.understood ? 'good' : 'bad';
-          const barColor = p.quiz_score >= .8 ? 'var(--green)' : p.quiz_score >= .5 ? 'var(--gold)' : 'var(--red)';
-          return `
+    tableWrap.innerHTML = `
+      <div class="perf-table-title">Slide-by-Slide Breakdown</div>
+      <div style="overflow-x:auto;">
+        <table id="perf-table">
+          <thead>
             <tr>
-              <td style="color:var(--text-3);font-family:var(--mono);">${i+1}</td>
-              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.slide_title)}</td>
-              <td style="font-family:var(--mono);">${fmtTime(p.time_spent)}</td>
-              <td>
-                <div class="mini-bar">
-                  <div class="mini-bar-fill" style="width:${qPct}%;background:${barColor};"></div>
-                </div>
-              </td>
-              <td><span class="badge ${uClass}">${p.understood ? 'Yes' : 'No'}</span></td>
-              <td><span class="badge ${qClass}">${qPct}%</span></td>
+              <th>#</th>
+              <th>Slide</th>
+              <th>Time</th>
+              <th>Quiz</th>
+              <th>Understood</th>
+              <th>Score</th>
             </tr>
-          `;
-        }).join('')}
-      </tbody>
+          </thead>
+          <tbody>
+            ${perf.map((p, i) => {
+              const qPct = Math.round(p.quiz_score * 100);
+              const qClass = p.quiz_score >= .8 ? 'good' : p.quiz_score >= .5 ? 'ok' : 'bad';
+              const uClass = p.understood ? 'good' : 'bad';
+              const barColor = p.quiz_score >= .8 ? 'var(--green)' : p.quiz_score >= .5 ? 'var(--gold)' : 'var(--red)';
+              return `
+                <tr>
+                  <td style="color:var(--text-3);font-family:var(--mono);">${i+1}</td>
+                  <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.slide_title)}</td>
+                  <td style="font-family:var(--mono);">${fmtTime(p.time_spent)}</td>
+                  <td>
+                    <div class="mini-bar">
+                      <div class="mini-bar-fill" style="width:${qPct}%;background:${barColor};"></div>
+                    </div>
+                  </td>
+                  <td><span class="badge ${uClass}">${p.understood ? 'Yes' : 'No'}</span></td>
+                  <td><span class="badge ${qClass}">${qPct}%</span></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
     `;
   }
 }
@@ -1804,6 +2346,8 @@ function restartSession() {
   // Reset all state
   state.sessionId = null; state.slides = []; state.currentIndex = 0;
   state.performance = []; state.adaptiveProfile = null;
+  state.xp = 0; state.streakSlides = 0;
+  state.chatHistory = []; state.notesBySlide = {};
   topicInput.value = '';
   charCount.textContent = '0';
   showScreen('screen-start');
