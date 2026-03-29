@@ -2464,46 +2464,79 @@ function svgTextLines(text, x, startY, lineHeight, maxChars, attrs) {
 }
 
 /* ============================================================
-   FLOWCHART  — fully rewritten
-   Full-label support, text wrapping, taller nodes, clean arrows
+   FLOWCHART  — collision-free, dynamic node heights
+   Each node is as tall as its content needs. GAP_Y is fixed
+   padding between nodes, never compressed.
    ============================================================ */
 function buildFlowchart(data) {
   const nodes = (data.nodes || []).slice(0, 9);
   const edges = data.edges || [];
 
-  const W        = 760;
-  const NODE_W   = 320;   // wide enough for real labels
-  const NODE_H   = 80;    // taller nodes for wrapped text
-  const GAP_Y    = 70;    // breathing room between nodes
-  const CX       = W / 2;
-  const PAD_TOP  = 30;
-  const BADGE_W  = 28;
+  const W       = 780;
+  const NODE_W  = 330;
+  const GAP_Y   = 60;    // fixed gap between nodes
+  const MIN_H   = 68;    // minimum node height
+  const LINE_H  = 20;    // px per label line
+  const SUB_H   = 15;    // px per sub line
+  const PAD_V   = 18;    // vertical internal padding
+  const BADGE_W = 28;
+  const CX      = W / 2;
+  const PAD_TOP = 30;
 
-  // Topological sort for vertical order
+  // ── text helper ──────────────────────────────────────────
+  function wrapText(text, maxCh) {
+    const words = String(text).split(' ');
+    const lines = []; let cur = '';
+    words.forEach(w => {
+      const test = cur ? cur + ' ' + w : w;
+      if (test.length <= maxCh) { cur = test; }
+      else { if (cur) lines.push(cur); cur = w.length > maxCh ? w.substring(0, maxCh) : w; }
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  // Measure each node's needed height before layout
+  const measured = nodes.map(n => {
+    const isStartEnd = n.type === 'start' || n.type === 'end';
+    const maxCh = isStartEnd ? 36 : 28;
+    const lblLines = wrapText(n.label || '', maxCh).slice(0, 4);
+    const subLines = n.sub ? wrapText(n.sub, isStartEnd ? 38 : 34).slice(0, 2) : [];
+    const contentH = lblLines.length * LINE_H + (subLines.length ? subLines.length * SUB_H + 4 : 0);
+    const nodeH = Math.max(MIN_H, contentH + PAD_V * 2);
+    return { ...n, lblLines, subLines, nodeH };
+  });
+
+  // Topological sort
   const adjMap = {};
   nodes.forEach(n => { adjMap[n.id] = []; });
   edges.forEach(e => { if (adjMap[e.from]) adjMap[e.from].push(e.to); });
   const visited = new Set(), order = [];
   function topo(id) {
-    if (visited.has(id)) return;
-    visited.add(id);
-    (adjMap[id] || []).forEach(topo);
-    order.unshift(id);
+    if (visited.has(id)) return; visited.add(id);
+    (adjMap[id] || []).forEach(topo); order.unshift(id);
   }
   nodes.forEach(n => topo(n.id));
 
-  const posY = {};
-  order.forEach((id, i) => { posY[id] = PAD_TOP + i * (NODE_H + GAP_Y); });
-  nodes.forEach((n, i) => { if (posY[n.id] === undefined) posY[n.id] = PAD_TOP + i * (NODE_H + GAP_Y); });
+  // Assign y positions using actual node heights + fixed gap
+  const posY = {}, nodeById = {};
+  measured.forEach(n => { nodeById[n.id] = n; });
+  let curY = PAD_TOP;
+  order.forEach(id => {
+    posY[id] = curY;
+    const m = nodeById[id];
+    curY += (m ? m.nodeH : MIN_H) + GAP_Y;
+  });
+  // Fallback for nodes not in topo order
+  measured.forEach(n => {
+    if (posY[n.id] === undefined) { posY[n.id] = curY; curY += n.nodeH + GAP_Y; }
+  });
 
-  const H = nodes.length * (NODE_H + GAP_Y) + PAD_TOP + 40;
+  const H = curY + 20;
 
   const defs = `<defs>
     <marker id="fc-arrow" markerWidth="12" markerHeight="12" refX="9" refY="5" orient="auto">
       <path d="M0,1 L0,9 L11,5 z" fill="#3a4560"/>
-    </marker>
-    <marker id="fc-arrow-gold" markerWidth="12" markerHeight="12" refX="9" refY="5" orient="auto">
-      <path d="M0,1 L0,9 L11,5 z" fill="rgba(232,160,32,.7)"/>
     </marker>
     <filter id="fc-glow" x="-20%" y="-20%" width="140%" height="140%">
       <feGaussianBlur stdDeviation="3" result="blur"/>
@@ -2511,34 +2544,31 @@ function buildFlowchart(data) {
     </filter>
   </defs>`;
 
-  // Edges — smooth bezier with glow
+  // Edges
   let edgeSvg = '';
   edges.forEach(e => {
-    const fn = nodes.find(n => n.id === e.from);
-    const tn = nodes.find(n => n.id === e.to);
+    const fn = nodeById[e.from], tn = nodeById[e.to];
     if (!fn || !tn) return;
-    const y1 = (posY[e.from] ?? 0) + NODE_H;
+    const y1 = (posY[e.from] ?? 0) + fn.nodeH;
     const y2 = (posY[e.to]   ?? 0);
     const my = (y1 + y2) / 2;
-    const path = `M${CX},${y1} C${CX},${my + 10} ${CX},${my - 10} ${CX},${y2 - 8}`;
-    edgeSvg += `<path d="${path}" fill="none" stroke="rgba(232,160,32,.18)" stroke-width="7"/>`;
-    edgeSvg += `<path d="${path}" fill="none" stroke="#3a4560" stroke-width="2.5"
-      marker-end="url(#fc-arrow)"/>`;
+    const path = `M${CX},${y1} C${CX},${my+8} ${CX},${my-8} ${CX},${y2-8}`;
+    edgeSvg += `<path d="${path}" fill="none" stroke="rgba(232,160,32,.15)" stroke-width="7"/>`;
+    edgeSvg += `<path d="${path}" fill="none" stroke="#3a4560" stroke-width="2.5" marker-end="url(#fc-arrow)"/>`;
     if (e.label) {
-      edgeSvg += `<rect x="${CX + 6}" y="${my - 11}" width="${e.label.length * 7 + 12}" height="20" rx="5"
+      edgeSvg += `<rect x="${CX+6}" y="${my-11}" width="${e.label.length*7+12}" height="20" rx="5"
         style="fill:#0f1420;stroke:#2a3347;stroke-width:1;"/>`;
-      edgeSvg += `<text x="${CX + 12}" y="${my + 1}"
-        style="fill:#6b7a99;font-size:11px;font-weight:600;font-family:Syne,sans-serif;dominant-baseline:middle;">
-        ${escHtml(e.label)}
-      </text>`;
+      edgeSvg += `<text x="${CX+12}" y="${my+1}"
+        style="fill:#6b7a99;font-size:11px;font-weight:600;font-family:Syne,sans-serif;dominant-baseline:middle;">${escHtml(e.label)}</text>`;
     }
   });
 
   // Nodes
   let nodeSvg = '';
-  nodes.forEach((n, stepNum) => {
-    const y    = posY[n.id] ?? (PAD_TOP + stepNum * (NODE_H + GAP_Y));
-    const x    = CX - NODE_W / 2;
+  measured.forEach((n, stepNum) => {
+    const y  = posY[n.id] ?? (PAD_TOP + stepNum * (MIN_H + GAP_Y));
+    const x  = CX - NODE_W / 2;
+    const NH = n.nodeH;
     const type = n.type || 'step';
     const isStart    = type === 'start';
     const isEnd      = type === 'end';
@@ -2546,101 +2576,66 @@ function buildFlowchart(data) {
 
     let borderColor, bgColor, textColor, glowColor, accentColor;
     if (isStart) {
-      borderColor = '#20c5b0'; bgColor = 'rgba(32,197,176,.12)'; textColor = '#20c5b0';
-      glowColor = 'rgba(32,197,176,.2)'; accentColor = '#20c5b0';
+      borderColor='#20c5b0'; bgColor='rgba(32,197,176,.12)'; textColor='#20c5b0';
+      glowColor='rgba(32,197,176,.18)'; accentColor='#20c5b0';
     } else if (isEnd) {
-      borderColor = '#3ec87a'; bgColor = 'rgba(62,200,122,.12)'; textColor = '#3ec87a';
-      glowColor = 'rgba(62,200,122,.2)'; accentColor = '#3ec87a';
+      borderColor='#3ec87a'; bgColor='rgba(62,200,122,.12)'; textColor='#3ec87a';
+      glowColor='rgba(62,200,122,.18)'; accentColor='#3ec87a';
     } else if (isDecision) {
-      borderColor = '#e8a020'; bgColor = 'rgba(232,160,32,.09)'; textColor = '#e8a020';
-      glowColor = 'rgba(232,160,32,.18)'; accentColor = '#e8a020';
+      borderColor='#e8a020'; bgColor='rgba(232,160,32,.09)'; textColor='#e8a020';
+      glowColor='rgba(232,160,32,.16)'; accentColor='#e8a020';
     } else {
-      borderColor = '#2a3860'; bgColor = '#141926'; textColor = '#dde2f0';
-      glowColor = 'rgba(100,130,255,.07)'; accentColor = '#5a7aff';
+      borderColor='#2a3860'; bgColor='#141926'; textColor='#dde2f0';
+      glowColor='rgba(100,130,255,.07)'; accentColor='#5a7aff';
     }
 
-    const rx = (isStart || isEnd) ? NODE_H / 2 : isDecision ? 14 : 12;
+    const rx = (isStart || isEnd) ? NH/2 : isDecision ? 14 : 12;
 
-    // Outer glow halo
-    nodeSvg += `<rect x="${x - 4}" y="${y - 4}" width="${NODE_W + 8}" height="${NODE_H + 8}" rx="${rx + 3}"
+    // Glow halo
+    nodeSvg += `<rect x="${x-4}" y="${y-4}" width="${NODE_W+8}" height="${NH+8}" rx="${rx+3}"
       style="fill:${glowColor};"/>`;
     // Main box
-    nodeSvg += `<rect x="${x}" y="${y}" width="${NODE_W}" height="${NODE_H}" rx="${rx}"
+    nodeSvg += `<rect x="${x}" y="${y}" width="${NODE_W}" height="${NH}" rx="${rx}"
       style="fill:${bgColor};stroke:${borderColor};stroke-width:2;"/>`;
 
-    // Left accent stripe for step nodes
+    // Left accent stripe (step nodes only)
     if (!isStart && !isEnd) {
-      nodeSvg += `<rect x="${x}" y="${y + 10}" width="4" height="${NODE_H - 20}" rx="2"
+      nodeSvg += `<rect x="${x}" y="${y+10}" width="4" height="${NH-20}" rx="2"
         style="fill:${accentColor};opacity:.7;"/>`;
     }
 
-    // Step number badge (skip for start/end)
+    // Step badge
     const hasBadge = !isStart && !isEnd;
     if (hasBadge) {
-      nodeSvg += `<rect x="${x + 12}" y="${y + NODE_H/2 - 13}" width="${BADGE_W}" height="${BADGE_W}" rx="7"
+      nodeSvg += `<rect x="${x+12}" y="${y+NH/2-14}" width="${BADGE_W}" height="${BADGE_W}" rx="7"
         style="fill:rgba(255,255,255,.06);stroke:${borderColor};stroke-width:1.2;"/>`;
-      nodeSvg += `<text x="${x + 12 + BADGE_W/2}" y="${y + NODE_H/2 + 1}" text-anchor="middle" dominant-baseline="middle"
+      nodeSvg += `<text x="${x+12+BADGE_W/2}" y="${y+NH/2+1}" text-anchor="middle" dominant-baseline="middle"
         style="fill:${accentColor};font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;">${stepNum}</text>`;
     }
 
-    // Text area start X (leave room for badge or centre for start/end)
-    const textX  = (isStart || isEnd) ? CX : x + 54;
-    const anchor = (isStart || isEnd) ? 'middle' : 'start';
-    const maxW   = (isStart || isEnd) ? 36 : 30; // chars per line
+    // Text positioning
+    const textX   = (isStart || isEnd) ? CX : x + 54;
+    const anchor  = (isStart || isEnd) ? 'middle' : 'start';
+    const hasSub  = n.subLines.length > 0;
 
-    const label  = String(n.label || '');
-    const sub    = String(n.sub   || '');
+    // Calculate vertical centre of label block
+    const lblBlockH = n.lblLines.length * LINE_H;
+    const subBlockH = hasSub ? n.subLines.length * SUB_H + 6 : 0;
+    const totalContentH = lblBlockH + subBlockH;
+    const contentTopY = y + (NH - totalContentH) / 2;
 
-    // Calculate vertical offset based on whether sub exists
-    if (sub) {
-      // Label on top half, sub on bottom half
-      const labelLines = [];
-      const words = label.split(' ');
-      let cur = '';
-      words.forEach(w => {
-        if ((cur + ' ' + w).trim().length <= maxW) cur = (cur + ' ' + w).trim();
-        else { if (cur) labelLines.push(cur); cur = w.substring(0, maxW); }
-      });
-      if (cur) labelLines.push(cur);
+    n.lblLines.forEach((line, li) => {
+      nodeSvg += `<text x="${textX}" y="${contentTopY + li*LINE_H + LINE_H/2}"
+        text-anchor="${anchor}" dominant-baseline="middle"
+        style="fill:${textColor};font-size:14px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    });
 
-      const totalLabelH = labelLines.length * 16;
-      const subY = y + NODE_H/2 + 6;
-      const labelStartY = y + NODE_H/2 - totalLabelH - 4;
-
-      labelLines.forEach((line, li) => {
-        nodeSvg += `<text x="${textX}" y="${labelStartY + li * 17}" text-anchor="${anchor}" dominant-baseline="middle"
-          style="fill:${textColor};font-size:14px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
-      });
-
-      // Sub label (smaller, muted)
-      const subWords = sub.split(' ');
-      let subLine = '';
-      const subLines = [];
-      subWords.forEach(w => {
-        if ((subLine + ' ' + w).trim().length <= 40) subLine = (subLine + ' ' + w).trim();
-        else { if (subLine) subLines.push(subLine); subLine = w.substring(0, 40); }
-      });
-      if (subLine) subLines.push(subLine);
-      subLines.slice(0, 2).forEach((line, li) => {
-        nodeSvg += `<text x="${textX}" y="${subY + li * 14}" text-anchor="${anchor}" dominant-baseline="middle"
+    if (hasSub) {
+      const subTopY = contentTopY + lblBlockH + 6;
+      n.subLines.forEach((line, li) => {
+        nodeSvg += `<text x="${textX}" y="${subTopY + li*SUB_H + SUB_H/2}"
+          text-anchor="${anchor}" dominant-baseline="middle"
           style="fill:#8b93a8;font-size:11px;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
-      });
-
-    } else {
-      // Centre label vertically
-      const words = label.split(' ');
-      const labelLines = [];
-      let cur = '';
-      words.forEach(w => {
-        if ((cur + ' ' + w).trim().length <= maxW) cur = (cur + ' ' + w).trim();
-        else { if (cur) labelLines.push(cur); cur = w.substring(0, maxW); }
-      });
-      if (cur) labelLines.push(cur);
-      const blockH = (labelLines.length - 1) * 20;
-      const startY = y + NODE_H/2 - blockH/2;
-      labelLines.forEach((line, li) => {
-        nodeSvg += `<text x="${textX}" y="${startY + li * 20}" text-anchor="${anchor}" dominant-baseline="middle"
-          style="fill:${textColor};font-size:15px;font-weight:700;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
       });
     }
   });
@@ -3001,159 +2996,186 @@ function buildPyramid(data) {
 }
 
 /* ============================================================
-   MINDMAP  — fully rewritten
-   Larger canvas, smarter layout, full labels, wrapped sub-items,
-   branch items laid out in a column away from centre
+   MINDMAP  — collision-free layout
+   Branches split into LEFT / RIGHT columns, equally spaced
+   vertically. Sub-items extend further outward in their own
+   column. No angular spoke placement = no collisions.
    ============================================================ */
 function buildMindmap(data) {
   const center   = String(data.center || 'Topic');
-  const branches = (data.branches || []).slice(0, 7);
+  const branches = (data.branches || []).slice(0, 8);
   const n        = branches.length;
+  if (!n) return '<p style="color:var(--text-3)">No branches.</p>';
 
-  // Canvas — much bigger to avoid crowding
-  const W = 1100, H = 860, CX = W / 2, CY = H / 2;
-  const SPOKE_R  = 230;   // distance from centre to branch node centre
-  const ITEM_GAP = 34;    // vertical gap between sub-items
-  const colors   = ['#e8a020','#20c5b0','#3ec87a','#8b5cf6','#f97316','#ec4899','#06b6d4'];
+  const colors = ['#e8a020','#20c5b0','#3ec87a','#8b5cf6','#f97316','#ec4899','#06b6d4','#f43f5e'];
+
+  // ── text wrapper helper ───────────────────────────────────
+  function wrapText(text, maxCh) {
+    const words = String(text).split(' ');
+    const lines = []; let cur = '';
+    words.forEach(w => {
+      const test = cur ? cur + ' ' + w : w;
+      if (test.length <= maxCh) { cur = test; }
+      else { if (cur) lines.push(cur); cur = w.length > maxCh ? w.substring(0, maxCh) : w; }
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  // ── Layout constants ──────────────────────────────────────
+  const ITEM_H      = 30;   // pill height (1 line)
+  const ITEM_LINE_H = 13;   // extra height per extra item line
+  const ITEM_GAP    = 12;   // gap between pills
+  const BR_PAD_V    = 36;   // guaranteed vertical gap between branch slots
+  const BR_H_BASE   = 42;   // branch box height for 1-line label
+  const BR_LINE_H   = 18;   // extra height per extra branch label line
+
+  // measure how tall a branch's slot needs to be
+  function measureBranch(br) {
+    const lblLines = wrapText(br.label || '', 16).slice(0, 2);
+    const brH = BR_H_BASE + (lblLines.length - 1) * BR_LINE_H;
+    const items = (br.items || []).slice(0, 5);
+    let itemsH = 0;
+    items.forEach(item => {
+      const iLines = wrapText(String(item), 20).slice(0, 2);
+      itemsH += ITEM_H + (iLines.length - 1) * ITEM_LINE_H + ITEM_GAP;
+    });
+    if (items.length) itemsH -= ITEM_GAP; // remove last gap
+    return { lblLines, brH, items, itemsH };
+  }
+
+  // Split branches: even-indexed → right, odd-indexed → left
+  const rightList = [], leftList = [];
+  branches.forEach((br, i) => {
+    (i % 2 === 0 ? rightList : leftList).push({ br, i });
+  });
+
+  // Total height needed per side (max of both sides drives canvas height)
+  function sideH(list) {
+    return list.reduce((acc, { br }) => {
+      const m = measureBranch(br);
+      return acc + Math.max(m.brH, m.itemsH) + BR_PAD_V;
+    }, BR_PAD_V);
+  }
+
+  const neededH = Math.max(sideH(rightList), sideH(leftList), 380);
+  const W = 1200, H = neededH, CY = H / 2, CX = W / 2;
+
+  // Column x positions
+  const BR_R_X   = CX + 200;   // right branch col centre-x
+  const BR_L_X   = CX - 200;   // left branch col centre-x
+  const IT_R_X   = CX + 430;   // right items col centre-x
+  const IT_L_X   = CX - 430;   // left items col centre-x
+  const CRX = 84, CRY = 40;    // centre ellipse radii
 
   let svg = `<svg class="viz-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
-
-  // Background gradient halo
   svg += `<defs>
-    <radialGradient id="mm-bg" cx="50%" cy="50%" r="50%">
-      <stop offset="0%"   stop-color="rgba(232,160,32,.05)"/>
+    <radialGradient id="mm-bg" cx="50%" cy="50%" r="45%">
+      <stop offset="0%" stop-color="rgba(232,160,32,.07)"/>
       <stop offset="100%" stop-color="rgba(0,0,0,0)"/>
     </radialGradient>
   </defs>`;
-  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${SPOKE_R + 100}" ry="${SPOKE_R + 80}" fill="url(#mm-bg)"/>`;
+  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${W*0.44}" ry="${H*0.44}" fill="url(#mm-bg)"/>`;
 
-  // ---- Centre node ----
-  const centerWords = center.split(' ');
-  // wrap into max 2 lines of ~14 chars
-  const cLines = [];
-  let cCur = '';
-  centerWords.forEach(w => {
-    if ((cCur + ' ' + w).trim().length <= 16) cCur = (cCur + ' ' + w).trim();
-    else { if (cCur) cLines.push(cCur); cCur = w.substring(0, 16); }
-  });
-  if (cCur) cLines.push(cCur);
-  const cLineSlice = cLines.slice(0, 3);
-
-  const CRX = 90, CRY = 44;
-  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${CRX + 8}" ry="${CRY + 8}"
-    style="fill:rgba(232,160,32,.06);stroke:rgba(232,160,32,.15);stroke-width:1;"/>`;
+  // ── Centre node ───────────────────────────────────────────
+  const cLines = wrapText(center, 14).slice(0, 3);
+  svg += `<ellipse cx="${CX}" cy="${CY}" rx="${CRX+7}" ry="${CRY+7}"
+    style="fill:rgba(232,160,32,.06);stroke:rgba(232,160,32,.18);stroke-width:1;"/>`;
   svg += `<ellipse cx="${CX}" cy="${CY}" rx="${CRX}" ry="${CRY}"
-    style="fill:rgba(232,160,32,.13);stroke:#e8a020;stroke-width:2.5;"/>`;
-
-  cLineSlice.forEach((line, li) => {
-    const totalH = (cLineSlice.length - 1) * 18;
-    const ty = CY - totalH / 2 + li * 18;
-    svg += `<text x="${CX}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
-      style="fill:#e8a020;font-size:15px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+    style="fill:rgba(232,160,32,.15);stroke:#e8a020;stroke-width:2.5;"/>`;
+  cLines.forEach((line, li) => {
+    const totalH = (cLines.length - 1) * 17;
+    svg += `<text x="${CX}" y="${CY - totalH/2 + li*17}"
+      text-anchor="middle" dominant-baseline="middle"
+      style="fill:#e8a020;font-size:14px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
   });
 
-  // ---- Branches ----
-  branches.forEach((br, bi) => {
-    const angle  = (2 * Math.PI * bi / n) - Math.PI / 2;
-    const color  = colors[bi % colors.length];
+  // ── Draw one side ─────────────────────────────────────────
+  function drawSide(list, isRight) {
+    const BRX  = isRight ? BR_R_X : BR_L_X;
+    const ITX  = isRight ? IT_R_X : IT_L_X;
+    const SPKX = isRight ? CX + CRX : CX - CRX; // spoke origin on ellipse
 
-    // Branch node centre
-    const bx = CX + SPOKE_R * Math.cos(angle);
-    const by = CY + SPOKE_R * Math.sin(angle);
-
-    // Branch label — wrap to 2 lines
-    const brLabel = String(br.label || '');
-    const brWords = brLabel.split(' ');
-    const brLines = [];
-    let brCur = '';
-    brWords.forEach(w => {
-      if ((brCur + ' ' + w).trim().length <= 18) brCur = (brCur + ' ' + w).trim();
-      else { if (brCur) brLines.push(brCur); brCur = w.substring(0, 18); }
+    // Compute total slot heights to centre the group on CY
+    const heights = list.map(({ br }) => {
+      const m = measureBranch(br);
+      return Math.max(m.brH, m.itemsH) + BR_PAD_V;
     });
-    if (brCur) brLines.push(brCur);
-    const brLineSlice = brLines.slice(0, 2);
+    const totalH = heights.reduce((a, b) => a + b, 0);
+    let curY = CY - totalH / 2;
 
-    // Branch box size
-    const BW = Math.max(130, Math.max(...brLineSlice.map(l => l.length)) * 9 + 28);
-    const BH = 32 + (brLineSlice.length - 1) * 18;
+    list.forEach(({ br, i }, idx) => {
+      const color = colors[i % colors.length];
+      const m     = measureBranch(br);
+      const slotH = heights[idx];
+      const by    = curY + slotH / 2;
+      curY += slotH;
 
-    // Spoke: from centre ellipse edge → branch node
-    const ex = CX + CRX * Math.cos(angle);
-    const ey = CY + CRY * Math.sin(angle);
-    svg += `<line x1="${ex}" y1="${ey}" x2="${bx}" y2="${by}"
-      stroke="${color}" stroke-width="2.5" opacity="0.6"/>`;
-    // Glow spoke
-    svg += `<line x1="${ex}" y1="${ey}" x2="${bx}" y2="${by}"
-      stroke="${color}" stroke-width="7" opacity="0.1"/>`;
+      // Branch box dimensions
+      const BW = Math.max(148, Math.max(...m.lblLines.map(l => l.length)) * 8.5 + 30);
+      const BH = m.brH;
 
-    // Branch node box
-    svg += `<rect x="${bx - BW/2 - 3}" y="${by - BH/2 - 3}" width="${BW + 6}" height="${BH + 6}" rx="14"
-      style="fill:${color};opacity:.12;"/>`;
-    svg += `<rect x="${bx - BW/2}" y="${by - BH/2}" width="${BW}" height="${BH}" rx="12"
-      style="fill:#0f1420;stroke:${color};stroke-width:2;"/>`;
+      // Bezier spoke: centre ellipse edge → branch box
+      const cpx = (SPKX + BRX) / 2;
+      svg += `<path d="M${SPKX},${CY} C${cpx},${CY} ${cpx},${by} ${BRX},${by}"
+        fill="none" stroke="${color}" stroke-width="7" opacity="0.08"/>`;
+      svg += `<path d="M${SPKX},${CY} C${cpx},${CY} ${cpx},${by} ${BRX},${by}"
+        fill="none" stroke="${color}" stroke-width="2" opacity="0.65"/>`;
 
-    brLineSlice.forEach((line, li) => {
-      const totalH = (brLineSlice.length - 1) * 18;
-      const ty = by - totalH / 2 + li * 18;
-      svg += `<text x="${bx}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
-        style="fill:${color};font-size:13px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
-    });
-
-    // ---- Sub-items: stacked vertically away from centre ----
-    const items = (br.items || []).slice(0, 5);
-    if (!items.length) return;
-
-    // Determine which side of the canvas the branch is on
-    const isRight = Math.cos(angle) >= 0;
-    const isBottom = Math.sin(angle) >= 0;
-
-    // Item column anchor: push further outward from branch
-    const ITEM_PUSH = 160;  // distance from branch node to item column centre
-    const ix_centre = bx + ITEM_PUSH * Math.cos(angle);
-    const iy_centre = by + ITEM_PUSH * Math.sin(angle);
-
-    const totalItemsH = items.length * ITEM_GAP;
-    const itemAnchor  = isRight ? 'start' : 'end';
-
-    items.forEach((item, ii) => {
-      const itemStr = String(item);
-      // Wrap item text to 22 chars
-      const itemWords = itemStr.split(' ');
-      const itemLines = [];
-      let iCur = '';
-      itemWords.forEach(w => {
-        if ((iCur + ' ' + w).trim().length <= 22) iCur = (iCur + ' ' + w).trim();
-        else { if (iCur) itemLines.push(iCur); iCur = w.substring(0, 22); }
+      // Branch node
+      svg += `<rect x="${BRX-BW/2-3}" y="${by-BH/2-3}" width="${BW+6}" height="${BH+6}" rx="13"
+        style="fill:${color};opacity:.1;"/>`;
+      svg += `<rect x="${BRX-BW/2}" y="${by-BH/2}" width="${BW}" height="${BH}" rx="11"
+        style="fill:#0f1420;stroke:${color};stroke-width:2;"/>`;
+      m.lblLines.forEach((line, li) => {
+        const totalLH = (m.lblLines.length - 1) * BR_LINE_H;
+        svg += `<text x="${BRX}" y="${by - totalLH/2 + li*BR_LINE_H}"
+          text-anchor="middle" dominant-baseline="middle"
+          style="fill:${color};font-size:13px;font-weight:800;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
       });
-      if (iCur) itemLines.push(iCur);
-      const itemLineSlice = itemLines.slice(0, 2);
 
-      const IH = 26 + (itemLineSlice.length - 1) * 14;
-      const IW = Math.max(90, Math.max(...itemLineSlice.map(l => l.length)) * 7.5 + 24);
+      // Sub-items — vertical column at ITX, centred on slot
+      if (!m.items.length) return;
 
-      // Vertically distribute items
-      const iy = iy_centre - totalItemsH / 2 + ii * ITEM_GAP;
-      // X: away from centre
-      const ix = ix_centre;
+      // Compute total items block height
+      let totalItemsH = 0;
+      const itemMeasures = m.items.map(item => {
+        const iLines = wrapText(String(item), 20).slice(0, 2);
+        const IH = ITEM_H + (iLines.length - 1) * ITEM_LINE_H;
+        const IW = Math.max(108, Math.max(...iLines.map(l => l.length)) * 7 + 26);
+        totalItemsH += IH;
+        return { iLines, IH, IW };
+      });
+      totalItemsH += (m.items.length - 1) * ITEM_GAP;
 
-      // Connector: branch node edge → item pill
-      const bEdgeX = isRight ? bx + BW/2 : bx - BW/2;
-      const itemPillX = isRight ? ix - IW/2 : ix + IW/2;
-      svg += `<line x1="${bEdgeX}" y1="${by}" x2="${itemPillX}" y2="${iy}"
-        stroke="${color}" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.45"/>`;
+      let iy = by - totalItemsH / 2;
 
-      // Item pill
-      svg += `<rect x="${ix - IW/2}" y="${iy - IH/2}" width="${IW}" height="${IH}" rx="13"
-        style="fill:rgba(255,255,255,.04);stroke:${color};stroke-width:1.2;opacity:.9;"/>`;
+      itemMeasures.forEach(({ iLines, IH, IW }, ii) => {
+        const itemCY = iy + IH / 2;
+        iy += IH + ITEM_GAP;
 
-      itemLineSlice.forEach((line, li) => {
-        const totalH = (itemLineSlice.length - 1) * 14;
-        const ty = iy - totalH / 2 + li * 14;
-        svg += `<text x="${ix}" y="${ty}" text-anchor="middle" dominant-baseline="middle"
-          style="fill:#dde2f0;font-size:11px;font-weight:600;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+        // Elbow connector: branch box edge → item pill edge
+        const brEdgeX  = isRight ? BRX + BW/2 : BRX - BW/2;
+        const itEdgeX  = isRight ? ITX - IW/2  : ITX + IW/2;
+        const elbowX   = (brEdgeX + itEdgeX) / 2;
+        svg += `<path d="M${brEdgeX},${by} C${elbowX},${by} ${elbowX},${itemCY} ${itEdgeX},${itemCY}"
+          fill="none" stroke="${color}" stroke-width="1.3" stroke-dasharray="5 3" opacity="0.42"/>`;
+
+        // Pill
+        svg += `<rect x="${ITX-IW/2}" y="${itemCY-IH/2}" width="${IW}" height="${IH}" rx="12"
+          style="fill:rgba(255,255,255,.04);stroke:${color};stroke-width:1.2;"/>`;
+        iLines.forEach((line, li) => {
+          const totalLH = (iLines.length - 1) * ITEM_LINE_H;
+          svg += `<text x="${ITX}" y="${itemCY - totalLH/2 + li*ITEM_LINE_H}"
+            text-anchor="middle" dominant-baseline="middle"
+            style="fill:#dde2f0;font-size:11px;font-weight:600;font-family:Syne,sans-serif;">${escHtml(line)}</text>`;
+        });
       });
     });
-  });
+  }
+
+  drawSide(rightList, true);
+  drawSide(leftList,  false);
 
   svg += `</svg>`;
   return svg;
