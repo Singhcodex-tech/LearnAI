@@ -236,8 +236,70 @@ def validate_slides(slides: list) -> list:
         points = [str(p).strip() for p in points if str(p).strip()]
         if len(points) < 2:
             continue
-        validated.append({"title": title, "points": points[:6]})
+
+        entry: dict = {"title": title, "points": points[:6]}
+
+        # Preserve equations (math slides)
+        equations = slide.get("equations")
+        if isinstance(equations, list):
+            valid_eqs = []
+            for eq in equations:
+                if not isinstance(eq, dict):
+                    continue
+                label = str(eq.get("label", "")).strip()
+                latex = str(eq.get("latex", "")).strip()
+                explanation = str(eq.get("explanation", "")).strip()
+                if label and latex:
+                    valid_eqs.append({
+                        "label": label,
+                        "latex": latex,
+                        "explanation": explanation,
+                    })
+            if valid_eqs:
+                entry["equations"] = valid_eqs[:3]
+
+        # Preserve worked example (math slides)
+        worked = slide.get("worked_example")
+        if isinstance(worked, dict):
+            problem = str(worked.get("problem", "")).strip()
+            steps = worked.get("steps", [])
+            answer = str(worked.get("answer", "")).strip()
+            if isinstance(steps, list):
+                steps = [str(s).strip() for s in steps if str(s).strip()]
+            if problem and steps:
+                entry["worked_example"] = {
+                    "problem": problem,
+                    "steps": steps,
+                    "answer": answer,
+                }
+
+        validated.append(entry)
     return validated
+
+
+# ---------------------------------------------------------------------------
+# Math topic detection
+# ---------------------------------------------------------------------------
+
+MATH_KEYWORDS = {
+    # Pure math branches
+    "algebra", "calculus", "geometry", "trigonometry", "statistics",
+    "probability", "number theory", "linear algebra", "differential equations",
+    "integral", "derivative", "matrix", "vector", "polynomial", "logarithm",
+    "exponential", "binomial", "permutation", "combination", "fourier",
+    "laplace", "topology", "set theory", "graph theory", "arithmetic",
+    "fraction", "equation", "inequality", "quadratic", "sequence", "series",
+    "limit", "continuity", "complex number", "real analysis", "discrete math",
+    # Applied math / physics math
+    "optimization", "eigenvalue", "gradient", "divergence", "curl",
+    "bayes", "hypothesis testing", "regression", "variance", "standard deviation",
+    "normal distribution", "correlation", "integration", "differentiation",
+}
+
+def is_math_topic(topic: str) -> bool:
+    """Return True if the topic is mathematical in nature."""
+    lower = topic.lower()
+    return any(kw in lower for kw in MATH_KEYWORDS)
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +324,58 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
                 f"Learner profile: {profile_summary}"
             )
 
-    prompt = f"""
+    math_topic = is_math_topic(topic)
+
+    if math_topic:
+        prompt = f"""
+You are an expert mathematics professor creating rigorous, exam-quality academic slides.
+
+Topic: {topic}
+{difficulty_hint}
+
+Return ONLY a valid JSON array. No extra text, no markdown fences.
+
+Format:
+[
+  {{
+    "title": "Slide title",
+    "points": [
+      "Detailed conceptual explanation sentence.",
+      "Another detailed explanation with context."
+    ],
+    "equations": [
+      {{
+        "label": "Short name for this equation (e.g. Quadratic Formula)",
+        "latex": "x = \\\\frac{{-b \\\\pm \\\\sqrt{{b^2 - 4ac}}}}{{2a}}",
+        "explanation": "One sentence explaining what each symbol means and when this is used."
+      }}
+    ],
+    "worked_example": {{
+      "problem": "State a specific numeric problem clearly. E.g. Solve: 2x^2 - 4x - 6 = 0",
+      "steps": [
+        "Step 1: Identify a=2, b=-4, c=-6 from the standard form ax^2 + bx + c = 0.",
+        "Step 2: Substitute into the quadratic formula: x = (4 ± sqrt(16 + 48)) / 4",
+        "Step 3: Simplify inside the square root: sqrt(64) = 8",
+        "Step 4: Compute both roots: x = (4+8)/4 = 3  and  x = (4-8)/4 = -1"
+      ],
+      "answer": "x = 3 or x = -1"
+    }}
+  }}
+]
+
+STRICT RULES:
+- Generate 10 to 12 slides
+- Each slide must have 4 to 6 bullet points in "points"
+- EVERY point must be a COMPLETE, INFORMATIVE sentence (definition, proof idea, property, or real-world use)
+- EVERY slide MUST include:
+  • "equations": at least 1 and up to 3 key equations/formulas for that slide, each with a label, LaTeX string, and explanation
+  • "worked_example": exactly 1 fully solved numeric example with clear step-by-step solution
+- LaTeX must be valid and use double-escaped backslashes (e.g. \\\\frac, \\\\sqrt, \\\\int)
+- Steps in worked_example must be numbered, show all arithmetic, and explain each operation
+- Do NOT output anything outside JSON
+"""
+    else:
+        prompt = f"""
 You are an expert university professor creating high-quality academic slides.
 
 Topic: {topic}
@@ -418,8 +531,66 @@ RULES:
 # ---------------------------------------------------------------------------
 
 def reteach_slide(slide: dict, retry: bool = False) -> dict | None:
-    """Regenerate a slide with simpler language, more examples, and analogies."""
-    prompt = f"""
+    """Regenerate a slide with simpler language, more examples, and analogies.
+    For math slides (those with equations/worked_example), also regenerates
+    a simpler worked example with more detailed steps."""
+    is_math = "equations" in slide or "worked_example" in slide
+
+    if is_math:
+        equations_block = json.dumps(slide.get("equations", []), indent=2)
+        worked_block = json.dumps(slide.get("worked_example", {}), indent=2)
+        prompt = f"""
+A student did not understand this mathematics slide. Rewrite it with simpler language and a new, easier worked example.
+
+Original Slide Title: {slide['title']}
+Original Content:
+{json.dumps(slide['points'], indent=2)}
+
+Original Equations:
+{equations_block}
+
+Original Worked Example:
+{worked_block}
+
+Rewrite rules:
+- Keep the same title
+- Use simpler language — explain as if to a high-school student
+- Keep ALL original equations in "equations" (same labels/latex) but rewrite their explanations more clearly
+- In "worked_example": create a NEW, simpler numeric problem (smaller/rounder numbers) for the same concept
+- Show MORE steps — break each arithmetic step into its own line
+- Explain WHY each step is done, not just what to do
+- Keep 4 to 6 bullet points in "points"
+
+Return ONLY a valid JSON object. No extra text.
+
+Format:
+{{
+  "title": "Same title",
+  "points": [
+    "Simplified explanation with analogy",
+    "Another clearer explanation"
+  ],
+  "equations": [
+    {{
+      "label": "Same label as before",
+      "latex": "same LaTeX string",
+      "explanation": "Clearer, simpler explanation of what each symbol means."
+    }}
+  ],
+  "worked_example": {{
+    "problem": "A simpler numeric problem testing the same concept",
+    "steps": [
+      "Step 1: ...",
+      "Step 2: ..."
+    ],
+    "answer": "Final numeric answer"
+  }},
+  "reteach": true
+}}
+"""
+        max_tokens = 1600
+    else:
+        prompt = f"""
 A student did not understand this slide. Rewrite it to be clearer and easier to understand.
 
 Original Slide Title: {slide['title']}
@@ -447,8 +618,9 @@ Format:
   "reteach": true
 }}
 """
+        max_tokens = 1000
 
-    raw_text = _call_groq(prompt, max_tokens=1000)
+    raw_text = _call_groq(prompt, max_tokens=max_tokens)
     if not raw_text:
         return None
 
@@ -478,7 +650,38 @@ Format:
     if len(points) < 2:
         return None
 
-    return {"title": title, "points": points[:6], "reteach": True}
+    result: dict = {"title": title, "points": points[:6], "reteach": True}
+
+    # Carry through equations for math slides
+    if is_math:
+        equations = slide_data.get("equations") or slide.get("equations")
+        if isinstance(equations, list):
+            valid_eqs = []
+            for eq in equations:
+                if isinstance(eq, dict) and eq.get("label") and eq.get("latex"):
+                    valid_eqs.append({
+                        "label": str(eq["label"]).strip(),
+                        "latex": str(eq["latex"]).strip(),
+                        "explanation": str(eq.get("explanation", "")).strip(),
+                    })
+            if valid_eqs:
+                result["equations"] = valid_eqs[:3]
+
+        worked = slide_data.get("worked_example")
+        if isinstance(worked, dict):
+            problem = str(worked.get("problem", "")).strip()
+            steps = worked.get("steps", [])
+            answer = str(worked.get("answer", "")).strip()
+            if isinstance(steps, list):
+                steps = [str(s).strip() for s in steps if str(s).strip()]
+            if problem and steps:
+                result["worked_example"] = {
+                    "problem": problem,
+                    "steps": steps,
+                    "answer": answer,
+                }
+
+    return result
 
 
 # ---------------------------------------------------------------------------
