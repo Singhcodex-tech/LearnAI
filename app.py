@@ -327,53 +327,49 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
     math_topic = is_math_topic(topic)
 
     if math_topic:
-        prompt = f"""
-You are an expert mathematics professor creating rigorous, exam-quality academic slides.
-
-Topic: {topic}
-{difficulty_hint}
-
-Return ONLY a valid JSON array. No extra text, no markdown fences.
-
-Format:
-[
-  {{
-    "title": "Slide title",
-    "points": [
-      "Detailed conceptual explanation sentence.",
-      "Another detailed explanation with context."
-    ],
-    "equations": [
-      {{
-        "label": "Short name for this equation (e.g. Quadratic Formula)",
-        "latex": "x = \\\\frac{{-b \\\\pm \\\\sqrt{{b^2 - 4ac}}}}{{2a}}",
-        "explanation": "One sentence explaining what each symbol means and when this is used."
-      }}
-    ],
-    "worked_example": {{
-      "problem": "State a specific numeric problem clearly. E.g. Solve: 2x^2 - 4x - 6 = 0",
-      "steps": [
-        "Step 1: Identify a=2, b=-4, c=-6 from the standard form ax^2 + bx + c = 0.",
-        "Step 2: Substitute into the quadratic formula: x = (4 ± sqrt(16 + 48)) / 4",
-        "Step 3: Simplify inside the square root: sqrt(64) = 8",
-        "Step 4: Compute both roots: x = (4+8)/4 = 3  and  x = (4-8)/4 = -1"
-      ],
-      "answer": "x = 3 or x = -1"
-    }}
-  }}
-]
-
-STRICT RULES:
-- Generate 10 to 12 slides
-- Each slide must have 4 to 6 bullet points in "points"
-- EVERY point must be a COMPLETE, INFORMATIVE sentence (definition, proof idea, property, or real-world use)
-- EVERY slide MUST include:
-  • "equations": at least 1 and up to 3 key equations/formulas for that slide, each with a label, LaTeX string, and explanation
-  • "worked_example": exactly 1 fully solved numeric example with clear step-by-step solution
-- LaTeX must be valid and use double-escaped backslashes (e.g. \\\\frac, \\\\sqrt, \\\\int)
-- Steps in worked_example must be numbered, show all arithmetic, and explain each operation
-- Do NOT output anything outside JSON
-"""
+        # Use plain string concatenation (not f-string) so LaTeX backslashes
+        # and curly braces don't conflict with Python's f-string syntax.
+        _math_tpl = (
+            "You are an expert mathematics professor creating rigorous, exam-quality academic slides.\n\n"
+            "Topic: {topic}\n"
+            "{difficulty_hint}\n\n"
+            "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
+            "Use EXACTLY this JSON structure for EVERY slide:\n"
+            "[\n"
+            "  {\n"
+            "    \"title\": \"Slide title\",\n"
+            "    \"points\": [\n"
+            "      \"A complete informative sentence.\",\n"
+            "      \"Another complete sentence.\"\n"
+            "    ],\n"
+            "    \"equations\": [\n"
+            "      {\n"
+            "        \"label\": \"Quadratic Formula\",\n"
+            "        \"latex\": \"x = \\\\frac{-b \\\\pm \\\\sqrt{b^2 - 4ac}}{2a}\",\n"
+            "        \"explanation\": \"Gives roots of ax^2+bx+c=0; a,b,c are real coefficients.\"\n"
+            "      }\n"
+            "    ],\n"
+            "    \"worked_example\": {\n"
+            "      \"problem\": \"Solve: 2x^2 - 4x - 6 = 0\",\n"
+            "      \"steps\": [\n"
+            "        \"Step 1: Identify a=2, b=-4, c=-6 from standard form ax^2+bx+c=0.\",\n"
+            "        \"Step 2: Apply formula: x = (4 +/- sqrt(16+48)) / 4.\",\n"
+            "        \"Step 3: sqrt(64)=8, so x=(4+8)/4=3 or x=(4-8)/4=-1.\"\n"
+            "      ],\n"
+            "      \"answer\": \"x = 3 or x = -1\"\n"
+            "    }\n"
+            "  }\n"
+            "]\n\n"
+            "STRICT RULES:\n"
+            "- Generate 10 to 12 slides using the exact structure above\n"
+            "- Each slide: 4 to 6 bullet points in 'points'\n"
+            "- EVERY point: a COMPLETE, INFORMATIVE sentence (definition, property, or example)\n"
+            "- EVERY slide MUST have 'equations' (1-3 entries) AND 'worked_example'\n"
+            "- LaTeX: single backslashes only (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha)\n"
+            "- worked_example: numbered steps, full arithmetic, explain EACH operation\n"
+            "- Do NOT output anything outside the JSON array\n"
+        )
+        prompt = _math_tpl.format(topic=topic, difficulty_hint=difficulty_hint)
     else:
         prompt = f"""
 You are an expert university professor creating high-quality academic slides.
@@ -410,7 +406,9 @@ STRICT RULES:
 - Do NOT output anything outside JSON
 """
 
-    raw_text = _call_groq(prompt, max_tokens=4000)  # 70B generates more verbose JSON — needs higher limit
+    # Math slides need more tokens: 10-12 slides x (points + equations + worked_example)
+    max_tok = 6000 if math_topic else 4000
+    raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
         return []
 
@@ -419,15 +417,29 @@ STRICT RULES:
     try:
         slides = json.loads(raw_text)
     except json.JSONDecodeError:
+        # Try to salvage a truncated response by extracting whatever complete
+        # slide objects exist before the truncation point
         json_part = extract_json_array(raw_text)
         if not json_part:
-            if not retry:
-                return generate_slides(topic, learner_profile, retry=True)
-            return []
-        try:
-            slides = json.loads(json_part)
-        except json.JSONDecodeError:
-            return []
+            # Last resort: find all complete {...} objects and wrap in array
+            objects = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
+            if objects:
+                try:
+                    slides = [json.loads(o) for o in objects if json.loads.__doc__ or True]
+                    slides = [s for s in slides if isinstance(s, dict)]
+                except Exception:
+                    slides = []
+            if not slides:
+                if not retry:
+                    return generate_slides(topic, learner_profile, retry=True)
+                return []
+        else:
+            try:
+                slides = json.loads(json_part)
+            except json.JSONDecodeError:
+                if not retry:
+                    return generate_slides(topic, learner_profile, retry=True)
+                return []
 
     if isinstance(slides, dict):
         slides = slides.get("slides") or slides.get("data") or []
