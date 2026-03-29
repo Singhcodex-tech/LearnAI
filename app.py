@@ -274,6 +274,56 @@ def extract_json_object(text: str) -> str | None:
     return None
 
 
+def _extract_all_objects(text: str) -> list:
+    """
+    Scan through text and extract every complete top-level JSON object using
+    bracket balancing. Handles deeply nested structures (points with sub_steps,
+    worked_example, etc.) that single-level regex cannot match.
+    Returns a list of successfully parsed dicts.
+    """
+    results = []
+    pos = 0
+    while pos < len(text):
+        start = text.find('{', pos)
+        if start == -1:
+            break
+        depth = 0
+        in_string = False
+        escape_next = False
+        end = None
+        for i, ch in enumerate(text[start:], start):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == '\\' and in_string:
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end is None:
+            # Unclosed object — truncated response, stop here
+            break
+        candidate = text[start:end + 1]
+        try:
+            obj = json.loads(candidate)
+            if isinstance(obj, dict):
+                results.append(obj)
+        except json.JSONDecodeError:
+            pass
+        pos = end + 1
+    return results
+
+
 def strip_markdown_fences(text: str) -> str:
     """
     Remove ```json ... ``` or ``` ... ``` code fences that the 70B model
@@ -436,12 +486,12 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate 10 to 12 slides\n"
-            "- Each slide: 4 to 6 points\n"
+            "- Generate exactly 7 slides (no more, no fewer)\n"
+            "- Each slide: exactly 4 points\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, inline_latex, inline_label, sub_steps\n"
             "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
-            "- sub_steps: 3 to 5 steps, each one a separate string, numbered, named, detailed with actual numbers\n"
-            "- worked_example: 4 to 6 numbered steps showing ALL arithmetic; each step on its own line\n"
+            "- sub_steps: exactly 3 steps, each one a separate string, numbered, named, detailed with actual numbers\n"
+            "- worked_example: exactly 4 numbered steps showing ALL arithmetic; each step on its own line\n"
             "- Do NOT output anything outside the JSON array\n"
             "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
         ) % (topic, difficulty_hint)
@@ -466,8 +516,8 @@ Format:
 ]
 
 STRICT RULES:
-- Generate 10 to 12 slides
-- Each slide must have 4 to 6 bullet points
+- Generate exactly 8 slides
+- Each slide must have exactly 4 bullet points
 - EVERY point must be a COMPLETE, INFORMATIVE sentence
 - NO generic lines like "It is important" or "Has many applications"
 - EVERY point MUST include at least one of:
@@ -481,8 +531,9 @@ STRICT RULES:
 - Do NOT output anything outside JSON
 """
 
-    # Math slides need more tokens: 10-12 slides x (points + equations + worked_example)
-    max_tok = 6000 if math_topic else 4000
+    # 7 math slides × (4 points × ~120 tok each + worked_example ~200 tok) ≈ 4760 tok
+    # 8 non-math slides × 4 points × ~60 tok each ≈ 1920 tok — 3000 gives plenty of headroom
+    max_tok = 5000 if math_topic else 3000
     raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
         print("generate_slides: _call_groq returned None — API call failed.")
@@ -499,15 +550,13 @@ STRICT RULES:
         # slide objects exist before the truncation point
         json_part = extract_json_array(raw_text)
         if not json_part:
-            # Last resort: find all complete {...} objects and wrap in array
-            objects = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
-            if objects:
-                try:
-                    slides = [json.loads(o) for o in objects if json.loads.__doc__ or True]
-                    slides = [s for s in slides if isinstance(s, dict)]
-                except Exception:
-                    slides = []
-            if not slides:
+            # Last resort: extract all top-level {...} objects individually
+            # using bracket balancing (handles nested arrays like points/sub_steps)
+            slides = _extract_all_objects(raw_text)
+            if slides:
+                print(f"generate_slides: recovered {len(slides)} objects via bracket scan.")
+            else:
+                print("generate_slides: all extraction methods failed.")
                 if not retry:
                     return generate_slides(topic, learner_profile, retry=True)
                 return []
