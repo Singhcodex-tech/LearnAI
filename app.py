@@ -463,37 +463,37 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "    \"title\": \"Slide title\",\n"
             "    \"points\": [\n"
             "      {\n"
-            "        \"text\": \"A thorough 2-3 sentence explanation of the concept — define it, explain WHY it works, and state when to use it.\",\n"
+            "        \"text\": \"A clear 1-2 sentence explanation of the concept — define it and state when to use it.\",\n"
             "        \"inline_latex\": \"\\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\",\n"
             "        \"inline_label\": \"Quadratic Formula\",\n"
             "        \"sub_steps\": [\n"
-            "          \"Step 1 — Setup: fully explain what values to identify and why, with a concrete example\",\n"
-            "          \"Step 2 — Apply: show the substitution with actual numbers, explain each operation\",\n"
-            "          \"Step 3 — Simplify: walk through the arithmetic in full detail, state the result and what it means\",\n"
-            "          \"Step 4 — Verify: explain how to check the answer and what edge cases to watch for\"\n"
+            "          \"Step 1 — Setup: identify values and formula to use\",\n"
+            "          \"Step 2 — Apply: substitute with actual numbers\",\n"
+            "          \"Step 3 — Simplify: compute the result\",\n"
+            "          \"Step 4 — Verify: check the answer\"\n"
             "        ]\n"
             "      }\n"
             "    ],\n"
             "    \"worked_example\": {\n"
             "      \"problem\": \"State a concrete, non-trivial numeric problem with full context\",\n"
             "      \"steps\": [\n"
-            "        \"Step 1 — Setup: identify ALL values, state what formula applies and why\",\n"
-            "        \"Step 2 — Substitute: write out the full substitution showing every value\",\n"
-            "        \"Step 3 — Compute: show all arithmetic including intermediate calculations\",\n"
-            "        \"Step 4 — Interpret: state the final answer and what it means in context\"\n"
+            "        \"Step 1 — Setup: identify values and applicable formula\",\n"
+            "        \"Step 2 — Substitute: write out the substitution\",\n"
+            "        \"Step 3 — Compute: show key arithmetic\",\n"
+            "        \"Step 4 — Interpret: state the final answer and its meaning\"\n"
             "      ],\n"
-            "      \"answer\": \"Full answer with units and interpretation\"\n"
+            "      \"answer\": \"Answer with units\"\n"
             "    }\n"
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate exactly 9 slides covering the topic from foundations to advanced applications\n"
+            "- Generate exactly 8 slides covering the topic from foundations to advanced applications\n"
             "- Each slide: exactly 4 points\n"
-            "- EVERY point text must be 2-3 full sentences — explain the concept deeply, not just state it\n"
+            "- EVERY point text must be 1-2 clear sentences — concise but informative\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, inline_latex, inline_label, sub_steps\n"
             "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
-            "- sub_steps: exactly 4 steps, each a detailed string with actual numbers and full reasoning\n"
-            "- worked_example: a non-trivial problem with 4 steps showing ALL arithmetic and interpretation\n"
+            "- sub_steps: exactly 4 steps, each a short clear string showing the key action and result\n"
+            "- worked_example: a clear numeric problem with 4 concise steps\n"
             "- Slides must progress logically: definition → properties → techniques → applications → edge cases\n"
             "- Do NOT repeat the same formula or example across slides\n"
             "- Do NOT output anything outside the JSON array\n"
@@ -520,28 +520,26 @@ Format:
 ]
 
 STRICT RULES:
-- Generate exactly 10 slides covering the topic thoroughly from fundamentals to advanced aspects
+- Generate exactly 12 slides covering the topic thoroughly from fundamentals to advanced aspects
 - Each slide must have exactly 5 bullet points
-- EVERY bullet point must be 2–3 full sentences minimum — never a short phrase
-- EVERY point must DEEPLY explain the concept, not just name it
+- EVERY bullet point must be 1-2 clear sentences — concise but substantive, never a vague phrase
+- EVERY point must explain the concept clearly, including the "what" and briefly the "why"
 - NO vague lines like "It is important", "Has many applications", "This is used in many fields"
 - EVERY point MUST include at least one of:
-  • precise definition with etymology or origin where relevant
-  • step-by-step mechanism or process with each stage explained
-  • real-world example with specific names, numbers, or dates
-  • comparison or contrast with a related concept
-  • cause-and-effect chain explaining WHY something happens
-  • quantitative data, formula, or measurable fact
-- Go beyond surface-level facts — explain the "how" and "why" behind every concept
-- Each slide should feel like a full paragraph of a university textbook compressed into 5 rich bullets
+  • a precise definition or key term
+  • a core mechanism or process briefly described
+  • a real-world example with a specific name or number
+  • a comparison with a related concept
+  • a cause-and-effect relationship
+  • a quantitative fact or formula
 - Slides must flow logically: start with history/definition, build to core mechanisms, then real-world applications, then limitations or future directions
 - Do NOT repeat the same information across slides
 - Do NOT output anything outside JSON
 """
 
-    # 9 math slides × (4 points × ~180 tok each + worked_example ~300 tok) ≈ 9180 tok
-    # 10 non-math slides × 5 points × ~120 tok each ≈ 6000 tok — 7000 gives headroom
-    max_tok = 8000 if math_topic else 7000
+    # 8 math slides × (4 points × ~80 tok each + worked_example ~150 tok) ≈ 3760 tok
+    # 12 non-math slides × 5 points × ~60 tok each ≈ 3600 tok — 5000 gives headroom
+    max_tok = 5000 if math_topic else 5000
     raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
         print("generate_slides: _call_groq returned None — API call failed.")
