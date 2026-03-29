@@ -228,35 +228,43 @@ def validate_slides(slides: list) -> list:
         if not isinstance(slide, dict):
             continue
         title = str(slide.get("title", "")).strip()
-        points = slide.get("points", [])
+        raw_points = slide.get("points", [])
         if not title:
             continue
-        if not isinstance(points, list):
-            points = [str(points)]
-        points = [str(p).strip() for p in points if str(p).strip()]
+        if not isinstance(raw_points, list):
+            raw_points = []
+
+        # Points can be either plain strings (non-math) or rich objects (math).
+        # Normalise into a uniform list, preserving rich structure when present.
+        points = []
+        for p in raw_points:
+            if isinstance(p, dict):
+                text = str(p.get("text", "")).strip()
+                if not text:
+                    continue
+                point_obj = {"text": text}
+                # inline equation
+                il = str(p.get("inline_latex", "")).strip()
+                lbl = str(p.get("inline_label", "")).strip()
+                if il:
+                    point_obj["inline_latex"] = il
+                    point_obj["inline_label"] = lbl
+                # sub-steps
+                ss = p.get("sub_steps", [])
+                if isinstance(ss, list):
+                    ss = [str(s).strip() for s in ss if str(s).strip()]
+                    if ss:
+                        point_obj["sub_steps"] = ss
+                points.append(point_obj)
+            elif isinstance(p, str):
+                text = p.strip()
+                if text:
+                    points.append({"text": text})
+
         if len(points) < 2:
             continue
 
         entry: dict = {"title": title, "points": points[:6]}
-
-        # Preserve equations (math slides)
-        equations = slide.get("equations")
-        if isinstance(equations, list):
-            valid_eqs = []
-            for eq in equations:
-                if not isinstance(eq, dict):
-                    continue
-                label = str(eq.get("label", "")).strip()
-                latex = str(eq.get("latex", "")).strip()
-                explanation = str(eq.get("explanation", "")).strip()
-                if label and latex:
-                    valid_eqs.append({
-                        "label": label,
-                        "latex": latex,
-                        "explanation": explanation,
-                    })
-            if valid_eqs:
-                entry["equations"] = valid_eqs[:3]
 
         # Preserve worked example (math slides)
         worked = slide.get("worked_example")
@@ -327,47 +335,50 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
     math_topic = is_math_topic(topic)
 
     if math_topic:
-        # Build prompt with simple % substitution to avoid f-string / .format()
-        # conflicts with curly braces inside the JSON example and LaTeX strings.
+        # Per-point inline math: each bullet point carries its own equation and sub-steps.
+        # Uses % substitution so LaTeX/JSON curly braces never conflict with Python f-strings.
         prompt = (
-            "You are an expert mathematics professor creating rigorous, exam-quality academic slides.\n\n"
+            "You are an expert mathematics professor creating rigorous, exam-quality slides.\n\n"
             "Topic: %s\n"
             "%s\n\n"
             "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
-            "Use EXACTLY this JSON structure for EVERY slide:\n"
+            "CRITICAL: Every bullet point must carry its OWN inline equation and detailed sub-steps.\n\n"
+            "Required JSON structure for EVERY slide:\n"
             "[\n"
             "  {\n"
             "    \"title\": \"Slide title\",\n"
             "    \"points\": [\n"
-            "      \"A complete informative sentence.\",\n"
-            "      \"Another complete sentence.\"\n"
-            "    ],\n"
-            "    \"equations\": [\n"
             "      {\n"
-            "        \"label\": \"Name of the formula\",\n"
-            "        \"latex\": \"\\\\frac{a}{b}\",\n"
-            "        \"explanation\": \"One sentence: what each symbol means and when used.\"\n"
+            "        \"text\": \"The concept explained in one clear sentence.\",\n"
+            "        \"inline_latex\": \"\\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\",\n"
+            "        \"inline_label\": \"Quadratic Formula\",\n"
+            "        \"sub_steps\": [\n"
+            "          \"Step 1 — name: full explanation with numbers\",\n"
+            "          \"Step 2 — name: full explanation with numbers\",\n"
+            "          \"Step 3 — name: full explanation with numbers\"\n"
+            "        ]\n"
             "      }\n"
             "    ],\n"
             "    \"worked_example\": {\n"
-            "      \"problem\": \"A specific numeric problem for this slide topic\",\n"
+            "      \"problem\": \"State a concrete numeric problem\",\n"
             "      \"steps\": [\n"
-            "        \"Step 1: identify the known values and the formula to use\",\n"
-            "        \"Step 2: substitute values and show full arithmetic\",\n"
-            "        \"Step 3: simplify and state the result\"\n"
+            "        \"Step 1 — Setup: identify values a=2, b=-4, c=-6 from the equation\",\n"
+            "        \"Step 2 — Substitute: plug into formula x=(4±sqrt(16+48))/4\",\n"
+            "        \"Step 3 — Simplify: sqrt(64)=8, so x=12/4=3 or x=-4/4=-1\"\n"
             "      ],\n"
-            "      \"answer\": \"Final numeric answer\"\n"
+            "      \"answer\": \"x = 3  or  x = -1\"\n"
             "    }\n"
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate 10 to 12 slides using the exact structure above\n"
-            "- Each slide: 4 to 6 bullet points in 'points'\n"
-            "- EVERY point: a COMPLETE sentence (definition, proof idea, property, example)\n"
-            "- EVERY slide MUST include 'equations' (1-3 entries) AND 'worked_example'\n"
-            "- LaTeX: single backslashes e.g. \\\\frac, \\\\sqrt, \\\\int, \\\\pm\n"
-            "- worked_example steps: numbered, show ALL arithmetic, explain EACH operation\n"
+            "- Generate 10 to 12 slides\n"
+            "- Each slide: 4 to 6 points\n"
+            "- EVERY point MUST be an OBJECT (not a string) with keys: text, inline_latex, inline_label, sub_steps\n"
+            "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
+            "- sub_steps: 3 to 5 steps, each one a separate string, numbered, named, detailed with actual numbers\n"
+            "- worked_example: 4 to 6 numbered steps showing ALL arithmetic; each step on its own line\n"
             "- Do NOT output anything outside the JSON array\n"
+            "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
         ) % (topic, difficulty_hint)
     else:
         prompt = f"""
@@ -548,58 +559,44 @@ def reteach_slide(slide: dict, retry: bool = False) -> dict | None:
     is_math = "equations" in slide or "worked_example" in slide
 
     if is_math:
-        equations_block = json.dumps(slide.get("equations", []), indent=2)
+        points_block = json.dumps(slide.get("points", []), indent=2)
         worked_block = json.dumps(slide.get("worked_example", {}), indent=2)
-        prompt = f"""
-A student did not understand this mathematics slide. Rewrite it with simpler language and a new, easier worked example.
-
-Original Slide Title: {slide['title']}
-Original Content:
-{json.dumps(slide['points'], indent=2)}
-
-Original Equations:
-{equations_block}
-
-Original Worked Example:
-{worked_block}
-
-Rewrite rules:
-- Keep the same title
-- Use simpler language — explain as if to a high-school student
-- Keep ALL original equations in "equations" (same labels/latex) but rewrite their explanations more clearly
-- In "worked_example": create a NEW, simpler numeric problem (smaller/rounder numbers) for the same concept
-- Show MORE steps — break each arithmetic step into its own line
-- Explain WHY each step is done, not just what to do
-- Keep 4 to 6 bullet points in "points"
-
-Return ONLY a valid JSON object. No extra text.
-
-Format:
-{{
-  "title": "Same title",
-  "points": [
-    "Simplified explanation with analogy",
-    "Another clearer explanation"
-  ],
-  "equations": [
-    {{
-      "label": "Same label as before",
-      "latex": "same LaTeX string",
-      "explanation": "Clearer, simpler explanation of what each symbol means."
-    }}
-  ],
-  "worked_example": {{
-    "problem": "A simpler numeric problem testing the same concept",
-    "steps": [
-      "Step 1: ...",
-      "Step 2: ..."
-    ],
-    "answer": "Final numeric answer"
-  }},
-  "reteach": true
-}}
-"""
-        max_tokens = 1600
+        reteach_prompt = (
+            "A student did not understand this mathematics slide.\n"
+            "Rewrite it with SIMPLER language and a NEW, EASIER worked example.\n\n"
+            "Original Slide Title: %s\n"
+            "Original Points:\n%s\n\n"
+            "Original Worked Example:\n%s\n\n"
+            "Rules:\n"
+            "- Keep the same title\n"
+            "- Rewrite each point as a rich object with: text, inline_latex, inline_label, sub_steps\n"
+            "- Use simpler language and everyday analogies\n"
+            "- inline_latex: same formula but write a clearer inline_label and simpler sub_steps\n"
+            "- sub_steps: 3-5 steps, each explaining WHY the step is done, with smaller numbers\n"
+            "- worked_example: a NEW simpler numeric problem, 4-6 steps, more arithmetic detail\n"
+            "- Keep 4 to 6 points\n\n"
+            "Return ONLY a valid JSON object. No extra text.\n\n"
+            "Format:\n"
+            "{\n"
+            "  \"title\": \"Same title\",\n"
+            "  \"points\": [\n"
+            "    {\n"
+            "      \"text\": \"Simpler explanation sentence\",\n"
+            "      \"inline_latex\": \"\\\\frac{a}{b}\",\n"
+            "      \"inline_label\": \"Formula name\",\n"
+            "      \"sub_steps\": [\"Step 1 — reason: detail\", \"Step 2 — reason: detail\"]\n"
+            "    }\n"
+            "  ],\n"
+            "  \"worked_example\": {\n"
+            "    \"problem\": \"A simpler problem\",\n"
+            "    \"steps\": [\"Step 1 — Setup: ...\", \"Step 2 — Compute: ...\"],\n"
+            "    \"answer\": \"Final answer\"\n"
+            "  },\n"
+            "  \"reteach\": true\n"
+            "}\n"
+        ) % (slide["title"], points_block, worked_block)
+        prompt = reteach_prompt
+        max_tokens = 2000
     else:
         prompt = f"""
 A student did not understand this slide. Rewrite it to be clearer and easier to understand.
@@ -661,23 +658,39 @@ Format:
     if len(points) < 2:
         return None
 
-    result: dict = {"title": title, "points": points[:6], "reteach": True}
+    # Re-parse points using the same normalisation as validate_slides
+    raw_points = slide_data.get("points", [])
+    if not isinstance(raw_points, list):
+        raw_points = []
+    norm_points = []
+    for p in raw_points:
+        if isinstance(p, dict):
+            text = str(p.get("text", "")).strip()
+            if not text:
+                continue
+            po = {"text": text}
+            il = str(p.get("inline_latex", "")).strip()
+            lbl = str(p.get("inline_label", "")).strip()
+            if il:
+                po["inline_latex"] = il
+                po["inline_label"] = lbl
+            ss = p.get("sub_steps", [])
+            if isinstance(ss, list):
+                ss = [str(s).strip() for s in ss if str(s).strip()]
+                if ss:
+                    po["sub_steps"] = ss
+            norm_points.append(po)
+        elif isinstance(p, str):
+            t = p.strip()
+            if t:
+                norm_points.append({"text": t})
 
-    # Carry through equations for math slides
+    if len(norm_points) < 2:
+        return None
+
+    result: dict = {"title": title, "points": norm_points[:6], "reteach": True}
+
     if is_math:
-        equations = slide_data.get("equations") or slide.get("equations")
-        if isinstance(equations, list):
-            valid_eqs = []
-            for eq in equations:
-                if isinstance(eq, dict) and eq.get("label") and eq.get("latex"):
-                    valid_eqs.append({
-                        "label": str(eq["label"]).strip(),
-                        "latex": str(eq["latex"]).strip(),
-                        "explanation": str(eq.get("explanation", "")).strip(),
-                    })
-            if valid_eqs:
-                result["equations"] = valid_eqs[:3]
-
         worked = slide_data.get("worked_example")
         if isinstance(worked, dict):
             problem = str(worked.get("problem", "")).strip()
