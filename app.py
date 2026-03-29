@@ -1395,37 +1395,60 @@ def note():
 # PPT Generation
 # ---------------------------------------------------------------------------
 
-def build_pptx(topic: str, slides_data: list):
+def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
     """
-    Build a beautiful dark-themed PPTX that matches the web UI's design language.
+    Build a beautifully designed PPTX in either dark or light theme.
     Returns a python-pptx Presentation object, or None if pptx is unavailable.
     """
     try:
         from pptx import Presentation
-        from pptx.util import Inches, Pt
+        from pptx.util import Inches, Pt, Emu
         from pptx.dml.color import RGBColor
         from pptx.enum.text import PP_ALIGN
+        from pptx.oxml.ns import qn
+        from lxml import etree
     except ImportError:
         return None
 
-    # ── Colour palette (mirrors the CSS variables) ──────────────
-    C_BG     = RGBColor(0x08, 0x0b, 0x12)
-    C_SURF   = RGBColor(0x0f, 0x14, 0x20)
-    C_CARD   = RGBColor(0x14, 0x19, 0x26)
-    C_BORDER = RGBColor(0x2a, 0x33, 0x47)
-    C_GOLD   = RGBColor(0xe8, 0xa0, 0x20)
-    C_TEAL   = RGBColor(0x20, 0xc5, 0xb0)
-    C_WHITE  = RGBColor(0xea, 0xe6, 0xdf)
-    C_MUTED  = RGBColor(0x8b, 0x93, 0xa8)
-    C_DIM    = RGBColor(0x4a, 0x52, 0x68)
+    is_dark = (theme != "light")
 
-    W = Inches(13.333)   # 16:9 widescreen
+    # ── Colour palettes ─────────────────────────────────────────
+    if is_dark:
+        C_BG      = RGBColor(0x08, 0x0b, 0x12)   # near-black
+        C_SURF    = RGBColor(0x0f, 0x14, 0x20)   # surface
+        C_CARD    = RGBColor(0x14, 0x19, 0x26)   # card
+        C_BORDER  = RGBColor(0x2a, 0x33, 0x47)   # border
+        C_BORDER2 = RGBColor(0x1e, 0x25, 0x35)
+        C_ACCENT1 = RGBColor(0xe8, 0xa0, 0x20)   # gold
+        C_ACCENT2 = RGBColor(0x20, 0xc5, 0xb0)   # teal
+        C_TITLE   = RGBColor(0xea, 0xe6, 0xdf)   # near-white
+        C_BODY    = RGBColor(0xb8, 0xc0, 0xd4)   # light grey body text
+        C_MUTED   = RGBColor(0x8b, 0x93, 0xa8)
+        C_DIM     = RGBColor(0x4a, 0x52, 0x68)
+        C_PILL_BG = RGBColor(0x0b, 0x1f, 0x1c)
+        BULLET_COLORS = [C_ACCENT1, C_ACCENT2, C_ACCENT1, C_ACCENT2, C_ACCENT1]
+    else:
+        C_BG      = RGBColor(0xf7, 0xf8, 0xfc)   # off-white
+        C_SURF    = RGBColor(0xff, 0xff, 0xff)   # white
+        C_CARD    = RGBColor(0xee, 0xf0, 0xf8)   # light card
+        C_BORDER  = RGBColor(0xd0, 0xd6, 0xe8)
+        C_BORDER2 = RGBColor(0xe0, 0xe5, 0xf2)
+        C_ACCENT1 = RGBColor(0xc4, 0x7d, 0x0e)   # amber (darker gold for contrast)
+        C_ACCENT2 = RGBColor(0x0d, 0x9c, 0x8a)   # dark teal
+        C_TITLE   = RGBColor(0x12, 0x17, 0x2e)   # near-black
+        C_BODY    = RGBColor(0x2c, 0x35, 0x52)   # dark navy body
+        C_MUTED   = RGBColor(0x60, 0x6a, 0x88)
+        C_DIM     = RGBColor(0x90, 0x9a, 0xb8)
+        C_PILL_BG = RGBColor(0xe0, 0xf5, 0xf2)
+        BULLET_COLORS = [C_ACCENT1, C_ACCENT2, C_ACCENT1, C_ACCENT2, C_ACCENT1]
+
+    W = Inches(13.333)
     H = Inches(7.5)
 
     prs = Presentation()
     prs.slide_width  = W
     prs.slide_height = H
-    blank = prs.slide_layouts[6]   # fully blank layout
+    blank = prs.slide_layouts[6]
 
     # ── Helpers ─────────────────────────────────────────────────
 
@@ -1434,7 +1457,7 @@ def build_pptx(topic: str, slides_data: list):
         bg.fill.solid()
         bg.fill.fore_color.rgb = color
 
-    def rect(slide, l, t, w, h, fill, line=None, line_w=Pt(0)):
+    def rect(slide, l, t, w, h, fill, line=None, line_w=Pt(0), rounding=None):
         shp = slide.shapes.add_shape(1, l, t, w, h)
         shp.fill.solid()
         shp.fill.fore_color.rgb = fill
@@ -1447,19 +1470,17 @@ def build_pptx(topic: str, slides_data: list):
 
     def textbox(slide, text, l, t, w, h,
                 font='Calibri', size=12, bold=False, italic=False,
-                color=None, align=PP_ALIGN.LEFT, wrap=True, spacing_before=0):
+                color=None, align=PP_ALIGN.LEFT, wrap=True):
         tb = slide.shapes.add_textbox(l, t, w, h)
         tf = tb.text_frame
         tf.word_wrap = wrap
         p = tf.paragraphs[0]
         p.alignment = align
-        if spacing_before:
-            p.space_before = Pt(spacing_before)
         run = p.add_run()
         run.text = text
-        run.font.name = font
-        run.font.size = Pt(size)
-        run.font.bold = bold
+        run.font.name  = font
+        run.font.size  = Pt(size)
+        run.font.bold  = bold
         run.font.italic = italic
         if color:
             run.font.color.rgb = color
@@ -1473,192 +1494,276 @@ def build_pptx(topic: str, slides_data: list):
     sl = prs.slides.add_slide(blank)
     set_bg(sl, C_BG)
 
-    # Subtle grid-line background pattern (two faint horizontal bands)
-    rect(sl, 0, Inches(3.5), W, Inches(0.012), C_SURF)
-    rect(sl, 0, Inches(5.0), W, Inches(0.012), C_SURF)
-    # Right decorative card
-    rect(sl, W - Inches(4.2), Inches(1.2), Inches(3.8), Inches(5.1), C_SURF,
-         line=C_BORDER, line_w=Pt(0.75))
-    # Gold accent circle inside card (imitated as a rounded square)
-    rect(sl, W - Inches(2.8), Inches(2.8), Inches(1.0), Inches(1.0), C_CARD)
-    textbox(sl, '✦', W - Inches(2.62), Inches(2.78), Inches(0.65), Inches(0.75),
-            font='Calibri', size=28, bold=True, color=C_GOLD,
-            align=PP_ALIGN.CENTER)
-    textbox(sl, f'{total}', W - Inches(2.62), Inches(3.58), Inches(0.65), Inches(0.55),
-            font='Courier New', size=22, bold=True, color=C_GOLD,
-            align=PP_ALIGN.CENTER)
-    textbox(sl, 'SLIDES', W - Inches(2.75), Inches(4.1), Inches(0.9), Inches(0.3),
-            font='Courier New', size=8, bold=True, color=C_MUTED,
+    # ── Full-height left panel ──────────────────────────────────
+    PANEL_W = Inches(5.2)
+    rect(sl, 0, 0, PANEL_W, H, C_SURF)
+    rect(sl, PANEL_W, 0, Inches(0.032), H, C_BORDER)
+
+    # Top accent bar inside left panel
+    rect(sl, 0, 0, PANEL_W, Inches(0.22), C_ACCENT1)
+
+    # Decorative stacked rectangles (visual layering)
+    rect(sl, Inches(0.35), Inches(0.55), Inches(0.9), Inches(0.9), C_CARD,
+         line=C_BORDER, line_w=Pt(0.5))
+    rect(sl, Inches(0.55), Inches(0.75), Inches(0.9), Inches(0.9), C_ACCENT1)
+    textbox(sl, 'AI', Inches(0.6), Inches(0.78), Inches(0.8), Inches(0.85),
+            font='Georgia', size=20, bold=True, color=C_BG,
             align=PP_ALIGN.CENTER)
 
-    # Left accent stripe
-    rect(sl, 0, 0, Inches(0.09), H, C_GOLD)
-    # Bottom accent bar
-    rect(sl, 0, H - Inches(0.07), W, Inches(0.07), C_GOLD)
+    # Brand label
+    textbox(sl, 'ADAPTIVE LEARN  ·  AI LECTURE ENGINE',
+            Inches(0.35), Inches(1.85), PANEL_W - Inches(0.7), Inches(0.3),
+            font='Courier New', size=7.5, bold=True, color=C_ACCENT2)
 
-    # Label
-    textbox(sl, 'ADAPTIVE LEARN  ·  AI-POWERED LECTURE ENGINE',
-            Inches(0.3), Inches(1.7), W - Inches(5.2), Inches(0.35),
-            font='Courier New', size=8, bold=True, color=C_GOLD)
-    # Short gold rule
-    rect(sl, Inches(0.3), Inches(2.12), Inches(0.7), Inches(0.04), C_GOLD)
+    # Thin rule
+    rect(sl, Inches(0.35), Inches(2.22), Inches(0.55), Inches(0.038), C_ACCENT1)
 
-    # Main title
-    t_short = topic if len(topic) <= 70 else topic[:68] + '…'
-    tb = sl.shapes.add_textbox(Inches(0.3), Inches(2.2), W - Inches(5.0), Inches(2.6))
+    # Main title text
+    t_short = topic if len(topic) <= 55 else topic[:53] + '…'
+    tb = sl.shapes.add_textbox(Inches(0.35), Inches(2.35), PANEL_W - Inches(0.7), Inches(2.8))
     tf = tb.text_frame
     tf.word_wrap = True
     p = tf.paragraphs[0]
     run = p.add_run()
     run.text = t_short
     run.font.name  = 'Georgia'
-    run.font.size  = Pt(46)
+    run.font.size  = Pt(34)
     run.font.bold  = True
-    run.font.color.rgb = C_WHITE
+    run.font.color.rgb = C_TITLE
 
-    # Subtitle
-    textbox(sl, f'Generated by AdaptiveLearn AI  ·  {total} Slides',
-            Inches(0.3), Inches(5.1), W - Inches(5.0), Inches(0.4),
-            font='Calibri', size=13, color=C_MUTED)
-    # Teal dot accent
-    rect(sl, Inches(0.3), Inches(5.62), Inches(0.09), Inches(0.09), C_TEAL)
-    textbox(sl, 'Click  →  to begin',
-            Inches(0.48), Inches(5.57), Inches(3), Inches(0.3),
-            font='Calibri', size=11, italic=True, color=C_DIM)
+    # Slide count badge
+    rect(sl, Inches(0.35), Inches(5.5), Inches(1.6), Inches(0.5), C_ACCENT1)
+    textbox(sl, f'{total}  SLIDES', Inches(0.35), Inches(5.52),
+            Inches(1.6), Inches(0.46),
+            font='Courier New', size=11, bold=True, color=C_BG,
+            align=PP_ALIGN.CENTER)
+
+    textbox(sl, f'Generated by AdaptiveLearn AI',
+            Inches(0.35), Inches(6.15), PANEL_W - Inches(0.7), Inches(0.3),
+            font='Calibri', size=10, italic=True, color=C_MUTED)
+
+    # ── Right decorative panel ──────────────────────────────────
+    RX = PANEL_W + Inches(0.032)
+    RW = W - RX
+
+    # Large accent block top-right
+    rect(sl, RX, 0, RW, Inches(2.5), C_ACCENT1)
+    # Teal strip below it
+    rect(sl, RX, Inches(2.5), RW, Inches(0.18), C_ACCENT2)
+
+    # Big decorative number
+    textbox(sl, str(total), RX, Inches(0.05), RW, Inches(2.4),
+            font='Georgia', size=110, bold=True, color=C_BG,
+            align=PP_ALIGN.CENTER)
+
+    # Grid of decorative cards in right panel body
+    card_y_start = Inches(2.9)
+    card_h = Inches(1.1)
+    card_gap = Inches(0.18)
+    deco_labels = ['CONCEPTS', 'QUIZZES', 'INSIGHTS', 'REVIEW']
+    for ci in range(min(4, total)):
+        cy = card_y_start + ci * (card_h + card_gap)
+        rect(sl, RX + Inches(0.3), cy, RW - Inches(0.6), card_h,
+             C_CARD if is_dark else C_SURF,
+             line=C_BORDER, line_w=Pt(0.6))
+        rect(sl, RX + Inches(0.3), cy, Inches(0.06), card_h, C_ACCENT2)
+        label = deco_labels[ci] if ci < len(deco_labels) else f'PART {ci+1}'
+        textbox(sl, label, RX + Inches(0.5), cy + Inches(0.15),
+                RW - Inches(1.0), Inches(0.3),
+                font='Courier New', size=7, bold=True, color=C_ACCENT2)
+        textbox(sl, f'Section {ci + 1}', RX + Inches(0.5), cy + Inches(0.45),
+                RW - Inches(1.0), Inches(0.4),
+                font='Calibri', size=12, bold=True, color=C_TITLE)
+
+    # Bottom strip
+    rect(sl, 0, H - Inches(0.12), W, Inches(0.12), C_ACCENT2)
 
     # ════════════════════════════════════════════════════════════
     # CONTENT SLIDES
     # ════════════════════════════════════════════════════════════
-    bullet_colors = [C_GOLD, C_TEAL, C_GOLD, C_TEAL, C_GOLD]
-
     for idx, sdata in enumerate(slides_data):
         sl = prs.slides.add_slide(blank)
         set_bg(sl, C_BG)
 
         title_txt  = str(sdata.get('title', f'Slide {idx + 1}')).strip()
         points_raw = sdata.get('points', [])
+        n_pts = min(len(points_raw), 5)
 
-        # ── Header band ──────────────────────────────────────────
-        rect(sl, 0, 0, W, Inches(1.3), C_SURF)
-        rect(sl, 0, Inches(1.3), W, Inches(0.028), C_BORDER)
-        # Gold left stripe in header
-        rect(sl, 0, 0, Inches(0.08), Inches(1.3), C_GOLD)
+        # ── Top header band ───────────────────────────────────────
+        HEADER_H = Inches(1.45)
+        rect(sl, 0, 0, W, HEADER_H, C_SURF)
 
-        # Slide number
-        textbox(sl, f'SLIDE  {idx + 1}  /  {total}',
-                Inches(0.24), Inches(0.48), Inches(3.5), Inches(0.38),
-                font='Courier New', size=9, bold=True, color=C_GOLD)
+        # Gold top stripe
+        rect(sl, 0, 0, W, Inches(0.18), C_ACCENT1)
 
-        # Topic label (right)
-        t_label = (topic[:48] + '…') if len(topic) > 48 else topic
+        # Teal left stripe (full height)
+        rect(sl, 0, 0, Inches(0.1), H, C_ACCENT2)
+
+        # Slide number box — top-left
+        rect(sl, Inches(0.22), Inches(0.35), Inches(1.15), Inches(0.72), C_ACCENT1)
+        textbox(sl, f'{idx + 1:02d}', Inches(0.22), Inches(0.35),
+                Inches(1.15), Inches(0.72),
+                font='Georgia', size=26, bold=True, color=C_BG,
+                align=PP_ALIGN.CENTER)
+
+        # Slide counter label
+        textbox(sl, f'/ {total}', Inches(1.42), Inches(0.62),
+                Inches(0.7), Inches(0.32),
+                font='Courier New', size=9, color=C_MUTED)
+
+        # Topic label right
+        t_label = (topic[:52] + '…') if len(topic) > 52 else topic
         textbox(sl, t_label.upper(),
-                W - Inches(5.2), Inches(0.52), Inches(5.0), Inches(0.3),
-                font='Courier New', size=8, color=C_DIM,
+                W - Inches(5.5), Inches(0.55), Inches(5.2), Inches(0.28),
+                font='Courier New', size=7.5, color=C_DIM,
                 align=PP_ALIGN.RIGHT)
+
+        # Separator line below header
+        rect(sl, Inches(0.1), HEADER_H, W - Inches(0.1), Inches(0.025), C_BORDER)
 
         # ── Slide title ──────────────────────────────────────────
         title_disp = title_txt if len(title_txt) <= 80 else title_txt[:78] + '…'
-        tb = sl.shapes.add_textbox(Inches(0.5), Inches(1.48), W - Inches(1.0), Inches(1.05))
+        tb = sl.shapes.add_textbox(Inches(0.3), Inches(1.55), W - Inches(2.2), Inches(0.95))
         tf = tb.text_frame
         tf.word_wrap = True
         p = tf.paragraphs[0]
         run = p.add_run()
         run.text = title_disp
         run.font.name  = 'Georgia'
-        run.font.size  = Pt(24)
+        run.font.size  = Pt(26)
         run.font.bold  = True
-        run.font.color.rgb = C_WHITE
+        run.font.color.rgb = C_TITLE
 
-        # Gold underline rule beneath title
-        rect(sl, Inches(0.5), Inches(2.58), Inches(0.55), Inches(0.038), C_GOLD)
+        # Underline accent beneath title
+        rect(sl, Inches(0.3), Inches(2.54), Inches(0.6), Inches(0.04), C_ACCENT1)
+        rect(sl, Inches(0.95), Inches(2.54), Inches(0.22), Inches(0.04), C_ACCENT2)
 
-        # ── Bullet points ─────────────────────────────────────────
-        # Determine layout: if 5 points, shrink font; else normal
-        n_pts = min(len(points_raw), 5)
-        font_size = 13 if n_pts <= 4 else 11.5
-        bullet_h  = Inches(0.68) if n_pts <= 4 else Inches(0.6)
-        start_y   = Inches(2.75)
+        # ── Right sidebar ─────────────────────────────────────────
+        SB_X = W - Inches(1.9)
+        SB_W = Inches(1.75)
+        rect(sl, SB_X, HEADER_H + Inches(0.08), SB_W, H - HEADER_H - Inches(0.35),
+             C_CARD if is_dark else C_SURF,
+             line=C_BORDER, line_w=Pt(0.5))
+        rect(sl, SB_X, HEADER_H + Inches(0.08), Inches(0.06),
+             H - HEADER_H - Inches(0.35), C_ACCENT2)
+
+        # Sidebar: big slide number watermark
+        textbox(sl, str(idx + 1),
+                SB_X, Inches(3.0), SB_W, Inches(1.4),
+                font='Georgia', size=64, bold=True, color=C_BORDER,
+                align=PP_ALIGN.CENTER)
+
+        # Sidebar: section label
+        textbox(sl, 'SLIDE', SB_X, Inches(2.4), SB_W, Inches(0.35),
+                font='Courier New', size=8, bold=True, color=C_DIM,
+                align=PP_ALIGN.CENTER)
+
+        # Sidebar: topic dots (decorative)
+        for di in range(min(n_pts, 5)):
+            dot_y = Inches(4.6) + di * Inches(0.38)
+            rect(sl, SB_X + Inches(0.75), dot_y, Inches(0.12), Inches(0.12),
+                 C_ACCENT1 if di % 2 == 0 else C_ACCENT2)
+
+        # ── Bullet points area ────────────────────────────────────
+        font_size = 13 if n_pts <= 3 else (12 if n_pts == 4 else 11)
+        bullet_h  = Inches(0.78) if n_pts <= 3 else (Inches(0.7) if n_pts == 4 else Inches(0.62))
+        start_y   = Inches(2.72)
+        content_w = SB_X - Inches(0.45)
 
         for bi, point in enumerate(points_raw[:5]):
-            if isinstance(point, dict):
-                pt_text = str(point.get('text', '')).strip()
-            else:
-                pt_text = str(point).strip()
+            pt_text = str(point.get('text', '') if isinstance(point, dict) else point).strip()
             if not pt_text:
                 continue
 
             by = start_y + bi * bullet_h
-            bc = bullet_colors[bi % len(bullet_colors)]
+            bc = BULLET_COLORS[bi % len(BULLET_COLORS)]
 
-            # Bullet dot (small square rounded-corner)
-            rect(sl, Inches(0.5), by + Inches(0.2), Inches(0.08), Inches(0.08), bc)
+            # Card-style row background (alternating subtle tint)
+            row_bg = (RGBColor(0x10, 0x16, 0x24) if is_dark else RGBColor(0xf0, 0xf3, 0xfc)) \
+                     if bi % 2 == 0 else \
+                     (RGBColor(0x0d, 0x12, 0x1e) if is_dark else RGBColor(0xfa, 0xfb, 0xff))
+            rect(sl, Inches(0.22), by, content_w - Inches(0.22), bullet_h - Inches(0.06),
+                 row_bg, line=C_BORDER2, line_w=Pt(0.4))
 
-            # Subtle left border for bullet row (very faint)
-            # Text
-            pt_disp = pt_text if len(pt_text) <= 200 else pt_text[:198] + '…'
-            tb = sl.shapes.add_textbox(Inches(0.72), by, W - Inches(1.05), Inches(0.62))
-            tf = tb.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            run = p.add_run()
-            run.text = pt_disp
-            run.font.name  = 'Calibri'
-            run.font.size  = Pt(font_size)
-            run.font.color.rgb = C_WHITE
+            # Left colour stripe on each row
+            rect(sl, Inches(0.22), by, Inches(0.06), bullet_h - Inches(0.06), bc)
 
-        # ── Right sidebar — slide number large ───────────────────
-        rect(sl, W - Inches(0.55), Inches(1.35), Inches(0.5), H - Inches(1.42), C_SURF)
-        textbox(sl, str(idx + 1),
-                W - Inches(0.55), Inches(3.2), Inches(0.5), Inches(0.6),
-                font='Georgia', size=18, bold=True, color=C_BORDER,
-                align=PP_ALIGN.CENTER)
+            # Bullet number circle (simulated with text)
+            rect(sl, Inches(0.38), by + Inches(0.19), Inches(0.32), Inches(0.32), bc)
+            textbox(sl, str(bi + 1),
+                    Inches(0.38), by + Inches(0.18), Inches(0.32), Inches(0.34),
+                    font='Courier New', size=9, bold=True, color=C_BG,
+                    align=PP_ALIGN.CENTER)
 
-        # ── Bottom bar ───────────────────────────────────────────
-        rect(sl, 0, H - Inches(0.065), W, Inches(0.065), C_GOLD)
+            # Point text
+            pt_disp = pt_text if len(pt_text) <= 220 else pt_text[:218] + '…'
+            tb2 = sl.shapes.add_textbox(Inches(0.82), by + Inches(0.08),
+                                         content_w - Inches(1.1), bullet_h - Inches(0.14))
+            tf2 = tb2.text_frame
+            tf2.word_wrap = True
+            p2 = tf2.paragraphs[0]
+            run2 = p2.add_run()
+            run2.text = pt_disp
+            run2.font.name  = 'Calibri'
+            run2.font.size  = Pt(font_size)
+            run2.font.color.rgb = C_BODY
 
-        # Teal accent dot bottom-right
-        rect(sl, W - Inches(1.05), H - Inches(0.5), Inches(0.09), Inches(0.09), C_TEAL)
-        textbox(sl, 'adaptivelearn.ai',
-                W - Inches(3.2), H - Inches(0.48), Inches(3.0), Inches(0.28),
-                font='Calibri', size=8, italic=True, color=C_DIM,
+        # ── Bottom bar ────────────────────────────────────────────
+        rect(sl, 0, H - Inches(0.14), W, Inches(0.14), C_ACCENT1)
+        textbox(sl, 'ADAPTIVELEARN  ·  AI-POWERED EDUCATION',
+                Inches(0.22), H - Inches(0.13), Inches(5.0), Inches(0.13),
+                font='Courier New', size=6.5, bold=True, color=C_BG)
+        textbox(sl, f'SLIDE {idx + 1} OF {total}',
+                W - Inches(2.2), H - Inches(0.13), Inches(2.0), Inches(0.13),
+                font='Courier New', size=6.5, bold=True, color=C_BG,
                 align=PP_ALIGN.RIGHT)
 
     # ════════════════════════════════════════════════════════════
-    # CLOSING / THANK-YOU SLIDE
+    # CLOSING SLIDE
     # ════════════════════════════════════════════════════════════
     sl = prs.slides.add_slide(blank)
     set_bg(sl, C_BG)
 
-    # Horizontal bands
-    rect(sl, 0, Inches(3.2), W, Inches(0.04), C_BORDER)
-    rect(sl, 0, Inches(4.6), W, Inches(0.04), C_BORDER)
-    rect(sl, 0, 0, Inches(0.09), H, C_TEAL)
-    rect(sl, 0, H - Inches(0.07), W, Inches(0.07), C_TEAL)
+    # Bold split — left teal panel, right body
+    rect(sl, 0, 0, Inches(4.8), H, C_ACCENT2)
+    rect(sl, Inches(4.8), 0, Inches(0.06), H, C_ACCENT1)
 
-    # "COMPLETE" pill
-    rect(sl, Inches(1.0), Inches(1.8), Inches(2.4), Inches(0.44),
-         RGBColor(0x0b, 0x1f, 0x1c), line=C_TEAL, line_w=Pt(0.75))
-    textbox(sl, '✓  SESSION COMPLETE',
-            Inches(1.05), Inches(1.82), Inches(2.3), Inches(0.4),
-            font='Courier New', size=9, bold=True, color=C_TEAL)
+    # Large checkmark-ish decoration on left panel
+    textbox(sl, '✓', Inches(0.3), Inches(1.1), Inches(4.2), Inches(2.0),
+            font='Georgia', size=100, bold=True, color=C_BG,
+            align=PP_ALIGN.CENTER)
+    textbox(sl, 'SESSION COMPLETE', Inches(0.3), Inches(3.3), Inches(4.2), Inches(0.55),
+            font='Courier New', size=13, bold=True, color=C_BG,
+            align=PP_ALIGN.CENTER)
+    textbox(sl, f'{total} slides covered', Inches(0.3), Inches(3.95),
+            Inches(4.2), Inches(0.4),
+            font='Calibri', size=11, italic=True, color=RGBColor(0xd0,0xf5,0xef),
+            align=PP_ALIGN.CENTER)
 
-    # Topic
-    t_close = topic if len(topic) <= 70 else topic[:68] + '…'
-    tb = sl.shapes.add_textbox(Inches(1.0), Inches(2.4), W - Inches(2.0), Inches(1.9))
+    # Right panel
+    t_close = topic if len(topic) <= 58 else topic[:56] + '…'
+    textbox(sl, 'YOU HAVE STUDIED', Inches(5.3), Inches(1.5),
+            W - Inches(5.7), Inches(0.4),
+            font='Courier New', size=9, bold=True, color=C_ACCENT2)
+    rect(sl, Inches(5.3), Inches(1.97), Inches(0.55), Inches(0.038), C_ACCENT1)
+
+    tb = sl.shapes.add_textbox(Inches(5.3), Inches(2.1), W - Inches(5.7), Inches(2.4))
     tf = tb.text_frame
     tf.word_wrap = True
     p = tf.paragraphs[0]
     run = p.add_run()
     run.text = t_close
     run.font.name  = 'Georgia'
-    run.font.size  = Pt(40)
+    run.font.size  = Pt(36)
     run.font.bold  = True
-    run.font.color.rgb = C_WHITE
+    run.font.color.rgb = C_TITLE
 
-    # Stats line
-    textbox(sl, f'{total} slides covered  ·  Powered by AdaptiveLearn AI',
-            Inches(1.0), Inches(4.5), W - Inches(2.0), Inches(0.4),
-            font='Calibri', size=13, color=C_MUTED)
+    textbox(sl, f'Powered by AdaptiveLearn AI  ·  {total} slides',
+            Inches(5.3), Inches(5.0), W - Inches(5.7), Inches(0.4),
+            font='Calibri', size=11, italic=True, color=C_MUTED)
+
+    # Bottom bar
+    rect(sl, 0, H - Inches(0.14), W, Inches(0.14), C_ACCENT1)
 
     return prs
 
@@ -1668,7 +1773,7 @@ def build_pptx(topic: str, slides_data: list):
 def generate_ppt():
     """
     Build and return a .pptx file for the current session.
-    Body: { "session_id": "..." }
+    Body: { "session_id": "...", "theme": "dark"|"light" }
     Returns: binary .pptx file download
     """
     data = request.get_json(silent=True)
@@ -1676,11 +1781,12 @@ def generate_ppt():
         return jsonify({"error": "Invalid JSON"}), 400
 
     session_id = data.get("session_id", "")
+    theme      = data.get("theme", "dark")
     session = sessions.get(session_id)
     if not session:
         return jsonify({"error": "Session not found"}), 404
 
-    prs = build_pptx(session["topic"], session["slides"])
+    prs = build_pptx(session["topic"], session["slides"], theme=theme)
     if prs is None:
         return jsonify({
             "error": "python-pptx is not installed on the server. "
@@ -1692,7 +1798,8 @@ def generate_ppt():
     buf.seek(0)
 
     safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', session["topic"][:40]).strip('_')
-    filename = f"{safe_name}_AdaptiveLearn.pptx"
+    theme_tag  = "Dark" if theme != "light" else "Light"
+    filename = f"{safe_name}_{theme_tag}_AdaptiveLearn.pptx"
 
     return send_file(
         buf,
