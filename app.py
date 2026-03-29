@@ -185,11 +185,20 @@ def _call_groq(
             print(f"Groq {response.status_code} on {model} — retrying with fallback model.")
             return _call_groq(prompt, max_tokens, system, use_fallback=True)
 
-        if response.status_code != 200:
-            print(f"Groq API error {response.status_code}: {response.text}")
+        if response.status_code == 401:
+            print("ERROR: Groq API key is invalid or missing (401 Unauthorized). "
+                  "Check your GROQ_API_KEY environment variable.")
             return None
 
-        return response.json()["choices"][0]["message"]["content"]
+        if response.status_code != 200:
+            print(f"Groq API error {response.status_code}: {response.text[:500]}")
+            return None
+
+        content = response.json()["choices"][0]["message"]["content"]
+        if not content or not content.strip():
+            print(f"WARNING: Groq returned an empty response for model {model}.")
+            return None
+        return content
 
     except requests.exceptions.Timeout:
         if not use_fallback:
@@ -203,13 +212,66 @@ def _call_groq(
 
 
 def extract_json_array(text: str) -> str | None:
-    match = re.search(r'\[\s*{.*?}\s*\]', text, re.DOTALL)
-    return match.group(0) if match else None
+    """
+    Extract the first top-level JSON array from text using bracket balancing.
+    More robust than regex for deeply nested structures (slides with points arrays).
+    """
+    start = text.find('[')
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '[':
+            depth += 1
+        elif ch == ']':
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
 
 
 def extract_json_object(text: str) -> str | None:
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    return match.group(0) if match else None
+    """
+    Extract the first top-level JSON object from text using bracket balancing.
+    """
+    start = text.find('{')
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
 
 
 def strip_markdown_fences(text: str) -> str:
@@ -224,12 +286,14 @@ def strip_markdown_fences(text: str) -> str:
 
 def validate_slides(slides: list) -> list:
     validated = []
-    for slide in slides:
+    for idx, slide in enumerate(slides):
         if not isinstance(slide, dict):
+            print(f"validate_slides: skipping slide {idx} — not a dict")
             continue
         title = str(slide.get("title", "")).strip()
         raw_points = slide.get("points", [])
         if not title:
+            print(f"validate_slides: skipping slide {idx} — missing title")
             continue
         if not isinstance(raw_points, list):
             raw_points = []
@@ -261,7 +325,8 @@ def validate_slides(slides: list) -> list:
                 if text:
                     points.append({"text": text})
 
-        if len(points) < 2:
+        if len(points) < 1:
+            print(f"validate_slides: skipping slide '{title}' — no valid points parsed")
             continue
 
         entry: dict = {"title": title, "points": points[:6]}
@@ -420,13 +485,16 @@ STRICT RULES:
     max_tok = 6000 if math_topic else 4000
     raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
+        print("generate_slides: _call_groq returned None — API call failed.")
         return []
 
     raw_text = strip_markdown_fences(raw_text)
+    print(f"generate_slides: raw API response preview: {raw_text[:300]!r}")
 
     try:
         slides = json.loads(raw_text)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"generate_slides: json.loads failed ({e}). Attempting extraction fallback.")
         # Try to salvage a truncated response by extracting whatever complete
         # slide objects exist before the truncation point
         json_part = extract_json_array(raw_text)
@@ -457,7 +525,9 @@ STRICT RULES:
     if not isinstance(slides, list):
         return []
 
-    return validate_slides(slides)
+    result = validate_slides(slides)
+    print(f"generate_slides: validated {len(result)} slides from {len(slides) if isinstance(slides, list) else '?'} raw slides.")
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -957,7 +1027,11 @@ def generate():
 
     slides = generate_slides(topic)
     if not slides:
-        return jsonify({"error": "AI failed to generate slides. Please try again."}), 500
+        print(f"[/generate] No slides produced for topic='{topic}'. Check server logs above for the root cause.")
+        return jsonify({
+            "error": "AI failed to generate slides. This is usually caused by an invalid GROQ_API_KEY, "
+                     "a rate-limit, or a JSON parsing failure. Check the server logs for details."
+        }), 500
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
