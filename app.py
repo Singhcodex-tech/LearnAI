@@ -327,12 +327,12 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
     math_topic = is_math_topic(topic)
 
     if math_topic:
-        # Use plain string concatenation (not f-string) so LaTeX backslashes
-        # and curly braces don't conflict with Python's f-string syntax.
-        _math_tpl = (
+        # Build prompt with simple % substitution to avoid f-string / .format()
+        # conflicts with curly braces inside the JSON example and LaTeX strings.
+        prompt = (
             "You are an expert mathematics professor creating rigorous, exam-quality academic slides.\n\n"
-            "Topic: {topic}\n"
-            "{difficulty_hint}\n\n"
+            "Topic: %s\n"
+            "%s\n\n"
             "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
             "Use EXACTLY this JSON structure for EVERY slide:\n"
             "[\n"
@@ -344,32 +344,31 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "    ],\n"
             "    \"equations\": [\n"
             "      {\n"
-            "        \"label\": \"Quadratic Formula\",\n"
-            "        \"latex\": \"x = \\\\frac{-b \\\\pm \\\\sqrt{b^2 - 4ac}}{2a}\",\n"
-            "        \"explanation\": \"Gives roots of ax^2+bx+c=0; a,b,c are real coefficients.\"\n"
+            "        \"label\": \"Name of the formula\",\n"
+            "        \"latex\": \"\\\\frac{a}{b}\",\n"
+            "        \"explanation\": \"One sentence: what each symbol means and when used.\"\n"
             "      }\n"
             "    ],\n"
             "    \"worked_example\": {\n"
-            "      \"problem\": \"Solve: 2x^2 - 4x - 6 = 0\",\n"
+            "      \"problem\": \"A specific numeric problem for this slide topic\",\n"
             "      \"steps\": [\n"
-            "        \"Step 1: Identify a=2, b=-4, c=-6 from standard form ax^2+bx+c=0.\",\n"
-            "        \"Step 2: Apply formula: x = (4 +/- sqrt(16+48)) / 4.\",\n"
-            "        \"Step 3: sqrt(64)=8, so x=(4+8)/4=3 or x=(4-8)/4=-1.\"\n"
+            "        \"Step 1: identify the known values and the formula to use\",\n"
+            "        \"Step 2: substitute values and show full arithmetic\",\n"
+            "        \"Step 3: simplify and state the result\"\n"
             "      ],\n"
-            "      \"answer\": \"x = 3 or x = -1\"\n"
+            "      \"answer\": \"Final numeric answer\"\n"
             "    }\n"
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
             "- Generate 10 to 12 slides using the exact structure above\n"
             "- Each slide: 4 to 6 bullet points in 'points'\n"
-            "- EVERY point: a COMPLETE, INFORMATIVE sentence (definition, property, or example)\n"
-            "- EVERY slide MUST have 'equations' (1-3 entries) AND 'worked_example'\n"
-            "- LaTeX: single backslashes only (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha)\n"
-            "- worked_example: numbered steps, full arithmetic, explain EACH operation\n"
+            "- EVERY point: a COMPLETE sentence (definition, proof idea, property, example)\n"
+            "- EVERY slide MUST include 'equations' (1-3 entries) AND 'worked_example'\n"
+            "- LaTeX: single backslashes e.g. \\\\frac, \\\\sqrt, \\\\int, \\\\pm\n"
+            "- worked_example steps: numbered, show ALL arithmetic, explain EACH operation\n"
             "- Do NOT output anything outside the JSON array\n"
-        )
-        prompt = _math_tpl.format(topic=topic, difficulty_hint=difficulty_hint)
+        ) % (topic, difficulty_hint)
     else:
         prompt = f"""
 You are an expert university professor creating high-quality academic slides.
