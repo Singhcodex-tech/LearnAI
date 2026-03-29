@@ -3,9 +3,10 @@ import json
 import re
 import time
 import uuid
+from io import BytesIO
 
 import requests
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -1388,6 +1389,320 @@ def note():
         return jsonify({"note": text, "saved": True})
     else:
         return jsonify({"note": session["notes"].get(cache_key, "")})
+
+
+# ---------------------------------------------------------------------------
+# PPT Generation
+# ---------------------------------------------------------------------------
+
+def build_pptx(topic: str, slides_data: list):
+    """
+    Build a beautiful dark-themed PPTX that matches the web UI's design language.
+    Returns a python-pptx Presentation object, or None if pptx is unavailable.
+    """
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches, Pt
+        from pptx.dml.color import RGBColor
+        from pptx.enum.text import PP_ALIGN
+    except ImportError:
+        return None
+
+    # ── Colour palette (mirrors the CSS variables) ──────────────
+    C_BG     = RGBColor(0x08, 0x0b, 0x12)
+    C_SURF   = RGBColor(0x0f, 0x14, 0x20)
+    C_CARD   = RGBColor(0x14, 0x19, 0x26)
+    C_BORDER = RGBColor(0x2a, 0x33, 0x47)
+    C_GOLD   = RGBColor(0xe8, 0xa0, 0x20)
+    C_TEAL   = RGBColor(0x20, 0xc5, 0xb0)
+    C_WHITE  = RGBColor(0xea, 0xe6, 0xdf)
+    C_MUTED  = RGBColor(0x8b, 0x93, 0xa8)
+    C_DIM    = RGBColor(0x4a, 0x52, 0x68)
+
+    W = Inches(13.333)   # 16:9 widescreen
+    H = Inches(7.5)
+
+    prs = Presentation()
+    prs.slide_width  = W
+    prs.slide_height = H
+    blank = prs.slide_layouts[6]   # fully blank layout
+
+    # ── Helpers ─────────────────────────────────────────────────
+
+    def set_bg(slide, color):
+        bg = slide.background
+        bg.fill.solid()
+        bg.fill.fore_color.rgb = color
+
+    def rect(slide, l, t, w, h, fill, line=None, line_w=Pt(0)):
+        shp = slide.shapes.add_shape(1, l, t, w, h)
+        shp.fill.solid()
+        shp.fill.fore_color.rgb = fill
+        if line:
+            shp.line.color.rgb = line
+            shp.line.width = line_w
+        else:
+            shp.line.fill.background()
+        return shp
+
+    def textbox(slide, text, l, t, w, h,
+                font='Calibri', size=12, bold=False, italic=False,
+                color=None, align=PP_ALIGN.LEFT, wrap=True, spacing_before=0):
+        tb = slide.shapes.add_textbox(l, t, w, h)
+        tf = tb.text_frame
+        tf.word_wrap = wrap
+        p = tf.paragraphs[0]
+        p.alignment = align
+        if spacing_before:
+            p.space_before = Pt(spacing_before)
+        run = p.add_run()
+        run.text = text
+        run.font.name = font
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.italic = italic
+        if color:
+            run.font.color.rgb = color
+        return tb
+
+    total = len(slides_data)
+
+    # ════════════════════════════════════════════════════════════
+    # SLIDE 0 — TITLE SLIDE
+    # ════════════════════════════════════════════════════════════
+    sl = prs.slides.add_slide(blank)
+    set_bg(sl, C_BG)
+
+    # Subtle grid-line background pattern (two faint horizontal bands)
+    rect(sl, 0, Inches(3.5), W, Inches(0.012), C_SURF)
+    rect(sl, 0, Inches(5.0), W, Inches(0.012), C_SURF)
+    # Right decorative card
+    rect(sl, W - Inches(4.2), Inches(1.2), Inches(3.8), Inches(5.1), C_SURF,
+         line=C_BORDER, line_w=Pt(0.75))
+    # Gold accent circle inside card (imitated as a rounded square)
+    rect(sl, W - Inches(2.8), Inches(2.8), Inches(1.0), Inches(1.0), C_CARD)
+    textbox(sl, '✦', W - Inches(2.62), Inches(2.78), Inches(0.65), Inches(0.75),
+            font='Calibri', size=28, bold=True, color=C_GOLD,
+            align=PP_ALIGN.CENTER)
+    textbox(sl, f'{total}', W - Inches(2.62), Inches(3.58), Inches(0.65), Inches(0.55),
+            font='Courier New', size=22, bold=True, color=C_GOLD,
+            align=PP_ALIGN.CENTER)
+    textbox(sl, 'SLIDES', W - Inches(2.75), Inches(4.1), Inches(0.9), Inches(0.3),
+            font='Courier New', size=8, bold=True, color=C_MUTED,
+            align=PP_ALIGN.CENTER)
+
+    # Left accent stripe
+    rect(sl, 0, 0, Inches(0.09), H, C_GOLD)
+    # Bottom accent bar
+    rect(sl, 0, H - Inches(0.07), W, Inches(0.07), C_GOLD)
+
+    # Label
+    textbox(sl, 'ADAPTIVE LEARN  ·  AI-POWERED LECTURE ENGINE',
+            Inches(0.3), Inches(1.7), W - Inches(5.2), Inches(0.35),
+            font='Courier New', size=8, bold=True, color=C_GOLD)
+    # Short gold rule
+    rect(sl, Inches(0.3), Inches(2.12), Inches(0.7), Inches(0.04), C_GOLD)
+
+    # Main title
+    t_short = topic if len(topic) <= 70 else topic[:68] + '…'
+    tb = sl.shapes.add_textbox(Inches(0.3), Inches(2.2), W - Inches(5.0), Inches(2.6))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = t_short
+    run.font.name  = 'Georgia'
+    run.font.size  = Pt(46)
+    run.font.bold  = True
+    run.font.color.rgb = C_WHITE
+
+    # Subtitle
+    textbox(sl, f'Generated by AdaptiveLearn AI  ·  {total} Slides',
+            Inches(0.3), Inches(5.1), W - Inches(5.0), Inches(0.4),
+            font='Calibri', size=13, color=C_MUTED)
+    # Teal dot accent
+    rect(sl, Inches(0.3), Inches(5.62), Inches(0.09), Inches(0.09), C_TEAL)
+    textbox(sl, 'Click  →  to begin',
+            Inches(0.48), Inches(5.57), Inches(3), Inches(0.3),
+            font='Calibri', size=11, italic=True, color=C_DIM)
+
+    # ════════════════════════════════════════════════════════════
+    # CONTENT SLIDES
+    # ════════════════════════════════════════════════════════════
+    bullet_colors = [C_GOLD, C_TEAL, C_GOLD, C_TEAL, C_GOLD]
+
+    for idx, sdata in enumerate(slides_data):
+        sl = prs.slides.add_slide(blank)
+        set_bg(sl, C_BG)
+
+        title_txt  = str(sdata.get('title', f'Slide {idx + 1}')).strip()
+        points_raw = sdata.get('points', [])
+
+        # ── Header band ──────────────────────────────────────────
+        rect(sl, 0, 0, W, Inches(1.3), C_SURF)
+        rect(sl, 0, Inches(1.3), W, Inches(0.028), C_BORDER)
+        # Gold left stripe in header
+        rect(sl, 0, 0, Inches(0.08), Inches(1.3), C_GOLD)
+
+        # Slide number
+        textbox(sl, f'SLIDE  {idx + 1}  /  {total}',
+                Inches(0.24), Inches(0.48), Inches(3.5), Inches(0.38),
+                font='Courier New', size=9, bold=True, color=C_GOLD)
+
+        # Topic label (right)
+        t_label = (topic[:48] + '…') if len(topic) > 48 else topic
+        textbox(sl, t_label.upper(),
+                W - Inches(5.2), Inches(0.52), Inches(5.0), Inches(0.3),
+                font='Courier New', size=8, color=C_DIM,
+                align=PP_ALIGN.RIGHT)
+
+        # ── Slide title ──────────────────────────────────────────
+        title_disp = title_txt if len(title_txt) <= 80 else title_txt[:78] + '…'
+        tb = sl.shapes.add_textbox(Inches(0.5), Inches(1.48), W - Inches(1.0), Inches(1.05))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        run = p.add_run()
+        run.text = title_disp
+        run.font.name  = 'Georgia'
+        run.font.size  = Pt(24)
+        run.font.bold  = True
+        run.font.color.rgb = C_WHITE
+
+        # Gold underline rule beneath title
+        rect(sl, Inches(0.5), Inches(2.58), Inches(0.55), Inches(0.038), C_GOLD)
+
+        # ── Bullet points ─────────────────────────────────────────
+        # Determine layout: if 5 points, shrink font; else normal
+        n_pts = min(len(points_raw), 5)
+        font_size = 13 if n_pts <= 4 else 11.5
+        bullet_h  = Inches(0.68) if n_pts <= 4 else Inches(0.6)
+        start_y   = Inches(2.75)
+
+        for bi, point in enumerate(points_raw[:5]):
+            if isinstance(point, dict):
+                pt_text = str(point.get('text', '')).strip()
+            else:
+                pt_text = str(point).strip()
+            if not pt_text:
+                continue
+
+            by = start_y + bi * bullet_h
+            bc = bullet_colors[bi % len(bullet_colors)]
+
+            # Bullet dot (small square rounded-corner)
+            rect(sl, Inches(0.5), by + Inches(0.2), Inches(0.08), Inches(0.08), bc)
+
+            # Subtle left border for bullet row (very faint)
+            # Text
+            pt_disp = pt_text if len(pt_text) <= 200 else pt_text[:198] + '…'
+            tb = sl.shapes.add_textbox(Inches(0.72), by, W - Inches(1.05), Inches(0.62))
+            tf = tb.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            run = p.add_run()
+            run.text = pt_disp
+            run.font.name  = 'Calibri'
+            run.font.size  = Pt(font_size)
+            run.font.color.rgb = C_WHITE
+
+        # ── Right sidebar — slide number large ───────────────────
+        rect(sl, W - Inches(0.55), Inches(1.35), Inches(0.5), H - Inches(1.42), C_SURF)
+        textbox(sl, str(idx + 1),
+                W - Inches(0.55), Inches(3.2), Inches(0.5), Inches(0.6),
+                font='Georgia', size=18, bold=True, color=C_BORDER,
+                align=PP_ALIGN.CENTER)
+
+        # ── Bottom bar ───────────────────────────────────────────
+        rect(sl, 0, H - Inches(0.065), W, Inches(0.065), C_GOLD)
+
+        # Teal accent dot bottom-right
+        rect(sl, W - Inches(1.05), H - Inches(0.5), Inches(0.09), Inches(0.09), C_TEAL)
+        textbox(sl, 'adaptivelearn.ai',
+                W - Inches(3.2), H - Inches(0.48), Inches(3.0), Inches(0.28),
+                font='Calibri', size=8, italic=True, color=C_DIM,
+                align=PP_ALIGN.RIGHT)
+
+    # ════════════════════════════════════════════════════════════
+    # CLOSING / THANK-YOU SLIDE
+    # ════════════════════════════════════════════════════════════
+    sl = prs.slides.add_slide(blank)
+    set_bg(sl, C_BG)
+
+    # Horizontal bands
+    rect(sl, 0, Inches(3.2), W, Inches(0.04), C_BORDER)
+    rect(sl, 0, Inches(4.6), W, Inches(0.04), C_BORDER)
+    rect(sl, 0, 0, Inches(0.09), H, C_TEAL)
+    rect(sl, 0, H - Inches(0.07), W, Inches(0.07), C_TEAL)
+
+    # "COMPLETE" pill
+    rect(sl, Inches(1.0), Inches(1.8), Inches(2.4), Inches(0.44),
+         RGBColor(0x0b, 0x1f, 0x1c), line=C_TEAL, line_w=Pt(0.75))
+    textbox(sl, '✓  SESSION COMPLETE',
+            Inches(1.05), Inches(1.82), Inches(2.3), Inches(0.4),
+            font='Courier New', size=9, bold=True, color=C_TEAL)
+
+    # Topic
+    t_close = topic if len(topic) <= 70 else topic[:68] + '…'
+    tb = sl.shapes.add_textbox(Inches(1.0), Inches(2.4), W - Inches(2.0), Inches(1.9))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    run = p.add_run()
+    run.text = t_close
+    run.font.name  = 'Georgia'
+    run.font.size  = Pt(40)
+    run.font.bold  = True
+    run.font.color.rgb = C_WHITE
+
+    # Stats line
+    textbox(sl, f'{total} slides covered  ·  Powered by AdaptiveLearn AI',
+            Inches(1.0), Inches(4.5), W - Inches(2.0), Inches(0.4),
+            font='Calibri', size=13, color=C_MUTED)
+
+    return prs
+
+
+@app.route("/generate_ppt", methods=["POST"])
+@limiter.limit("5 per minute")
+def generate_ppt():
+    """
+    Build and return a .pptx file for the current session.
+    Body: { "session_id": "..." }
+    Returns: binary .pptx file download
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    prs = build_pptx(session["topic"], session["slides"])
+    if prs is None:
+        return jsonify({
+            "error": "python-pptx is not installed on the server. "
+                     "Run: pip install python-pptx"
+        }), 500
+
+    buf = BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+
+    safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', session["topic"][:40]).strip('_')
+    filename = f"{safe_name}_AdaptiveLearn.pptx"
+
+    return send_file(
+        buf,
+        as_attachment=True,
+        download_name=filename,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument"
+            ".presentationml.presentation"
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
