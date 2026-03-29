@@ -2,4 +2,5 @@ flask
 requests
 flask-cors
 flask-limiter
+python-pptx
 gunicorn
