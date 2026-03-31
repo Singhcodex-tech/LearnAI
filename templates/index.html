@@ -430,6 +430,20 @@
       margin-top: .55rem;
     }
     .reteach-point .point-bullet { background: var(--teal); }
+    .point-main-text { flex: 1; }
+    .point-source {
+      margin-top: .48rem;
+      font-size: .76rem;
+      color: var(--text-3);
+      line-height: 1.45;
+      opacity: .95;
+    }
+    .point-source a {
+      color: var(--teal);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(32, 197, 176, .45);
+    }
+    .point-source a:hover { color: #42ddc8; border-bottom-color: #42ddc8; }
 
     /* --- Understanding buttons --- */
     .understanding-section {
@@ -2198,6 +2212,8 @@ function loadSlide(index, overrideSlide = null) {
   function renderPoint(p, idx, isReteach) {
     const isObj = (typeof p === 'object' && p !== null && !Array.isArray(p));
     const text = isObj ? (p.text || '') : String(p);
+    const sourceTitle = isObj ? String(p.source_title || '').trim() : '';
+    const sourceUrl = isObj ? String(p.source_url || '').trim() : '';
     const latex = isObj ? (p.inline_latex || '') : '';
     const label = isObj ? (p.inline_label || 'Formula') : '';
     const steps = isObj ? (p.sub_steps || []) : [];
@@ -2223,12 +2239,23 @@ function loadSlide(index, overrideSlide = null) {
       stepsHtml = `<div class="sub-steps">${stepsInner}</div>`;
     }
 
+    const sourceHtml = sourceTitle
+      ? `<div class="point-source">Source: ${
+          sourceUrl
+            ? `<a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(sourceTitle)}</a>`
+            : escHtml(sourceTitle)
+        }</div>`
+      : '';
+
     return `
       <li class="slide-point ${isReteach ? 'reteach-point' : ''}"
           style="animation-delay:${idx * 0.07}s; flex-direction:column; gap:.5rem;">
         <div style="display:flex;gap:.85rem;align-items:flex-start;">
           <span class="point-bullet" style="margin-top:.55rem;flex-shrink:0;"></span>
-          <span style="flex:1;">${escHtml(text)}</span>
+          <div class="point-main-text">
+            <span>${escHtml(text)}</span>
+            ${sourceHtml}
+          </div>
         </div>
         ${mathHtml}
         ${stepsHtml}

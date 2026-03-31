@@ -358,6 +358,13 @@ def validate_slides(slides: list) -> list:
                 if not text:
                     continue
                 point_obj = {"text": text}
+                # Per-point citation metadata
+                source_title = str(p.get("source_title", "")).strip()
+                source_url = str(p.get("source_url", "")).strip()
+                if source_title:
+                    point_obj["source_title"] = source_title
+                if source_url:
+                    point_obj["source_url"] = source_url
                 # inline equation
                 il = str(p.get("inline_latex", "")).strip()
                 lbl = str(p.get("inline_label", "")).strip()
@@ -464,6 +471,8 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "    \"points\": [\n"
             "      {\n"
             "        \"text\": \"A clear 1-2 sentence explanation of the concept — define it and state when to use it.\",\n"
+            "        \"source_title\": \"Credible source title for this exact bullet (e.g., Stewart Calculus, MIT OCW, Wikipedia)\",\n"
+            "        \"source_url\": \"Direct URL/DOI for this bullet source, or empty string if unavailable\",\n"
             "        \"inline_latex\": \"\\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\",\n"
             "        \"inline_label\": \"Quadratic Formula\",\n"
             "        \"sub_steps\": [\n"
@@ -490,9 +499,10 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "- Generate exactly 8 slides covering the topic from foundations to advanced applications\n"
             "- Each slide: exactly 4 points\n"
             "- EVERY point text must be 1-2 clear sentences — concise but informative\n"
-            "- EVERY point MUST be an OBJECT (not a string) with keys: text, inline_latex, inline_label, sub_steps\n"
+            "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
             "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
             "- sub_steps: exactly 4 steps, each a short clear string showing the key action and result\n"
+            "- source_title and source_url must be specific to each bullet and from real, credible references\n"
             "- worked_example: a clear numeric problem with 4 concise steps\n"
             "- Slides must progress logically: definition → properties → techniques → applications → edge cases\n"
             "- Do NOT repeat the same formula or example across slides\n"
@@ -513,8 +523,16 @@ Format:
   {{
     "title": "Slide title",
     "points": [
-      "Detailed explanation sentence",
-      "Another detailed explanation"
+      {{
+        "text": "Detailed explanation sentence",
+        "source_title": "Credible source title for this bullet",
+        "source_url": "Direct URL/DOI for this bullet source, or empty string if unavailable"
+      }},
+      {{
+        "text": "Another detailed explanation",
+        "source_title": "Another credible source title",
+        "source_url": "Direct URL/DOI for this bullet source, or empty string if unavailable"
+      }}
     ]
   }}
 ]
@@ -523,6 +541,7 @@ STRICT RULES:
 - Generate exactly 12 slides covering the topic thoroughly from fundamentals to advanced aspects
 - Each slide must have exactly 5 bullet points
 - EVERY bullet point must be 1-2 clear sentences — concise but substantive, never a vague phrase
+- EVERY bullet point MUST be an object with keys: text, source_title, source_url
 - EVERY point must explain the concept clearly, including the "what" and briefly the "why"
 - NO vague lines like "It is important", "Has many applications", "This is used in many fields"
 - EVERY point MUST include at least one of:
@@ -533,6 +552,7 @@ STRICT RULES:
   • a cause-and-effect relationship
   • a quantitative fact or formula
 - Slides must flow logically: start with history/definition, build to core mechanisms, then real-world applications, then limitations or future directions
+- source_title and source_url must be real, credible references that match the exact bullet content
 - Do NOT repeat the same information across slides
 - Do NOT output anything outside JSON
 """
@@ -694,7 +714,7 @@ def reteach_slide(slide: dict, retry: bool = False) -> dict | None:
             "Original Worked Example:\n%s\n\n"
             "Rules:\n"
             "- Keep the same title\n"
-            "- Rewrite each point as a rich object with: text, inline_latex, inline_label, sub_steps\n"
+            "- Rewrite each point as a rich object with: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
             "- Use simpler language and everyday analogies\n"
             "- inline_latex: same formula but write a clearer inline_label and simpler sub_steps\n"
             "- sub_steps: 3-5 steps, each explaining WHY the step is done, with smaller numbers\n"
@@ -707,6 +727,8 @@ def reteach_slide(slide: dict, retry: bool = False) -> dict | None:
             "  \"points\": [\n"
             "    {\n"
             "      \"text\": \"Simpler explanation sentence\",\n"
+            "      \"source_title\": \"Credible source title for this bullet\",\n"
+            "      \"source_url\": \"Direct URL/DOI for this bullet source, or empty string if unavailable\",\n"
             "      \"inline_latex\": \"\\\\frac{a}{b}\",\n"
             "      \"inline_label\": \"Formula name\",\n"
             "      \"sub_steps\": [\"Step 1 — reason: detail\", \"Step 2 — reason: detail\"]\n"
@@ -794,6 +816,12 @@ Format:
             if not text:
                 continue
             po = {"text": text}
+            source_title = str(p.get("source_title", "")).strip()
+            source_url = str(p.get("source_url", "")).strip()
+            if source_title:
+                po["source_title"] = source_title
+            if source_url:
+                po["source_url"] = source_url
             il = str(p.get("inline_latex", "")).strip()
             lbl = str(p.get("inline_label", "")).strip()
             if il:
