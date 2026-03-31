@@ -302,13 +302,21 @@
 
     /* ---- HUD inline search ---- */
     .hud-search-form {
-      display: flex; align-items: center; gap: .4rem;
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
       background: var(--card);
       border: 1px solid var(--border2);
       border-radius: 10px;
-      padding: .25rem .25rem .25rem .75rem;
+      padding: .45rem;
       transition: border-color .2s, box-shadow .2s;
       flex-shrink: 0;
+    }
+    .hud-search-top {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      min-width: 0;
     }
     .hud-search-form:focus-within {
       border-color: var(--gold);
@@ -322,8 +330,9 @@
       font-family: 'Syne', sans-serif;
       font-size: .82rem;
       font-weight: 500;
-      width: 180px;
+      width: 210px;
       min-width: 0;
+      flex: 1;
     }
     .hud-search-input::placeholder { color: var(--text-3); }
     .hud-search-btn {
@@ -346,8 +355,9 @@
       background: var(--surface);
       color: var(--text-2);
       border-radius: 7px;
-      height: 30px;
-      padding: 0 .45rem;
+      height: 32px;
+      width: 100%;
+      padding: 0 .55rem;
       font-family: var(--mono);
       font-size: .68rem;
       letter-spacing: .05em;
@@ -361,12 +371,11 @@
 
     /* collapse input on very small screens */
     @media (max-width: 600px) {
-      .hud-search-input { width: 100px; font-size: .75rem; }
-      .hud-explain-select { width: 88px; }
+      .hud-search-input { width: 130px; font-size: .75rem; }
     }
     @media (max-width: 420px) {
-      .hud-search-input { width: 70px; }
-      .hud-explain-select { width: 80px; font-size: .62rem; padding: 0 .25rem; }
+      .hud-search-input { width: 95px; }
+      .hud-explain-select { font-size: .62rem; padding: 0 .35rem; }
     }
 
     /* ---- Slide navigation arrow buttons ---- */
@@ -1970,19 +1979,21 @@
     <div class="hud-right">
       <!-- Inline new-topic search -->
       <div class="hud-search-form" id="hud-search-form">
-        <input
-          class="hud-search-input"
-          id="hud-search-input"
-          type="text"
-          maxlength="200"
-          placeholder="New topic…"
-          autocomplete="off"
-        />
+        <div class="hud-search-top">
+          <input
+            class="hud-search-input"
+            id="hud-search-input"
+            type="text"
+            maxlength="200"
+            placeholder="New topic…"
+            autocomplete="off"
+          />
+          <button class="hud-search-btn" id="hud-search-btn" title="Search new topic">🔍</button>
+        </div>
         <select class="hud-explain-select" id="hud-explanation-mode" title="Explanation style">
           <option value="brief">Brief</option>
           <option value="in_depth" selected>In-depth</option>
         </select>
-        <button class="hud-search-btn" id="hud-search-btn" title="Search new topic">🔍</button>
       </div>
       <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
       <div class="slide-counter" id="slide-counter">1 / 10</div>
