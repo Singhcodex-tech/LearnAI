@@ -325,6 +325,54 @@ def _extract_all_objects(text: str) -> list:
     return results
 
 
+def _repair_slides_json(raw_text: str, math_topic: bool) -> list:
+    """
+    Ask the model to repair malformed slide JSON into a valid array.
+    Returns parsed list or [].
+    """
+    repair_prompt = f"""
+You are a strict JSON repair engine.
+Convert the following malformed model output into a valid JSON array of slides.
+Return ONLY JSON array. No prose.
+
+Required shape:
+[
+  {{
+    "title": "Slide title",
+    "points": [
+      {{
+        "text": "point text",
+        "source_title": "source title",
+        "source_url": "url or empty"
+      }}
+    ]
+  }}
+]
+
+{ "Math topics may include inline_latex, inline_label, sub_steps, worked_example fields." if math_topic else "" }
+
+Malformed input:
+{raw_text[:12000]}
+"""
+    repaired = _call_groq(repair_prompt, max_tokens=3000, system="Return valid JSON only.")
+    if not repaired:
+        return []
+    repaired = strip_markdown_fences(repaired)
+    try:
+        data = json.loads(repaired)
+    except json.JSONDecodeError:
+        arr = extract_json_array(repaired)
+        if not arr:
+            return []
+        try:
+            data = json.loads(arr)
+        except json.JSONDecodeError:
+            return []
+    if isinstance(data, dict):
+        data = data.get("slides") or data.get("data") or []
+    return data if isinstance(data, list) else []
+
+
 def strip_markdown_fences(text: str) -> str:
     """
     Remove ```json ... ``` or ``` ... ``` code fences that the 70B model
@@ -720,9 +768,13 @@ STRICT RULES:
             explanation_mode=explanation_mode,
             retry=True,
         )
-    if len(result) < 2:
-        print("generate_slides: still too few slides after retry; using local fallback.")
-        result = build_local_fallback_slides(topic, explanation_mode)
+    if len(result) < 2 and raw_text:
+        print("generate_slides: trying JSON repair path.")
+        repaired_slides = _repair_slides_json(raw_text, math_topic=math_topic)
+        if repaired_slides:
+            repaired_valid = validate_slides(repaired_slides)
+            if repaired_valid:
+                result = repaired_valid
     if explanation_mode == "in_depth":
         result = _ensure_min_words_per_point(result, min_words=50)
     return result
@@ -1318,12 +1370,18 @@ def generate():
     if explanation_mode not in {"brief", "in_depth"}:
         explanation_mode = "in_depth"
 
-    slides = generate_slides(topic, explanation_mode=explanation_mode)
+    slides = []
+    for attempt in range(3):
+        slides = generate_slides(topic, explanation_mode=explanation_mode)
+        if slides:
+            break
+        print(f"[/generate] Attempt {attempt + 1}/3 failed for topic='{topic}'. Retrying...")
+        time.sleep(0.8 * (attempt + 1))
     if not slides:
-        print(f"[/generate] No slides produced for topic='{topic}'. Using local fallback slides.")
-        slides = build_local_fallback_slides(topic, explanation_mode)
-        if explanation_mode == "in_depth":
-            slides = _ensure_min_words_per_point(slides, min_words=50)
+        print(f"[/generate] No slides produced for topic='{topic}' after retries.")
+        return jsonify({
+            "error": "Slide generation failed after retries. Please try once more."
+        }), 500
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
