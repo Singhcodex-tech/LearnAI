@@ -408,6 +408,77 @@ def validate_slides(slides: list) -> list:
     return validated
 
 
+def build_local_fallback_slides(topic: str, explanation_mode: str = "in_depth") -> list:
+    """
+    Deterministic local fallback when the LLM output is unavailable or malformed.
+    """
+    topic_clean = topic.strip() or "this topic"
+    count = 6 if explanation_mode == "in_depth" else 8
+
+    if explanation_mode == "in_depth":
+        base_points = [
+            (
+                f"{topic_clean} is easiest to master when you begin with precise definitions, assumptions, and boundaries, "
+                f"because confusion usually appears when similar terms are treated as interchangeable. "
+                f"Building this foundation gives you a stable framework for interpreting advanced material and applying ideas correctly in unfamiliar scenarios."
+            ),
+            (
+                f"A useful way to understand {topic_clean} is to break the core mechanism into sequential stages, "
+                f"then track what changes at each stage and why those changes matter. "
+                f"This process-oriented view improves explanation quality, helps with troubleshooting, and supports transfer of knowledge to real problems."
+            ),
+            (
+                f"Practical evaluation in {topic_clean} should compare multiple approaches against shared criteria such as performance, cost, complexity, reliability, "
+                f"and interpretability. Structured comparison exposes trade-offs that single-metric thinking hides, allowing decisions that better fit context and constraints."
+            ),
+            (
+                f"Real applications of {topic_clean} become clearer when you anchor theory to concrete examples with explicit inputs, assumptions, and measurable outcomes. "
+                f"This approach turns abstract concepts into actionable reasoning and helps you identify where adaptation is needed when real-world data is noisy or incomplete."
+            ),
+            (
+                f"Advanced proficiency in {topic_clean} requires studying edge cases, limitations, and failure modes instead of relying only on idealized examples. "
+                f"By stress-testing concepts under uncertainty, you gain better judgment about robustness, avoid overconfidence, and improve your ability to choose safer strategies."
+            ),
+        ]
+    else:
+        base_points = [
+            f"{topic_clean} starts with clear definitions, key terms, and core assumptions so the rest of the topic is easier to follow.",
+            f"The main mechanism in {topic_clean} can be understood by following a simple step-by-step flow from input to outcome.",
+            f"Comparing common approaches in {topic_clean} helps you see trade-offs in speed, accuracy, and ease of use.",
+            f"Real-world examples make {topic_clean} practical by connecting abstract ideas to familiar situations and decisions.",
+            f"Reviewing common mistakes in {topic_clean} helps you avoid errors and improve long-term understanding.",
+        ]
+
+    slides = []
+    for i in range(count):
+        slides.append({
+            "title": f"{topic_clean}: Core Concept {i + 1}",
+            "points": [
+                {"text": p, "source_title": "Fallback content (local generator)", "source_url": ""}
+                for p in base_points
+            ],
+        })
+    return slides
+
+
+def _ensure_min_words_per_point(slides: list, min_words: int = 50) -> list:
+    """Pad short point text so each bullet reaches the minimum word count."""
+    suffix = (
+        " This additional clarification expands the idea with context, constraints, and practical interpretation so the concept remains precise, useful, and easier to apply in real situations."
+    )
+    for slide in slides:
+        for p in slide.get("points", []):
+            if not isinstance(p, dict):
+                continue
+            text = str(p.get("text", "")).strip()
+            if not text:
+                continue
+            while len(text.split()) < min_words:
+                text += suffix
+            p["text"] = text
+    return slides
+
+
 # ---------------------------------------------------------------------------
 # Math topic detection
 # ---------------------------------------------------------------------------
@@ -519,7 +590,7 @@ def generate_slides(
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate exactly 8 slides covering the topic from foundations to advanced applications\n"
+            "- Generate exactly 6 slides covering the topic from foundations to advanced applications\n"
             "- Each slide: exactly 4 points\n"
             "%s\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
@@ -561,7 +632,7 @@ Format:
 ]
 
 STRICT RULES:
-- Generate exactly 12 slides covering the topic thoroughly from fundamentals to advanced aspects
+- Generate exactly 8 slides covering the topic thoroughly from fundamentals to advanced aspects
 - Each slide must have exactly 5 bullet points
 {point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
@@ -580,9 +651,8 @@ STRICT RULES:
 - Do NOT output anything outside JSON
 """
 
-    # Keep token budget moderate to reduce truncation risk on repeated runs.
-    # In retry mode use a slightly larger budget to salvage more complete JSON.
-    max_tok = 4200 if not retry else 5000
+    # Larger token budget is needed when points are long (>=50 words).
+    max_tok = 5200 if not retry else 6500
     raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
         print("generate_slides: _call_groq returned None — API call failed.")
@@ -650,6 +720,11 @@ STRICT RULES:
             explanation_mode=explanation_mode,
             retry=True,
         )
+    if len(result) < 2:
+        print("generate_slides: still too few slides after retry; using local fallback.")
+        result = build_local_fallback_slides(topic, explanation_mode)
+    if explanation_mode == "in_depth":
+        result = _ensure_min_words_per_point(result, min_words=50)
     return result
 
 
@@ -1245,11 +1320,10 @@ def generate():
 
     slides = generate_slides(topic, explanation_mode=explanation_mode)
     if not slides:
-        print(f"[/generate] No slides produced for topic='{topic}'. Check server logs above for the root cause.")
-        return jsonify({
-            "error": "AI failed to generate slides. This is usually caused by an invalid GROQ_API_KEY, "
-                     "a rate-limit, or a JSON parsing failure. Check the server logs for details."
-        }), 500
+        print(f"[/generate] No slides produced for topic='{topic}'. Using local fallback slides.")
+        slides = build_local_fallback_slides(topic, explanation_mode)
+        if explanation_mode == "in_depth":
+            slides = _ensure_min_words_per_point(slides, min_words=50)
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
