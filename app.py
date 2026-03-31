@@ -458,8 +458,8 @@ def generate_slides(
         depth_note = (
             "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
         )
-        point_length_rule_math = "- EVERY point text must be 1-2 clear sentences — concise but informative"
-        point_length_rule_non_math = "- EVERY bullet point must be 1-2 clear sentences — concise but substantive, never a vague phrase"
+        point_length_rule_math = "- EVERY point text must be detailed and at least 50 words"
+        point_length_rule_non_math = "- EVERY bullet point must be detailed and at least 50 words"
 
     difficulty_hint = ""
     if learner_profile:
@@ -580,12 +580,19 @@ STRICT RULES:
 - Do NOT output anything outside JSON
 """
 
-    # 8 math slides × (4 points × ~80 tok each + worked_example ~150 tok) ≈ 3760 tok
-    # 12 non-math slides × 5 points × ~60 tok each ≈ 3600 tok — 5000 gives headroom
-    max_tok = 5000 if math_topic else 5000
+    # Keep token budget moderate to reduce truncation risk on repeated runs.
+    # In retry mode use a slightly larger budget to salvage more complete JSON.
+    max_tok = 4200 if not retry else 5000
     raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
         print("generate_slides: _call_groq returned None — API call failed.")
+        if not retry:
+            return generate_slides(
+                topic,
+                learner_profile=learner_profile,
+                explanation_mode=explanation_mode,
+                retry=True,
+            )
         return []
 
     raw_text = strip_markdown_fences(raw_text)
@@ -635,6 +642,14 @@ STRICT RULES:
 
     result = validate_slides(slides)
     print(f"generate_slides: validated {len(result)} slides from {len(slides) if isinstance(slides, list) else '?'} raw slides.")
+    if len(result) < 3 and not retry:
+        print("generate_slides: too few validated slides, retrying once.")
+        return generate_slides(
+            topic,
+            learner_profile=learner_profile,
+            explanation_mode=explanation_mode,
+            retry=True,
+        )
     return result
 
 
