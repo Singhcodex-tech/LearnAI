@@ -1014,6 +1014,90 @@ STRICT RULES:
 
 
 # ---------------------------------------------------------------------------
+# Sources generation
+# ---------------------------------------------------------------------------
+
+def generate_sources_for_slide(slide: dict, topic: str, retry: bool = False) -> list:
+    """
+    Generate a list of credible reference sources for the content on a given slide.
+    Returns a list of source dicts: { title, type, description, url_hint }
+    """
+    points_text = "\n".join(
+        (p["text"] if isinstance(p, dict) else str(p))
+        for p in slide.get("points", [])
+    )
+
+    prompt = f"""You are an academic librarian. For the slide below, list the 3 to 5 most relevant, credible reference sources a student could use to learn more.
+
+Topic: {topic}
+Slide Title: {slide['title']}
+Slide Content:
+{points_text}
+
+Return ONLY a valid JSON array. No extra text.
+
+Format:
+[
+  {{
+    "title": "Full name of the source (book, paper, website, or course)",
+    "type": "book" | "paper" | "website" | "course" | "encyclopedia",
+    "authors": "Author(s) or organization (e.g. 'Goodfellow et al.' or 'Wikipedia')",
+    "year": "Publication year or 'ongoing' for websites",
+    "description": "One sentence explaining what this source covers and why it is relevant to this slide.",
+    "url_hint": "A plausible URL or DOI (e.g. 'https://en.wikipedia.org/wiki/...' or 'https://arxiv.org/...'). Use an empty string if unknown."
+  }}
+]
+
+RULES:
+- Only cite real, well-known sources (textbooks, Wikipedia, Khan Academy, arXiv, MDN, official docs, etc.)
+- Do NOT invent fictional papers or fake DOIs
+- Match sources to the exact content of the slide (not just the general topic)
+- Prefer freely accessible sources where possible
+- Do NOT output anything outside the JSON array
+"""
+
+    raw = _call_groq(prompt, max_tokens=1200)
+    if not raw:
+        return []
+
+    raw = strip_markdown_fences(raw)
+
+    try:
+        sources = json.loads(raw)
+    except json.JSONDecodeError:
+        arr = extract_json_array(raw)
+        if not arr:
+            if not retry:
+                return generate_sources_for_slide(slide, topic, retry=True)
+            return []
+        try:
+            sources = json.loads(arr)
+        except json.JSONDecodeError:
+            return []
+
+    if not isinstance(sources, list):
+        return []
+
+    validated = []
+    for s in sources:
+        if not isinstance(s, dict):
+            continue
+        title = str(s.get("title", "")).strip()
+        if not title:
+            continue
+        validated.append({
+            "title": title,
+            "type": str(s.get("type", "website")).strip(),
+            "authors": str(s.get("authors", "")).strip(),
+            "year": str(s.get("year", "")).strip(),
+            "description": str(s.get("description", "")).strip(),
+            "url_hint": str(s.get("url_hint", "")).strip(),
+        })
+
+    return validated[:5]
+
+
+# ---------------------------------------------------------------------------
 # XP / Streak helpers
 # ---------------------------------------------------------------------------
 
@@ -1096,6 +1180,7 @@ def generate():
         "created_at": time.time(),
         "quiz_cache": {},      # { slide_index_str: [questions] }
         "visual_cache": {},    # { slide_index_str: visual_dict }
+        "sources_cache": {},   # { slide_index_str: [sources] }
         "notes": {},           # { slide_index_str: "text" }
         "xp": 0,
         "streak_slides": 0,
@@ -1394,6 +1479,47 @@ def note():
         return jsonify({"note": text, "saved": True})
     else:
         return jsonify({"note": session["notes"].get(cache_key, "")})
+
+
+# ---------------------------------------------------------------------------
+# NEW: Per-slide sources / references
+# ---------------------------------------------------------------------------
+
+@app.route("/sources", methods=["POST"])
+@limiter.limit("15 per minute")
+def sources():
+    """
+    Generate credible reference sources for a specific slide (cached per slide).
+    Body:  { "session_id": "...", "slide_index": 0 }
+    Returns: { "sources": [ { title, type, authors, year, description, url_hint } ] }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    slide_index = data.get("slide_index", 0)
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slides = session["slides"]
+    if not (0 <= slide_index < len(slides)):
+        return jsonify({"error": "Invalid slide index"}), 400
+
+    cache_key = str(slide_index)
+    if cache_key in session.get("sources_cache", {}):
+        return jsonify({"sources": session["sources_cache"][cache_key], "cached": True})
+
+    result = generate_sources_for_slide(slides[slide_index], session["topic"])
+    if not result:
+        return jsonify({"error": "Failed to generate sources. Please try again."}), 500
+
+    if "sources_cache" not in session:
+        session["sources_cache"] = {}
+    session["sources_cache"][cache_key] = result
+    return jsonify({"sources": result})
 
 
 # ---------------------------------------------------------------------------

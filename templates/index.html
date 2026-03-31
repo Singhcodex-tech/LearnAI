@@ -1638,6 +1638,137 @@
     }
     #ppt-success-toast.show { transform: translateX(-50%) translateY(0); }
 
+    /* ===================== SOURCES PANEL ===================== */
+    .sources-panel {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      overflow: hidden;
+      animation: fadeSlideIn .4s ease;
+    }
+
+    .sources-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .9rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      transition: background .18s;
+    }
+    .sources-panel-header:hover { background: rgba(255,255,255,.025); }
+
+    .sources-panel-label {
+      font-size: .72rem; font-weight: 700;
+      letter-spacing: .14em; text-transform: uppercase;
+      color: var(--text-3);
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .sources-panel-label::before {
+      content: ''; width: 4px; height: 4px; border-radius: 50%;
+      background: var(--gold);
+    }
+
+    .sources-toggle-icon {
+      font-size: .75rem;
+      color: var(--text-3);
+      transition: transform .2s;
+    }
+    .sources-toggle-icon.open { transform: rotate(180deg); }
+
+    .sources-body {
+      padding: 1rem 1.25rem 1.25rem;
+      display: none;
+      flex-direction: column;
+      gap: .65rem;
+    }
+    .sources-body.open { display: flex; }
+
+    .source-item {
+      display: flex; gap: .85rem; align-items: flex-start;
+      padding: .75rem .9rem;
+      background: var(--surface);
+      border-radius: 10px;
+      border-left: 3px solid var(--gold-dim);
+      animation: pointReveal .3s ease both;
+    }
+
+    .source-icon {
+      flex-shrink: 0;
+      font-size: 1.1rem;
+      margin-top: .1rem;
+    }
+
+    .source-content { flex: 1; min-width: 0; }
+
+    .source-title {
+      font-size: .88rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: .2rem;
+      line-height: 1.35;
+    }
+    .source-title a {
+      color: var(--teal);
+      text-decoration: none;
+      transition: color .15s;
+    }
+    .source-title a:hover { color: #35d8c2; text-decoration: underline; }
+
+    .source-meta {
+      font-size: .72rem;
+      color: var(--text-3);
+      font-family: var(--mono);
+      margin-bottom: .3rem;
+    }
+
+    .source-desc {
+      font-size: .82rem;
+      color: var(--text-2);
+      line-height: 1.55;
+    }
+
+    .source-type-badge {
+      display: inline-block;
+      font-size: .6rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: .15rem .45rem;
+      border-radius: 4px;
+      margin-left: .4rem;
+      vertical-align: middle;
+    }
+    .source-type-badge.book        { background: rgba(232,160,32,.13); color: var(--gold); }
+    .source-type-badge.paper       { background: rgba(62,200,122,.12); color: var(--green); }
+    .source-type-badge.website     { background: rgba(32,197,176,.12); color: var(--teal); }
+    .source-type-badge.course      { background: rgba(224,84,84,.12);  color: var(--red); }
+    .source-type-badge.encyclopedia{ background: rgba(138,115,200,.12); color: #a88be0; }
+
+    .sources-loading {
+      display: flex; align-items: center; gap: .75rem;
+      color: var(--text-3); font-size: .82rem; padding: .5rem 0;
+    }
+
+    .sources-error {
+      color: var(--text-3); font-size: .82rem; padding: .25rem 0;
+    }
+
+    .btn-load-sources {
+      display: inline-flex; align-items: center; gap: .4rem;
+      padding: .45rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--gold-dim);
+      background: transparent;
+      color: var(--gold);
+      font-family: 'Syne', sans-serif;
+      font-size: .75rem; font-weight: 700;
+      letter-spacing: .05em; text-transform: uppercase;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-load-sources:hover { background: rgba(232,160,32,.1); border-color: var(--gold); }
+    .btn-load-sources:disabled { opacity: .4; cursor: not-allowed; }
+
   </style>
 </head>
 <body>
@@ -1666,6 +1797,7 @@
         <span class="pill">📝 Slide Notes</span>
         <span class="pill">⚡ XP &amp; Streaks</span>
         <span class="pill ppt-pill">🎞️ Export PPT</span>
+        <span class="pill">📚 Cited Sources</span>
       </div>
     </div>
   </div>
@@ -1773,6 +1905,17 @@
           <span class="notes-saved-msg" id="notes-saved-msg">✓ Saved</span>
           <button class="btn-save-note" onclick="saveNote()">Save Note</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Sources / References panel -->
+    <div id="sources-section" class="sources-panel" style="display:none;">
+      <div class="sources-panel-header" onclick="toggleSources()">
+        <div class="sources-panel-label">📚 References &amp; Sources</div>
+        <span class="sources-toggle-icon" id="sources-toggle-icon">▼</span>
+      </div>
+      <div class="sources-body" id="sources-body">
+        <!-- populated by JS -->
       </div>
     </div>
 
@@ -2176,6 +2319,9 @@ function loadSlide(index, overrideSlide = null) {
   document.getElementById('notes-body').style.display = 'none';
   document.getElementById('notes-toggle-icon').textContent = '▼';
   state.notesOpen = false;
+
+  // Reset sources panel for new slide
+  resetSources();
 
   // Scroll to top
   document.getElementById('learning-body').scrollTop = 0;
@@ -3658,6 +3804,121 @@ function fmtTime(s) {
   s = Math.round(s);
   if (s < 60) return s + 's';
   return `${Math.floor(s/60)}m ${s%60}s`;
+}
+
+// =====================================================================
+// SOURCES / REFERENCES
+// =====================================================================
+const SOURCE_ICONS = {
+  book: '📖',
+  paper: '📄',
+  website: '🌐',
+  course: '🎓',
+  encyclopedia: '📕',
+};
+
+let _sourcesOpen = false;
+let _sourcesLoaded = false;   // per-slide flag
+let _sourcesLoading = false;
+
+function resetSources() {
+  _sourcesOpen = false;
+  _sourcesLoaded = false;
+  _sourcesLoading = false;
+
+  const section = document.getElementById('sources-section');
+  const body    = document.getElementById('sources-body');
+  const icon    = document.getElementById('sources-toggle-icon');
+  if (!section) return;
+
+  section.style.display = 'block';
+  body.innerHTML = '';
+  body.classList.remove('open');
+  icon.classList.remove('open');
+}
+
+function toggleSources() {
+  _sourcesOpen = !_sourcesOpen;
+
+  const body = document.getElementById('sources-body');
+  const icon = document.getElementById('sources-toggle-icon');
+
+  if (_sourcesOpen) {
+    body.classList.add('open');
+    icon.classList.add('open');
+    if (!_sourcesLoaded && !_sourcesLoading) {
+      fetchSources();
+    }
+  } else {
+    body.classList.remove('open');
+    icon.classList.remove('open');
+  }
+}
+
+async function fetchSources() {
+  if (_sourcesLoading) return;
+  _sourcesLoading = true;
+
+  const body = document.getElementById('sources-body');
+  body.innerHTML = `
+    <div class="sources-loading">
+      <div class="loading-ring" style="width:22px;height:22px;border-width:2px;flex-shrink:0;"></div>
+      Finding credible sources…
+    </div>`;
+
+  try {
+    const res = await fetch('/sources', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Failed to load sources.');
+
+    renderSources(data.sources || []);
+    _sourcesLoaded = true;
+
+  } catch (err) {
+    body.innerHTML = `<div class="sources-error">⚠ ${escHtml(err.message)}
+      <br><button class="btn-load-sources" style="margin-top:.5rem;" onclick="fetchSources()">Retry</button>
+    </div>`;
+  } finally {
+    _sourcesLoading = false;
+  }
+}
+
+function renderSources(sources) {
+  const body = document.getElementById('sources-body');
+
+  if (!sources || sources.length === 0) {
+    body.innerHTML = `<div class="sources-error">No sources found for this slide.</div>`;
+    return;
+  }
+
+  const items = sources.map((s, i) => {
+    const icon = SOURCE_ICONS[s.type] || '🔗';
+    const typeClass = (s.type || 'website').replace(/\s+/g, '');
+    const badge = `<span class="source-type-badge ${typeClass}">${escHtml(s.type || 'source')}</span>`;
+
+    const titleHtml = s.url_hint
+      ? `<a href="${escHtml(s.url_hint)}" target="_blank" rel="noopener noreferrer">${escHtml(s.title)}</a>`
+      : escHtml(s.title);
+
+    const meta = [s.authors, s.year].filter(Boolean).join(' · ');
+
+    return `
+      <div class="source-item" style="animation-delay:${i * 0.06}s">
+        <div class="source-icon">${icon}</div>
+        <div class="source-content">
+          <div class="source-title">${titleHtml}${badge}</div>
+          ${meta ? `<div class="source-meta">${escHtml(meta)}</div>` : ''}
+          ${s.description ? `<div class="source-desc">${escHtml(s.description)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  body.innerHTML = items;
 }
 
 // =====================================================================
