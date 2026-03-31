@@ -3824,6 +3824,8 @@ let _sourcesLoading = false;
 function resetSources() {
   _sourcesOpen = false;
   _sourcesLoaded = false;
+  // Bug 3 fix: explicitly clear loading flag so a stale in-flight request
+  // from the previous slide doesn't block fetching on the new slide.
   _sourcesLoading = false;
 
   const section = document.getElementById('sources-section');
@@ -3857,6 +3859,14 @@ function toggleSources() {
 
 async function fetchSources() {
   if (_sourcesLoading) return;
+
+  // Bug 1 fix: guard against missing sessionId before any network call
+  if (!state.sessionId) {
+    const body = document.getElementById('sources-body');
+    body.innerHTML = `<div class="sources-error">⚠ No active session. Please generate slides first.</div>`;
+    return;
+  }
+
   _sourcesLoading = true;
 
   const body = document.getElementById('sources-body');
@@ -3892,7 +3902,10 @@ function renderSources(sources) {
   const body = document.getElementById('sources-body');
 
   if (!sources || sources.length === 0) {
-    body.innerHTML = `<div class="sources-error">No sources found for this slide.</div>`;
+    // Bug 2 fix: include retry button just like failed fetches do
+    body.innerHTML = `<div class="sources-error">No sources found for this slide.
+      <br><button class="btn-load-sources" style="margin-top:.5rem;" onclick="_sourcesLoaded=false;fetchSources()">Try Again</button>
+    </div>`;
     return;
   }
 

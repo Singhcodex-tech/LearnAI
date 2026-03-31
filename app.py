@@ -1514,7 +1514,7 @@ def sources():
 
     result = generate_sources_for_slide(slides[slide_index], session["topic"])
     if not result:
-        return jsonify({"error": "Failed to generate sources. Please try again."}), 500
+        return jsonify({"error": "The AI could not generate sources for this slide. Please try again."}), 500
 
     if "sources_cache" not in session:
         session["sources_cache"] = {}
