@@ -456,75 +456,95 @@ def validate_slides(slides: list) -> list:
     return validated
 
 
-def build_local_fallback_slides(topic: str, explanation_mode: str = "in_depth") -> list:
+def _expand_short_points_with_api(slides: list, min_words: int = 50) -> list:
     """
-    Deterministic local fallback when the LLM output is unavailable or malformed.
+    API-only expansion pass: if in-depth points are too short, ask the model
+    to rewrite only those points to at least `min_words`.
     """
-    topic_clean = topic.strip() or "this topic"
-    count = 6 if explanation_mode == "in_depth" else 8
+    short_exists = False
+    for s in slides:
+        for p in s.get("points", []):
+            if isinstance(p, dict) and len(str(p.get("text", "")).split()) < min_words:
+                short_exists = True
+                break
+        if short_exists:
+            break
+    if not short_exists:
+        return slides
 
-    if explanation_mode == "in_depth":
-        base_points = [
-            (
-                f"{topic_clean} is easiest to master when you begin with precise definitions, assumptions, and boundaries, "
-                f"because confusion usually appears when similar terms are treated as interchangeable. "
-                f"Building this foundation gives you a stable framework for interpreting advanced material and applying ideas correctly in unfamiliar scenarios."
-            ),
-            (
-                f"A useful way to understand {topic_clean} is to break the core mechanism into sequential stages, "
-                f"then track what changes at each stage and why those changes matter. "
-                f"This process-oriented view improves explanation quality, helps with troubleshooting, and supports transfer of knowledge to real problems."
-            ),
-            (
-                f"Practical evaluation in {topic_clean} should compare multiple approaches against shared criteria such as performance, cost, complexity, reliability, "
-                f"and interpretability. Structured comparison exposes trade-offs that single-metric thinking hides, allowing decisions that better fit context and constraints."
-            ),
-            (
-                f"Real applications of {topic_clean} become clearer when you anchor theory to concrete examples with explicit inputs, assumptions, and measurable outcomes. "
-                f"This approach turns abstract concepts into actionable reasoning and helps you identify where adaptation is needed when real-world data is noisy or incomplete."
-            ),
-            (
-                f"Advanced proficiency in {topic_clean} requires studying edge cases, limitations, and failure modes instead of relying only on idealized examples. "
-                f"By stress-testing concepts under uncertainty, you gain better judgment about robustness, avoid overconfidence, and improve your ability to choose safer strategies."
-            ),
-        ]
-    else:
-        base_points = [
-            f"{topic_clean} starts with clear definitions, key terms, and core assumptions so the rest of the topic is easier to follow.",
-            f"The main mechanism in {topic_clean} can be understood by following a simple step-by-step flow from input to outcome.",
-            f"Comparing common approaches in {topic_clean} helps you see trade-offs in speed, accuracy, and ease of use.",
-            f"Real-world examples make {topic_clean} practical by connecting abstract ideas to familiar situations and decisions.",
-            f"Reviewing common mistakes in {topic_clean} helps you avoid errors and improve long-term understanding.",
-        ]
+    prompt = f"""
+You are editing slide JSON.
+Expand only short point texts so each point has at least {min_words} words.
+Keep meaning intact. Keep title, source_title, source_url, and any math fields.
+Return ONLY valid JSON array, no prose.
 
-    slides = []
-    for i in range(count):
-        slides.append({
-            "title": f"{topic_clean}: Core Concept {i + 1}",
-            "points": [
-                {"text": p, "source_title": "Fallback content (local generator)", "source_url": ""}
-                for p in base_points
-            ],
-        })
-    return slides
+Input slides:
+{json.dumps(slides, ensure_ascii=False)}
+"""
+    raw = _call_groq(prompt, max_tokens=3200, system="Return valid JSON only.")
+    if not raw:
+        return slides
+    raw = strip_markdown_fences(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        arr = extract_json_array(raw)
+        if not arr:
+            return slides
+        try:
+            data = json.loads(arr)
+        except json.JSONDecodeError:
+            return slides
+    if isinstance(data, dict):
+        data = data.get("slides") or data.get("data") or []
+    if not isinstance(data, list):
+        return slides
+    fixed = validate_slides(data)
+    return fixed or slides
 
 
-def _ensure_min_words_per_point(slides: list, min_words: int = 50) -> list:
-    """Pad short point text so each bullet reaches the minimum word count."""
-    suffix = (
-        " This additional clarification expands the idea with context, constraints, and practical interpretation so the concept remains precise, useful, and easier to apply in real situations."
-    )
-    for slide in slides:
-        for p in slide.get("points", []):
-            if not isinstance(p, dict):
-                continue
-            text = str(p.get("text", "")).strip()
-            if not text:
-                continue
-            while len(text.split()) < min_words:
-                text += suffix
-            p["text"] = text
-    return slides
+def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
+    """
+    API-only rescue generation with simpler constraints to maximize reliability.
+    """
+    min_words = 50 if explanation_mode == "in_depth" else 12
+    prompt = f"""
+You are an expert lecturer. Return ONLY valid JSON array.
+Topic: {topic}
+
+Generate exactly 5 slides.
+Each slide must have exactly 3 points.
+Each point must be an object with keys: text, source_title, source_url.
+In in-depth mode, each text must be at least {min_words} words.
+Use real credible sources.
+No markdown fences. No text outside JSON.
+"""
+    raw = _call_groq(prompt, max_tokens=3600, use_fallback=True)
+    if not raw:
+        return []
+    raw = strip_markdown_fences(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        arr = extract_json_array(raw)
+        if not arr:
+            repaired = _repair_slides_json(raw, math_topic=is_math_topic(topic))
+            if not repaired:
+                return []
+            data = repaired
+        else:
+            try:
+                data = json.loads(arr)
+            except json.JSONDecodeError:
+                repaired = _repair_slides_json(raw, math_topic=is_math_topic(topic))
+                if not repaired:
+                    return []
+                data = repaired
+    if isinstance(data, dict):
+        data = data.get("slides") or data.get("data") or []
+    if not isinstance(data, list):
+        return []
+    return validate_slides(data)
 
 
 # ---------------------------------------------------------------------------
@@ -775,8 +795,8 @@ STRICT RULES:
             repaired_valid = validate_slides(repaired_slides)
             if repaired_valid:
                 result = repaired_valid
-    if explanation_mode == "in_depth":
-        result = _ensure_min_words_per_point(result, min_words=50)
+    if explanation_mode == "in_depth" and result:
+        result = _expand_short_points_with_api(result, min_words=50)
     return result
 
 
@@ -1378,6 +1398,9 @@ def generate():
         print(f"[/generate] Attempt {attempt + 1}/3 failed for topic='{topic}'. Retrying...")
         time.sleep(0.8 * (attempt + 1))
     if not slides:
+        print(f"[/generate] Standard generation failed for topic='{topic}'. Trying rescue generation.")
+        slides = generate_slides_rescue(topic, explanation_mode=explanation_mode)
+    if not slides:
         print(f"[/generate] No slides produced for topic='{topic}' after retries.")
         return jsonify({
             "error": "Slide generation failed after retries. Please try once more."
@@ -1829,7 +1852,39 @@ def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
             run.font.color.rgb = color
         return tb
 
-    total = len(slides_data)
+    # Expand long slides into continuation parts so full sentences fit in PPT.
+    expanded_slides = []
+    for s in slides_data:
+        pts = s.get("points", []) if isinstance(s, dict) else []
+        if not isinstance(pts, list):
+            pts = []
+        point_texts = [
+            str(p.get("text", "") if isinstance(p, dict) else p).strip()
+            for p in pts
+            if str(p.get("text", "") if isinstance(p, dict) else p).strip()
+        ]
+        max_len = max((len(t) for t in point_texts), default=0)
+        if max_len > 420:
+            chunk_size = 2
+        elif max_len > 260:
+            chunk_size = 3
+        elif max_len > 170:
+            chunk_size = 4
+        else:
+            chunk_size = 5
+        if not pts:
+            expanded_slides.append({**s, "_ppt_points": [], "_ppt_part": 1, "_ppt_parts": 1})
+            continue
+        total_parts = (len(pts) + chunk_size - 1) // chunk_size
+        for i in range(0, len(pts), chunk_size):
+            expanded_slides.append({
+                **s,
+                "_ppt_points": pts[i:i + chunk_size],
+                "_ppt_part": (i // chunk_size) + 1,
+                "_ppt_parts": total_parts,
+            })
+
+    total = len(expanded_slides)
 
     # ════════════════════════════════════════════════════════════
     # SLIDE 0 — TITLE SLIDE
@@ -1924,12 +1979,16 @@ def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
     # ════════════════════════════════════════════════════════════
     # CONTENT SLIDES
     # ════════════════════════════════════════════════════════════
-    for idx, sdata in enumerate(slides_data):
+    for idx, sdata in enumerate(expanded_slides):
         sl = prs.slides.add_slide(blank)
         set_bg(sl, C_BG)
 
-        title_txt  = str(sdata.get('title', f'Slide {idx + 1}')).strip()
-        points_raw = sdata.get('points', [])
+        title_txt = str(sdata.get('title', f'Slide {idx + 1}')).strip()
+        part = int(sdata.get("_ppt_part", 1))
+        parts = int(sdata.get("_ppt_parts", 1))
+        if parts > 1:
+            title_txt = f"{title_txt} (Part {part}/{parts})"
+        points_raw = sdata.get('_ppt_points', sdata.get('points', []))
         n_pts = min(len(points_raw), 5)
 
         # ── Top header band ───────────────────────────────────────
@@ -1965,7 +2024,7 @@ def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
         rect(sl, Inches(0.1), HEADER_H, W - Inches(0.1), Inches(0.025), C_BORDER)
 
         # ── Slide title ──────────────────────────────────────────
-        title_disp = title_txt if len(title_txt) <= 80 else title_txt[:78] + '…'
+        title_disp = title_txt
         tb = sl.shapes.add_textbox(Inches(0.3), Inches(1.55), W - Inches(2.2), Inches(0.95))
         tf = tb.text_frame
         tf.word_wrap = True
@@ -2038,8 +2097,8 @@ def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
                     font='Courier New', size=9, bold=True, color=C_BG,
                     align=PP_ALIGN.CENTER)
 
-            # Point text
-            pt_disp = pt_text if len(pt_text) <= 220 else pt_text[:218] + '…'
+            # Point text (full sentence; no truncation)
+            pt_disp = pt_text
             tb2 = sl.shapes.add_textbox(Inches(0.82), by + Inches(0.08),
                                          content_w - Inches(1.1), bullet_h - Inches(0.14))
             tf2 = tb2.text_frame
@@ -2048,7 +2107,15 @@ def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
             run2 = p2.add_run()
             run2.text = pt_disp
             run2.font.name  = 'Calibri'
-            run2.font.size  = Pt(font_size)
+            text_len = len(pt_disp)
+            adj_size = font_size
+            if text_len > 420:
+                adj_size = max(8, font_size - 3)
+            elif text_len > 260:
+                adj_size = max(9, font_size - 2)
+            elif text_len > 170:
+                adj_size = max(10, font_size - 1)
+            run2.font.size = Pt(adj_size)
             run2.font.color.rgb = C_BODY
 
         # ── Bottom bar ────────────────────────────────────────────
