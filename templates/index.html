@@ -3860,16 +3860,17 @@ function toggleSources() {
 async function fetchSources() {
   if (_sourcesLoading) return;
 
+  // Single body reference used throughout the entire function
+  const body = document.getElementById('sources-body');
+
   // Bug 1 fix: guard against missing sessionId before any network call
   if (!state.sessionId) {
-    const body = document.getElementById('sources-body');
     body.innerHTML = `<div class="sources-error">⚠ No active session. Please generate slides first.</div>`;
     return;
   }
 
   _sourcesLoading = true;
 
-  const body = document.getElementById('sources-body');
   body.innerHTML = `
     <div class="sources-loading">
       <div class="loading-ring" style="width:22px;height:22px;border-width:2px;flex-shrink:0;"></div>
