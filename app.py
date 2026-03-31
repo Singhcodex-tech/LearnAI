@@ -580,6 +580,7 @@ def generate_slides(
     topic: str,
     learner_profile: dict | None = None,
     explanation_mode: str = "in_depth",
+    compact_mode: bool = False,
     retry: bool = False,
 ) -> list:
     explanation_mode = str(explanation_mode or "in_depth").strip().lower()
@@ -599,6 +600,15 @@ def generate_slides(
         )
         point_length_rule_math = "- EVERY point text must be detailed and at least 50 words"
         point_length_rule_non_math = "- EVERY bullet point must be detailed and at least 50 words"
+
+    # Compact mode intentionally asks for smaller payloads to reduce API truncation/timeouts.
+    if compact_mode:
+        if explanation_mode == "in_depth":
+            point_length_rule_math = "- EVERY point text must be detailed and at least 30 words"
+            point_length_rule_non_math = "- EVERY bullet point must be detailed and at least 30 words"
+        compact_note = "\nNOTE: COMPACT MODE is enabled. Keep output concise and manageable to avoid truncation."
+    else:
+        compact_note = ""
 
     difficulty_hint = ""
     if learner_profile:
@@ -623,7 +633,7 @@ def generate_slides(
         prompt = (
             "You are an expert mathematics professor and textbook author creating rigorous, deeply detailed, exam-quality slides.\n\n"
             "Topic: %s\n"
-            "%s%s\n\n"
+            "%s%s%s\n\n"
             "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
             "CRITICAL: Every bullet point must carry its OWN inline equation, detailed explanation, and sub-steps.\n\n"
             "Required JSON structure for EVERY slide:\n"
@@ -658,8 +668,8 @@ def generate_slides(
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate exactly 6 slides covering the topic from foundations to advanced applications\n"
-            "- Each slide: exactly 4 points\n"
+            "- Generate exactly %d slides covering the topic from foundations to advanced applications\n"
+            "- Each slide: exactly %d points\n"
             "%s\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
             "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
@@ -670,13 +680,21 @@ def generate_slides(
             "- Do NOT repeat the same formula or example across slides\n"
             "- Do NOT output anything outside the JSON array\n"
             "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
-        ) % (topic, difficulty_hint, depth_note, point_length_rule_math)
+        ) % (
+            topic,
+            difficulty_hint,
+            depth_note,
+            compact_note,
+            (4 if compact_mode else 6),
+            (3 if compact_mode else 4),
+            point_length_rule_math
+        )
     else:
         prompt = f"""
 You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
 
 Topic: {topic}
-{difficulty_hint}{depth_note}
+{difficulty_hint}{depth_note}{compact_note}
 
 Return ONLY a valid JSON array. No extra text.
 
@@ -700,8 +718,8 @@ Format:
 ]
 
 STRICT RULES:
-- Generate exactly 8 slides covering the topic thoroughly from fundamentals to advanced aspects
-- Each slide must have exactly 5 bullet points
+- Generate exactly {6 if compact_mode else 8} slides covering the topic thoroughly from fundamentals to advanced aspects
+- Each slide must have exactly {4 if compact_mode else 5} bullet points
 {point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
 - EVERY point must explain the concept clearly, including the "what" and briefly the "why"
@@ -719,8 +737,11 @@ STRICT RULES:
 - Do NOT output anything outside JSON
 """
 
-    # Larger token budget is needed when points are long (>=50 words).
-    max_tok = 5200 if not retry else 6500
+    # In compact mode keep payload smaller for reliability.
+    if compact_mode:
+        max_tok = 3000 if not retry else 3600
+    else:
+        max_tok = 5200 if not retry else 6500
     raw_text = _call_groq(prompt, max_tokens=max_tok)
     if not raw_text:
         print("generate_slides: _call_groq returned None — API call failed.")
@@ -729,6 +750,7 @@ STRICT RULES:
                 topic,
                 learner_profile=learner_profile,
                 explanation_mode=explanation_mode,
+                compact_mode=compact_mode,
                 retry=True,
             )
         return []
@@ -756,6 +778,7 @@ STRICT RULES:
                         topic,
                         learner_profile=learner_profile,
                         explanation_mode=explanation_mode,
+                        compact_mode=compact_mode,
                         retry=True,
                     )
                 return []
@@ -768,6 +791,7 @@ STRICT RULES:
                         topic,
                         learner_profile=learner_profile,
                         explanation_mode=explanation_mode,
+                        compact_mode=compact_mode,
                         retry=True,
                     )
                 return []
@@ -786,6 +810,7 @@ STRICT RULES:
             topic,
             learner_profile=learner_profile,
             explanation_mode=explanation_mode,
+            compact_mode=compact_mode,
             retry=True,
         )
     if len(result) < 2 and raw_text:
@@ -1392,11 +1417,20 @@ def generate():
 
     slides = []
     for attempt in range(3):
-        slides = generate_slides(topic, explanation_mode=explanation_mode)
+        slides = generate_slides(topic, explanation_mode=explanation_mode, compact_mode=False)
         if slides:
             break
         print(f"[/generate] Attempt {attempt + 1}/3 failed for topic='{topic}'. Retrying...")
-        time.sleep(0.8 * (attempt + 1))
+        time.sleep(1.2 * (attempt + 1))
+    # If normal-size generation still fails, automatically switch to compact payload.
+    if not slides:
+        print(f"[/generate] Switching to compact generation for topic='{topic}'.")
+        for attempt in range(3):
+            slides = generate_slides(topic, explanation_mode=explanation_mode, compact_mode=True)
+            if slides:
+                break
+            print(f"[/generate] Compact attempt {attempt + 1}/3 failed for topic='{topic}'. Retrying...")
+            time.sleep(1.5 * (attempt + 1))
     if not slides:
         print(f"[/generate] Standard generation failed for topic='{topic}'. Trying rescue generation.")
         slides = generate_slides_rescue(topic, explanation_mode=explanation_mode)
