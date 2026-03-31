@@ -260,25 +260,46 @@
 
     /* --- Top HUD --- */
     .hud {
-      display: flex; align-items: center; gap: 1rem;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
       padding: 1rem 1.5rem;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
       flex-shrink: 0;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+    }
+    .hud-left {
+      display: flex;
+      flex-direction: column;
+      gap: .7rem;
+      min-width: 0;
+      flex: 1 1 auto;
     }
 
     .hud-topic {
       font-family: 'DM Serif Display', serif;
       font-size: 1rem;
       color: var(--gold);
-      flex: 1;
+      flex: 0 1 auto;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
+    .hud-controls {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      flex-wrap: wrap;
+    }
+
     .hud-right {
-      display: flex; align-items: center; gap: 1rem;
-      flex-shrink: 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      width: 330px;
+      max-width: 100%;
+      flex: 0 0 330px;
     }
 
     .slide-counter {
@@ -311,6 +332,7 @@
       padding: .45rem;
       transition: border-color .2s, box-shadow .2s;
       flex-shrink: 0;
+      width: 100%;
     }
     .hud-search-top {
       display: flex;
@@ -330,7 +352,7 @@
       font-family: 'Syne', sans-serif;
       font-size: .82rem;
       font-weight: 500;
-      width: 210px;
+      width: 100%;
       min-width: 0;
       flex: 1;
     }
@@ -371,10 +393,9 @@
 
     /* collapse input on very small screens */
     @media (max-width: 600px) {
-      .hud-search-input { width: 130px; font-size: .75rem; }
+      .hud-search-input { font-size: .75rem; }
     }
     @media (max-width: 420px) {
-      .hud-search-input { width: 95px; }
       .hud-explain-select { font-size: .62rem; padding: 0 .35rem; }
     }
 
@@ -1490,8 +1511,9 @@
       .hud-left,
       .hud-right {
         width: 100%;
-        justify-content: space-between;
+        flex: 1 1 100%;
       }
+      .hud-right { justify-content: stretch; }
       .hud-search-form {
         flex: 1 1 auto;
         min-width: 0;
@@ -1537,6 +1559,7 @@
         align-items: stretch;
       }
       .summary-panel-header { gap: .6rem; align-items: flex-start; flex-direction: column; }
+      .hud-controls { gap: .5rem; }
     }
     /* ===================== PPT EXPORT ===================== */
     .btn-export-ppt {
@@ -1975,7 +1998,22 @@
 
   <!-- HUD -->
   <div class="hud">
-    <div class="hud-topic" id="hud-topic">Topic</div>
+    <div class="hud-left">
+      <div class="hud-topic" id="hud-topic">Topic</div>
+      <div class="hud-controls">
+        <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
+        <div class="slide-counter" id="slide-counter">1 / 10</div>
+        <button class="slide-nav-btn" id="btn-next" onclick="navNext()" title="Next slide (→)">&#8594;</button>
+        <div class="xp-bar-wrap" id="xp-bar-wrap" title="XP &amp; Streak">
+          <span class="xp-label" id="xp-display">⚡ 0 XP</span>
+          <span class="xp-streak" id="streak-display"></span>
+        </div>
+        <button class="hud-ppt-btn" id="hud-ppt-btn" onclick="openPptModal()" title="Export slides as PowerPoint">
+          🎞️ PPT
+        </button>
+        <div class="timer-badge" id="timer-badge">⏱ 0s</div>
+      </div>
+    </div>
     <div class="hud-right">
       <!-- Inline new-topic search -->
       <div class="hud-search-form" id="hud-search-form">
@@ -1995,17 +2033,6 @@
           <option value="in_depth" selected>In-depth</option>
         </select>
       </div>
-      <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
-      <div class="slide-counter" id="slide-counter">1 / 10</div>
-      <button class="slide-nav-btn" id="btn-next" onclick="navNext()" title="Next slide (→)">&#8594;</button>
-      <div class="xp-bar-wrap" id="xp-bar-wrap" title="XP &amp; Streak">
-        <span class="xp-label" id="xp-display">⚡ 0 XP</span>
-        <span class="xp-streak" id="streak-display"></span>
-      </div>
-      <button class="hud-ppt-btn" id="hud-ppt-btn" onclick="openPptModal()" title="Export slides as PowerPoint">
-        🎞️ PPT
-      </button>
-      <div class="timer-badge" id="timer-badge">⏱ 0s</div>
     </div>
   </div>
 
