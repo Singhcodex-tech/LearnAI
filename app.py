@@ -40,6 +40,7 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "llama-3.3-70b-versatile"       # primary model — best quality
 FALLBACK_MODEL = "llama-3.1-8b-instant"      # fallback if primary fails / rate-limited
 MAX_TOPIC_LENGTH = 200
+LAST_GROQ_CALL_AT = 0.0
 
 # ---------------------------------------------------------------------------
 # XP / Gamification constants
@@ -159,6 +160,7 @@ def _call_groq(
     - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
     Returns raw text or None on error.
     """
+    global LAST_GROQ_CALL_AT
     model = FALLBACK_MODEL if use_fallback else MODEL_NAME
     messages = []
     if system:
@@ -166,6 +168,13 @@ def _call_groq(
     messages.append({"role": "user", "content": prompt})
 
     try:
+        # Throttle outbound LLM calls to reduce 429 bursts across endpoints.
+        now = time.time()
+        elapsed = now - LAST_GROQ_CALL_AT
+        min_gap = 0.9
+        if elapsed < min_gap:
+            time.sleep(min_gap - elapsed)
+
         response = requests.post(
             GROQ_URL,
             headers={
@@ -175,16 +184,22 @@ def _call_groq(
             json={
                 "model": model,
                 "messages": messages,
-                "temperature": 0.3,
+                "temperature": 0.2,
                 "max_tokens": max_tokens,
             },
             timeout=45,   # increased from 30 — 70B is slower
         )
+        LAST_GROQ_CALL_AT = time.time()
 
         # Rate-limit or server error → retry with fallback
         if response.status_code in (429, 503) and not use_fallback:
             print(f"Groq {response.status_code} on {model} — retrying with fallback model.")
+            time.sleep(1.2)
             return _call_groq(prompt, max_tokens, system, use_fallback=True)
+        if response.status_code in (429, 503) and use_fallback:
+            print(f"Groq {response.status_code} on fallback model — backing off once.")
+            time.sleep(2.0)
+            return None
 
         if response.status_code == 401:
             print("ERROR: Groq API key is invalid or missing (401 Unauthorized). "
@@ -1201,80 +1216,31 @@ def generate_visual_for_slide(slide: dict, retry: bool = False) -> dict | None:
     Decide the best visual type for a slide and return structured data
     that the frontend can render as an SVG/HTML diagram.
     """
-    prompt = f"""You are a visual-learning engine. Given a slide, choose the BEST diagram type and return ONLY a valid JSON object — no prose, no markdown fences.
+    prompt = f"""Return ONLY valid JSON object (no markdown).
+Create one educational diagram for this slide.
 
 Slide title: {slide['title']}
-Slide content:
-{json.dumps(slide['points'], indent=2)}
+Slide points:
+{json.dumps(slide.get('points', [])[:4], ensure_ascii=False)}
 
-Choose ONE type from: flowchart, cycle, comparison, timeline, pyramid, mindmap.
+Use one type from: flowchart, cycle, comparison, timeline, pyramid, mindmap.
+Keep structure compact (4 to 6 elements).
 
-Guidelines:
-- flowchart   → sequential steps / cause-effect / process with decisions
-- cycle       → repeating loop (water cycle, cell cycle, feedback loop)
-- comparison  → two or more things being contrasted
-- timeline    → events ordered by date / historical sequence
-- pyramid     → hierarchical importance (Maslow, OSI layers, taxonomies)
-- mindmap     → broad topic with multiple independent sub-branches
-
-Return this exact JSON shape (fill in for your chosen type, omit unused keys):
-
+Output format:
 {{
-  "type": "<chosen_type>",
-  "title": "<short diagram title, max 8 words>",
+  "type": "mindmap",
+  "title": "Short title",
   "data": {{
-
-    // --- flowchart ---
-    "nodes": [
-      {{"id": "n1", "label": "max 4 words", "sub": "optional 1 line", "type": "start|step|decision|end"}}
-    ],
-    "edges": [
-      {{"from": "n1", "to": "n2", "label": ""}}
-    ],
-
-    // --- cycle ---
-    "steps": [
-      {{"label": "Step name", "sub": "one-line detail"}}
-    ],
-
-    // --- comparison ---
-    "headers": ["Name A", "Name B"],
-    "items": [
-      {{"label": "Criterion", "a": "value for A", "b": "value for B"}}
-    ],
-
-    // --- timeline ---
-    "events": [
-      {{"year": "1900", "label": "Event name", "sub": "brief detail"}}
-    ],
-
-    // --- pyramid ---
-    "levels": [
-      {{"label": "Top level", "sub": "detail", "width_pct": 30}},
-      {{"label": "Mid level", "sub": "detail", "width_pct": 60}},
-      {{"label": "Base level", "sub": "detail", "width_pct": 90}}
-    ],
-
-    // --- mindmap ---
-    "center": "Central concept",
+    "center": "Main idea",
     "branches": [
-      {{"label": "Branch", "items": ["item1", "item2"]}}
+      {{"label": "Branch label", "items": ["item one", "item two"]}}
     ]
   }}
 }}
-
-STRICT RULES:
-- Return ONLY the JSON object. Absolutely no text outside it.
-- 5 to 8 nodes/steps/events/levels/branches maximum.
-- Labels: write COMPLETE, MEANINGFUL phrases — do NOT truncate or abbreviate. Use 3 to 8 words per label.
-- Sub-labels: write FULL explanatory phrases, 5 to 12 words. Every word matters — do not cut short.
-- flowchart must have exactly one "start" and one "end" node.
-- cycle must have 4 to 7 steps.
-- comparison must have 2 headers and 4 to 6 items.
-- mindmap: write complete branch labels (3-6 words) and complete sub-items (4-8 words each).
+If you choose another type, keep the same top-level keys and valid data for that type.
 """
 
-    raw = _call_groq(prompt, max_tokens=1200)
+    raw = _call_groq(prompt, max_tokens=650, use_fallback=True)
     if not raw:
         return None
 
@@ -1301,6 +1267,43 @@ STRICT RULES:
         return None
 
     return data
+
+
+def build_fallback_visual(slide: dict) -> dict:
+    """
+    Deterministic fallback visual so frontend always receives a renderable diagram.
+    """
+    title = str(slide.get("title", "Slide Concept")).strip() or "Slide Concept"
+    raw_points = slide.get("points", [])
+    texts = []
+    for p in raw_points:
+        t = str(p.get("text", "") if isinstance(p, dict) else p).strip()
+        if t:
+            texts.append(t)
+    if not texts:
+        texts = [title]
+
+    branches = []
+    for i, t in enumerate(texts[:5]):
+        words = t.split()
+        label = " ".join(words[:4]) or f"Idea {i + 1}"
+        items = []
+        if len(words) > 4:
+            items.append(" ".join(words[4:10]))
+        if len(words) > 10:
+            items.append(" ".join(words[10:16]))
+        if not items:
+            items = ["Key point from this slide", "Related concept to review"]
+        branches.append({"label": label[:48], "items": [it[:72] for it in items[:2]]})
+
+    return {
+        "type": "mindmap",
+        "title": title[:48],
+        "data": {
+            "center": title[:48],
+            "branches": branches[:5],
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1674,7 +1677,10 @@ def visual():
 
     result = generate_visual_for_slide(slides[slide_index])
     if not result:
-        return jsonify({"error": "Failed to generate visual. Please try again."}), 500
+        time.sleep(0.8)
+        result = generate_visual_for_slide(slides[slide_index], retry=True)
+    if not result:
+        result = build_fallback_visual(slides[slide_index])
 
     session["visual_cache"][cache_key] = result
     return jsonify({"visual": result})
