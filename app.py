@@ -528,12 +528,6 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
     else:
         min_w, max_w = 45, 55
 
-    filler = (
-        " This gives practical context and improves clarity for real-world understanding."
-        if explanation_mode == "brief"
-        else " This adds deeper context, clarifies assumptions, and explains practical implications in realistic situations."
-    )
-
     for slide in slides:
         for p in slide.get("points", []):
             if not isinstance(p, dict):
@@ -547,14 +541,6 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
                 text = " ".join(words[:max_w]).rstrip(" ,;:-")
                 if text and text[-1] not in ".!?":
                     text += "."
-            while len(text.split()) < min_w:
-                text += filler
-                words2 = text.split()
-                if len(words2) > max_w:
-                    text = " ".join(words2[:max_w]).rstrip(" ,;:-")
-                    if text and text[-1] not in ".!?":
-                        text += "."
-                    break
             p["text"] = text
     return slides
 
