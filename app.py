@@ -1419,12 +1419,14 @@ def home():
 
 
 @app.route("/health")
+@app.route("/health.php")
 def health():
     """Simple health check for deployment monitoring."""
     return jsonify({"status": "ok", "model": MODEL_NAME, "sessions": len(sessions)})
 
 
 @app.route("/generate", methods=["POST"])
+@app.route("/generate.php", methods=["POST"])
 @limiter.limit("10 per minute")
 def generate():
     """
@@ -1490,6 +1492,7 @@ def generate():
 
 
 @app.route("/quiz", methods=["POST"])
+@app.route("/quiz.php", methods=["POST"])
 @limiter.limit("20 per minute")
 def quiz():
     """
@@ -1527,6 +1530,7 @@ def quiz():
 
 
 @app.route("/feedback", methods=["POST"])
+@app.route("/feedback.php", methods=["POST"])
 @limiter.limit("30 per minute")
 def feedback():
     """
@@ -1583,6 +1587,7 @@ def feedback():
 
 
 @app.route("/reteach", methods=["POST"])
+@app.route("/reteach.php", methods=["POST"])
 @limiter.limit("10 per minute")
 def reteach():
     """
@@ -1612,8 +1617,7 @@ def reteach():
     return jsonify({"slide": simplified})
 
 
-@app.route("/stats/<session_id>", methods=["GET"])
-def stats(session_id):
+def _stats_payload(session_id: str):
     """
     Return full session analytics.
     Returns: { "topic", "total_slides", "completed_slides", "profile", "performance" }
@@ -1634,7 +1638,21 @@ def stats(session_id):
     })
 
 
+@app.route("/stats/<session_id>", methods=["GET"])
+def stats(session_id):
+    return _stats_payload(session_id)
+
+
+@app.route("/stats.php", methods=["GET"])
+def stats_php():
+    session_id = str(request.args.get("session_id", "")).strip()
+    if not session_id:
+        return jsonify({"error": "Missing session_id"}), 400
+    return _stats_payload(session_id)
+
+
 @app.route("/visual", methods=["POST"])
+@app.route("/visual.php", methods=["POST"])
 @limiter.limit("15 per minute")
 def visual():
     """
@@ -1677,6 +1695,7 @@ def visual():
 # ---------------------------------------------------------------------------
 
 @app.route("/chat", methods=["POST"])
+@app.route("/chat.php", methods=["POST"])
 @limiter.limit("20 per minute")
 def chat():
     """
@@ -1723,6 +1742,7 @@ def chat():
 # ---------------------------------------------------------------------------
 
 @app.route("/summary", methods=["POST"])
+@app.route("/summary.php", methods=["POST"])
 @limiter.limit("5 per minute")
 def summary():
     """
@@ -1751,6 +1771,7 @@ def summary():
 # ---------------------------------------------------------------------------
 
 @app.route("/note", methods=["POST"])
+@app.route("/note.php", methods=["POST"])
 @limiter.limit("30 per minute")
 def note():
     """
@@ -1789,6 +1810,7 @@ def note():
 # ---------------------------------------------------------------------------
 
 @app.route("/sources", methods=["POST"])
+@app.route("/sources.php", methods=["POST"])
 @limiter.limit("15 per minute")
 def sources():
     """
@@ -2247,6 +2269,7 @@ def build_pptx(topic: str, slides_data: list, theme: str = "dark"):
 
 
 @app.route("/generate_ppt", methods=["POST"])
+@app.route("/generate_ppt.php", methods=["POST"])
 @limiter.limit("5 per minute")
 def generate_ppt():
     """
