@@ -437,7 +437,30 @@ def is_math_topic(topic: str) -> bool:
 # Slide generation (original + adaptive)
 # ---------------------------------------------------------------------------
 
-def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool = False) -> list:
+def generate_slides(
+    topic: str,
+    learner_profile: dict | None = None,
+    explanation_mode: str = "in_depth",
+    retry: bool = False,
+) -> list:
+    explanation_mode = str(explanation_mode or "in_depth").strip().lower()
+    if explanation_mode not in {"brief", "in_depth"}:
+        explanation_mode = "in_depth"
+
+    if explanation_mode == "brief":
+        depth_note = (
+            "\nNOTE: Keep explanations brief and easy to scan. "
+            "Use concise wording and only essential detail."
+        )
+        point_length_rule_math = "- EVERY point text must be exactly 1 short clear sentence (about 12-20 words)"
+        point_length_rule_non_math = "- EVERY bullet point must be exactly 1 short clear sentence (about 12-20 words)"
+    else:
+        depth_note = (
+            "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
+        )
+        point_length_rule_math = "- EVERY point text must be 1-2 clear sentences — concise but informative"
+        point_length_rule_non_math = "- EVERY bullet point must be 1-2 clear sentences — concise but substantive, never a vague phrase"
+
     difficulty_hint = ""
     if learner_profile:
         hint = learner_profile.get("difficulty_hint", "normal")
@@ -461,7 +484,7 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
         prompt = (
             "You are an expert mathematics professor and textbook author creating rigorous, deeply detailed, exam-quality slides.\n\n"
             "Topic: %s\n"
-            "%s\n\n"
+            "%s%s\n\n"
             "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
             "CRITICAL: Every bullet point must carry its OWN inline equation, detailed explanation, and sub-steps.\n\n"
             "Required JSON structure for EVERY slide:\n"
@@ -498,7 +521,7 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "STRICT RULES:\n"
             "- Generate exactly 8 slides covering the topic from foundations to advanced applications\n"
             "- Each slide: exactly 4 points\n"
-            "- EVERY point text must be 1-2 clear sentences — concise but informative\n"
+            "%s\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
             "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
             "- sub_steps: exactly 4 steps, each a short clear string showing the key action and result\n"
@@ -508,13 +531,13 @@ def generate_slides(topic: str, learner_profile: dict | None = None, retry: bool
             "- Do NOT repeat the same formula or example across slides\n"
             "- Do NOT output anything outside the JSON array\n"
             "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
-        ) % (topic, difficulty_hint)
+        ) % (topic, difficulty_hint, depth_note, point_length_rule_math)
     else:
         prompt = f"""
 You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
 
 Topic: {topic}
-{difficulty_hint}
+{difficulty_hint}{depth_note}
 
 Return ONLY a valid JSON array. No extra text.
 
@@ -540,7 +563,7 @@ Format:
 STRICT RULES:
 - Generate exactly 12 slides covering the topic thoroughly from fundamentals to advanced aspects
 - Each slide must have exactly 5 bullet points
-- EVERY bullet point must be 1-2 clear sentences — concise but substantive, never a vague phrase
+{point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
 - EVERY point must explain the concept clearly, including the "what" and briefly the "why"
 - NO vague lines like "It is important", "Has many applications", "This is used in many fields"
@@ -584,14 +607,24 @@ STRICT RULES:
             else:
                 print("generate_slides: all extraction methods failed.")
                 if not retry:
-                    return generate_slides(topic, learner_profile, retry=True)
+                    return generate_slides(
+                        topic,
+                        learner_profile=learner_profile,
+                        explanation_mode=explanation_mode,
+                        retry=True,
+                    )
                 return []
         else:
             try:
                 slides = json.loads(json_part)
             except json.JSONDecodeError:
                 if not retry:
-                    return generate_slides(topic, learner_profile, retry=True)
+                    return generate_slides(
+                        topic,
+                        learner_profile=learner_profile,
+                        explanation_mode=explanation_mode,
+                        retry=True,
+                    )
                 return []
 
     if isinstance(slides, dict):
@@ -1178,7 +1211,7 @@ def health():
 def generate():
     """
     Start a new learning session.
-    Body: { "topic": "..." }
+    Body: { "topic": "...", "explanation_mode": "brief" | "in_depth" }
     Returns: { "session_id": "...", "slides": [...] }
     """
     _prune_sessions()
@@ -1187,12 +1220,15 @@ def generate():
         return jsonify({"error": "Invalid or missing JSON body"}), 400
 
     topic = str(data.get("topic", "")).strip()
+    explanation_mode = str(data.get("explanation_mode", "in_depth")).strip().lower()
     if not topic:
         return jsonify({"error": "No topic provided"}), 400
     if len(topic) > MAX_TOPIC_LENGTH:
         return jsonify({"error": f"Topic must be {MAX_TOPIC_LENGTH} characters or fewer"}), 400
+    if explanation_mode not in {"brief", "in_depth"}:
+        explanation_mode = "in_depth"
 
-    slides = generate_slides(topic)
+    slides = generate_slides(topic, explanation_mode=explanation_mode)
     if not slides:
         print(f"[/generate] No slides produced for topic='{topic}'. Check server logs above for the root cause.")
         return jsonify({
@@ -1210,11 +1246,12 @@ def generate():
         "visual_cache": {},    # { slide_index_str: visual_dict }
         "sources_cache": {},   # { slide_index_str: [sources] }
         "notes": {},           # { slide_index_str: "text" }
+        "explanation_mode": explanation_mode,
         "xp": 0,
         "streak_slides": 0,
     }
 
-    return jsonify({"session_id": session_id, "slides": slides})
+    return jsonify({"session_id": session_id, "slides": slides, "explanation_mode": explanation_mode})
 
 
 @app.route("/quiz", methods=["POST"])

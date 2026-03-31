@@ -142,6 +142,54 @@
       margin-top: .4rem;
       font-family: var(--mono);
     }
+    .explain-mode-wrap {
+      margin-top: .85rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+    .explain-mode-label {
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .explain-mode-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .45rem;
+    }
+    .explain-mode-option {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .35rem;
+      padding: .55rem .6rem;
+      border-radius: 9px;
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text-2);
+      font-size: .74rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color .2s, background .2s, color .2s;
+      user-select: none;
+    }
+    .explain-mode-option input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .explain-mode-option.active {
+      border-color: var(--gold);
+      background: rgba(232,160,32,.12);
+      color: var(--gold);
+    }
 
     .btn-primary {
       width: 100%;
@@ -293,13 +341,32 @@
     .hud-search-btn:hover { background: #f5b030; }
     .hud-search-btn:active { transform: scale(.93); }
     .hud-search-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .hud-explain-select {
+      border: 1px solid var(--border2);
+      background: var(--surface);
+      color: var(--text-2);
+      border-radius: 7px;
+      height: 30px;
+      padding: 0 .45rem;
+      font-family: var(--mono);
+      font-size: .68rem;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      outline: none;
+    }
+    .hud-explain-select:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(232,160,32,.12);
+    }
 
     /* collapse input on very small screens */
     @media (max-width: 600px) {
       .hud-search-input { width: 100px; font-size: .75rem; }
+      .hud-explain-select { width: 88px; }
     }
     @media (max-width: 420px) {
       .hud-search-input { width: 70px; }
+      .hud-explain-select { width: 80px; font-size: .62rem; padding: 0 .25rem; }
     }
 
     /* ---- Slide navigation arrow buttons ---- */
@@ -1801,6 +1868,19 @@
         maxlength="200"
       ></textarea>
       <div class="char-count"><span id="char-count">0</span> / 200</div>
+      <div class="explain-mode-wrap">
+        <div class="explain-mode-label">Explanation style</div>
+        <div class="explain-mode-group" id="explain-mode-group">
+          <label class="explain-mode-option active" id="mode-brief-label">
+            <input type="radio" name="explain-mode" value="brief" />
+            Brief
+          </label>
+          <label class="explain-mode-option" id="mode-depth-label">
+            <input type="radio" name="explain-mode" value="in_depth" checked />
+            In-Depth
+          </label>
+        </div>
+      </div>
       <button class="btn-primary" id="start-btn">Generate Lecture →</button>
       <div class="feature-pills">
         <span class="pill">📊 Adaptive Quizzes</span>
@@ -1841,6 +1921,10 @@
           placeholder="New topic…"
           autocomplete="off"
         />
+        <select class="hud-explain-select" id="hud-explanation-mode" title="Explanation style">
+          <option value="brief">Brief</option>
+          <option value="in_depth" selected>In-depth</option>
+        </select>
         <button class="hud-search-btn" id="hud-search-btn" title="Search new topic">🔍</button>
       </div>
       <button class="slide-nav-btn" id="btn-prev" onclick="navPrev()" title="Previous slide (←)" disabled>&#8592;</button>
@@ -1997,6 +2081,7 @@
 const state = {
   sessionId: null,
   topic: '',
+  explanationMode: 'in_depth',
   slides: [],
   currentIndex: 0,
   timerInterval: null,
@@ -2041,10 +2126,39 @@ function showToast(msg) {
 // =====================================================================
 const topicInput = document.getElementById('topic-input');
 const charCount  = document.getElementById('char-count');
+const modeOptions = Array.from(document.querySelectorAll('input[name="explain-mode"]'));
+const modeLabels = {
+  brief: document.getElementById('mode-brief-label'),
+  in_depth: document.getElementById('mode-depth-label')
+};
+const hudExplanationMode = document.getElementById('hud-explanation-mode');
+
+function setExplanationMode(mode) {
+  const next = (mode === 'brief') ? 'brief' : 'in_depth';
+  state.explanationMode = next;
+  modeOptions.forEach(opt => { opt.checked = (opt.value === next); });
+  Object.entries(modeLabels).forEach(([key, el]) => {
+    if (!el) return;
+    el.classList.toggle('active', key === next);
+  });
+  if (hudExplanationMode) hudExplanationMode.value = next;
+}
+
+function getExplanationMode() {
+  const selected = modeOptions.find(opt => opt.checked);
+  return selected ? selected.value : 'in_depth';
+}
 
 topicInput.addEventListener('input', () => {
   charCount.textContent = topicInput.value.length;
 });
+modeOptions.forEach(opt => {
+  opt.addEventListener('change', () => setExplanationMode(opt.value));
+});
+if (hudExplanationMode) {
+  hudExplanationMode.addEventListener('change', () => setExplanationMode(hudExplanationMode.value));
+}
+setExplanationMode('in_depth');
 
 document.getElementById('start-btn').addEventListener('click', startSession);
 
@@ -2055,8 +2169,10 @@ topicInput.addEventListener('keydown', e => {
 async function startSession() {
   const topic = topicInput.value.trim();
   if (!topic) { showToast('Please enter a topic first.'); return; }
+  const explanationMode = getExplanationMode();
 
   state.topic = topic;
+  state.explanationMode = explanationMode;
   setLoading('Generating your lecture…', 'Crafting 10–12 slides on: ' + topic);
   showScreen('screen-loading');
 
@@ -2064,7 +2180,7 @@ async function startSession() {
     const res = await fetch('/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify({ topic, explanation_mode: explanationMode }),
     });
     const data = await res.json();
 
@@ -2105,6 +2221,7 @@ function setLoading(title, sub) {
   async function hudSearch() {
     const topic = hudInput.value.trim();
     if (!topic) { showToast('Enter a topic to search.'); return; }
+    const explanationMode = hudExplanationMode ? hudExplanationMode.value : state.explanationMode;
 
     // Reset state fully
     stopTimer();
@@ -2122,6 +2239,7 @@ function setLoading(title, sub) {
     charCount.textContent = topic.length;
 
     state.topic = topic;
+    state.explanationMode = explanationMode;
     setLoading('Generating your lecture…', 'Crafting 10–12 slides on: ' + topic);
     showScreen('screen-loading');
     hudBtn.disabled = true;
@@ -2130,7 +2248,7 @@ function setLoading(title, sub) {
       const res = await fetch('/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic }),
+        body: JSON.stringify({ topic, explanation_mode: explanationMode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate slides.');
