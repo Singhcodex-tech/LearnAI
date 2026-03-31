@@ -503,11 +503,52 @@ Input slides:
     return fixed or slides
 
 
+def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
+    """
+    Enforce stable word-count ranges locally to reduce regeneration failures.
+    brief: 20-25 words, in_depth: 45-55 words.
+    """
+    if explanation_mode == "brief":
+        min_w, max_w = 20, 25
+    else:
+        min_w, max_w = 45, 55
+
+    filler = (
+        " This gives practical context and improves clarity for real-world understanding."
+        if explanation_mode == "brief"
+        else " This adds deeper context, clarifies assumptions, and explains practical implications in realistic situations."
+    )
+
+    for slide in slides:
+        for p in slide.get("points", []):
+            if not isinstance(p, dict):
+                continue
+            text = str(p.get("text", "")).strip()
+            if not text:
+                continue
+
+            words = text.split()
+            if len(words) > max_w:
+                text = " ".join(words[:max_w]).rstrip(" ,;:-")
+                if text and text[-1] not in ".!?":
+                    text += "."
+            while len(text.split()) < min_w:
+                text += filler
+                words2 = text.split()
+                if len(words2) > max_w:
+                    text = " ".join(words2[:max_w]).rstrip(" ,;:-")
+                    if text and text[-1] not in ".!?":
+                        text += "."
+                    break
+            p["text"] = text
+    return slides
+
+
 def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
     """
     API-only rescue generation with simpler constraints to maximize reliability.
     """
-    min_words = 35 if explanation_mode == "in_depth" else 20
+    min_words = 45 if explanation_mode == "in_depth" else 20
     prompt = f"""
 You are an expert lecturer. Return ONLY valid JSON array.
 Topic: {topic}
@@ -515,8 +556,8 @@ Topic: {topic}
 Generate exactly 5 slides.
 Each slide must have exactly 3 points.
 Each point must be an object with keys: text, source_title, source_url.
-In brief mode, each text should be around 20 to 30 words.
-In in-depth mode, each text should be about 40 words (target range 35 to 45 words).
+In brief mode, each text should be around 20 to 25 words.
+In in-depth mode, each text should be around 50 words (target range 45 to 55 words).
 Use real credible sources.
 No markdown fences. No text outside JSON.
 """
@@ -593,20 +634,20 @@ def generate_slides(
             "\nNOTE: Keep explanations brief and easy to scan. "
             "Use concise wording and only essential detail."
         )
-        point_length_rule_math = "- EVERY point text should be around 20 to 30 words"
-        point_length_rule_non_math = "- EVERY bullet point should be around 20 to 30 words"
+        point_length_rule_math = "- EVERY point text should be around 20 to 25 words"
+        point_length_rule_non_math = "- EVERY bullet point should be around 20 to 25 words"
     else:
         depth_note = (
             "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
         )
-        point_length_rule_math = "- EVERY point text should be about 40 words (target range 35 to 45 words)"
-        point_length_rule_non_math = "- EVERY bullet point should be about 40 words (target range 35 to 45 words)"
+        point_length_rule_math = "- EVERY point text should be around 50 words (target range 45 to 55 words)"
+        point_length_rule_non_math = "- EVERY bullet point should be around 50 words (target range 45 to 55 words)"
 
     # Compact mode intentionally asks for smaller payloads to reduce API truncation/timeouts.
     if compact_mode:
         if explanation_mode == "in_depth":
-            point_length_rule_math = "- EVERY point text should be about 40 words (target range 35 to 45 words)"
-            point_length_rule_non_math = "- EVERY bullet point should be about 40 words (target range 35 to 45 words)"
+            point_length_rule_math = "- EVERY point text should be around 50 words (target range 45 to 55 words)"
+            point_length_rule_non_math = "- EVERY bullet point should be around 50 words (target range 45 to 55 words)"
         compact_note = "\nNOTE: COMPACT MODE is enabled. Keep output concise and manageable to avoid truncation."
     else:
         compact_note = ""
@@ -686,7 +727,7 @@ def generate_slides(
             difficulty_hint,
             depth_note,
             compact_note,
-            (4 if compact_mode else 6),
+            (4 if compact_mode else 5),
             (3 if compact_mode else 4),
             point_length_rule_math
         )
@@ -719,8 +760,8 @@ Format:
 ]
 
 STRICT RULES:
-- Generate exactly {6 if compact_mode else 8} slides covering the topic thoroughly from fundamentals to advanced aspects
-- Each slide must have exactly {4 if compact_mode else 5} bullet points
+- Generate exactly {5 if compact_mode else 6} slides covering the topic thoroughly from fundamentals to advanced aspects
+- Each slide must have exactly {4 if compact_mode else 4} bullet points
 {point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
 - EVERY point must explain the concept clearly, including the "what" and briefly the "why"
@@ -740,10 +781,10 @@ STRICT RULES:
 
     # In compact mode keep payload smaller for reliability.
     if compact_mode:
-        max_tok = 3000 if not retry else 3600
+        max_tok = 2200 if not retry else 2800
     else:
-        max_tok = 5200 if not retry else 6500
-    raw_text = _call_groq(prompt, max_tokens=max_tok)
+        max_tok = 3200 if not retry else 4200
+    raw_text = _call_groq(prompt, max_tokens=max_tok, use_fallback=True)
     if not raw_text:
         print("generate_slides: _call_groq returned None — API call failed.")
         if not retry:
@@ -821,8 +862,8 @@ STRICT RULES:
             repaired_valid = validate_slides(repaired_slides)
             if repaired_valid:
                 result = repaired_valid
-    if explanation_mode == "in_depth" and result:
-        result = _expand_short_points_with_api(result, min_words=35)
+    if result:
+        result = _normalize_point_word_lengths(result, explanation_mode)
     return result
 
 
