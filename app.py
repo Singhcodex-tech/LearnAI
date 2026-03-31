@@ -507,7 +507,7 @@ def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> li
     """
     API-only rescue generation with simpler constraints to maximize reliability.
     """
-    min_words = 50 if explanation_mode == "in_depth" else 12
+    min_words = 35 if explanation_mode == "in_depth" else 20
     prompt = f"""
 You are an expert lecturer. Return ONLY valid JSON array.
 Topic: {topic}
@@ -515,7 +515,8 @@ Topic: {topic}
 Generate exactly 5 slides.
 Each slide must have exactly 3 points.
 Each point must be an object with keys: text, source_title, source_url.
-In in-depth mode, each text must be at least {min_words} words.
+In brief mode, each text should be around 20 to 30 words.
+In in-depth mode, each text should be about 40 words (target range 35 to 45 words).
 Use real credible sources.
 No markdown fences. No text outside JSON.
 """
@@ -592,20 +593,20 @@ def generate_slides(
             "\nNOTE: Keep explanations brief and easy to scan. "
             "Use concise wording and only essential detail."
         )
-        point_length_rule_math = "- EVERY point text must be exactly 1 short clear sentence (about 12-20 words)"
-        point_length_rule_non_math = "- EVERY bullet point must be exactly 1 short clear sentence (about 12-20 words)"
+        point_length_rule_math = "- EVERY point text should be around 20 to 30 words"
+        point_length_rule_non_math = "- EVERY bullet point should be around 20 to 30 words"
     else:
         depth_note = (
             "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
         )
-        point_length_rule_math = "- EVERY point text must be detailed and at least 50 words"
-        point_length_rule_non_math = "- EVERY bullet point must be detailed and at least 50 words"
+        point_length_rule_math = "- EVERY point text should be about 40 words (target range 35 to 45 words)"
+        point_length_rule_non_math = "- EVERY bullet point should be about 40 words (target range 35 to 45 words)"
 
     # Compact mode intentionally asks for smaller payloads to reduce API truncation/timeouts.
     if compact_mode:
         if explanation_mode == "in_depth":
-            point_length_rule_math = "- EVERY point text must be detailed and at least 30 words"
-            point_length_rule_non_math = "- EVERY bullet point must be detailed and at least 30 words"
+            point_length_rule_math = "- EVERY point text should be about 40 words (target range 35 to 45 words)"
+            point_length_rule_non_math = "- EVERY bullet point should be about 40 words (target range 35 to 45 words)"
         compact_note = "\nNOTE: COMPACT MODE is enabled. Keep output concise and manageable to avoid truncation."
     else:
         compact_note = ""
@@ -821,7 +822,7 @@ STRICT RULES:
             if repaired_valid:
                 result = repaired_valid
     if explanation_mode == "in_depth" and result:
-        result = _expand_short_points_with_api(result, min_words=50)
+        result = _expand_short_points_with_api(result, min_words=35)
     return result
 
 
