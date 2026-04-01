@@ -548,6 +548,8 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
 def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
     """
     API-only rescue generation with simpler constraints to maximize reliability.
+    Intentionally kept small (5 slides / 3 points) so the response never truncates.
+    The caller (generate_slides) may call this multiple times or just supplement.
     """
     min_words = 45 if explanation_mode == "in_depth" else 20
     prompt = f"""
@@ -619,64 +621,46 @@ def is_math_topic(topic: str) -> bool:
 # Slide generation (original + adaptive)
 # ---------------------------------------------------------------------------
 
-def generate_slides(
+TOTAL_SLIDES   = 12   # target number of slides per session
+CHUNK_SIZE     = 3    # slides generated per API call (keeps JSON small & reliable)
+
+
+def _build_slide_prompt(
     topic: str,
-    learner_profile: dict | None = None,
-    explanation_mode: str = "in_depth",
-    compact_mode: bool = False,
-    retry: bool = False,
-) -> list:
-    explanation_mode = str(explanation_mode or "in_depth").strip().lower()
-    if explanation_mode not in {"brief", "in_depth"}:
-        explanation_mode = "in_depth"
+    chunk_index: int,
+    chunk_size: int,
+    total_slides: int,
+    math_topic: bool,
+    difficulty_hint: str,
+    depth_note: str,
+    compact_note: str,
+    point_length_rule_math: str,
+    point_length_rule_non_math: str,
+) -> tuple[str, int]:
+    """
+    Build the prompt for a single chunk of slides.
+    Returns (prompt_str, max_tokens).
 
-    if explanation_mode == "brief":
-        depth_note = (
-            "\nNOTE: Keep explanations brief and easy to scan. "
-            "Use concise wording and only essential detail."
-        )
-        point_length_rule_math = "- EVERY point text should be around 20 to 25 words"
-        point_length_rule_non_math = "- EVERY bullet point should be around 20 to 25 words"
-    else:
-        depth_note = (
-            "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
-        )
-        point_length_rule_math = "- EVERY point text should be around 50 words (target range 45 to 55 words)"
-        point_length_rule_non_math = "- EVERY bullet point should be around 50 words (target range 45 to 55 words)"
+    chunk_index is 0-based; slide numbers within the overall deck are
+    [chunk_index*chunk_size + 1 … chunk_index*chunk_size + chunk_size].
+    """
+    slide_start = chunk_index * chunk_size + 1
+    slide_end   = min(slide_start + chunk_size - 1, total_slides)
+    n_slides    = slide_end - slide_start + 1
 
-    # Compact mode intentionally asks for smaller payloads to reduce API truncation/timeouts.
-    if compact_mode:
-        if explanation_mode == "in_depth":
-            point_length_rule_math = "- EVERY point text should be around 50 words (target range 45 to 55 words)"
-            point_length_rule_non_math = "- EVERY bullet point should be around 50 words (target range 45 to 55 words)"
-        compact_note = "\nNOTE: COMPACT MODE is enabled. Keep output concise and manageable to avoid truncation."
-    else:
-        compact_note = ""
-
-    difficulty_hint = ""
-    if learner_profile:
-        hint = learner_profile.get("difficulty_hint", "normal")
-        profile_summary = learner_profile.get("summary", "")
-        if hint == "simplify":
-            difficulty_hint = (
-                "\nNOTE: This learner has been struggling. Use simpler language, "
-                "more analogies, and concrete step-by-step examples. Avoid jargon. "
-                f"Learner profile: {profile_summary}"
-            )
-        elif hint == "advanced":
-            difficulty_hint = (
-                "\nNOTE: This learner is advanced. Include more technical depth, "
-                "edge cases, and challenging concepts. "
-                f"Learner profile: {profile_summary}"
-            )
-
-    math_topic = is_math_topic(topic)
+    # Build a short context note so the model knows where in the deck these
+    # slides sit, helping it avoid repeating earlier content.
+    position_note = (
+        f"\nThis is slides {slide_start}–{slide_end} of {total_slides} total. "
+        "Do NOT repeat concepts or examples from slides before this range. "
+        "Continue the logical progression of the topic."
+    )
 
     if math_topic:
         prompt = (
             "You are an expert mathematics professor and textbook author creating rigorous, deeply detailed, exam-quality slides.\n\n"
             "Topic: %s\n"
-            "%s%s%s\n\n"
+            "%s%s%s%s\n\n"
             "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
             "CRITICAL: Every bullet point must carry its OWN inline equation, detailed explanation, and sub-steps.\n\n"
             "Required JSON structure for EVERY slide:\n"
@@ -711,16 +695,16 @@ def generate_slides(
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate exactly %d slides covering the topic from foundations to advanced applications\n"
-            "- Each slide: exactly %d points\n"
+            "- Generate exactly %d slides\n"
+            "- Each slide: exactly 4 points\n"
             "%s\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
             "- inline_latex: valid LaTeX, single backslashes (\\\\frac, \\\\sqrt, \\\\int, \\\\pm, \\\\alpha, \\\\theta)\n"
             "- sub_steps: exactly 4 steps, each a short clear string showing the key action and result\n"
             "- source_title and source_url must be specific to each bullet and from real, credible references\n"
             "- worked_example: a clear numeric problem with 4 concise steps\n"
-            "- Slides must progress logically: definition → properties → techniques → applications → edge cases\n"
-            "- Do NOT repeat the same formula or example across slides\n"
+            "- Slides must progress logically within this chunk\n"
+            "- Do NOT repeat the same formula or example\n"
             "- Do NOT output anything outside the JSON array\n"
             "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
         ) % (
@@ -728,16 +712,17 @@ def generate_slides(
             difficulty_hint,
             depth_note,
             compact_note,
-            (4 if compact_mode else 5),
-            (3 if compact_mode else 4),
-            point_length_rule_math
+            position_note,
+            n_slides,
+            point_length_rule_math,
         )
+        max_tok = 3800
     else:
         prompt = f"""
 You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
 
 Topic: {topic}
-{difficulty_hint}{depth_note}{compact_note}
+{difficulty_hint}{depth_note}{compact_note}{position_note}
 
 Return ONLY a valid JSON array. No extra text.
 
@@ -750,19 +735,14 @@ Format:
         "text": "Detailed explanation sentence",
         "source_title": "Credible source title for this bullet",
         "source_url": "Direct URL/DOI for this bullet source, or empty string if unavailable"
-      }},
-      {{
-        "text": "Another detailed explanation",
-        "source_title": "Another credible source title",
-        "source_url": "Direct URL/DOI for this bullet source, or empty string if unavailable"
       }}
     ]
   }}
 ]
 
 STRICT RULES:
-- Generate exactly {5 if compact_mode else 6} slides covering the topic thoroughly from fundamentals to advanced aspects
-- Each slide must have exactly {4 if compact_mode else 4} bullet points
+- Generate exactly {n_slides} slides
+- Each slide must have exactly 4 bullet points
 {point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
 - EVERY point must explain the concept clearly, including the "what" and briefly the "why"
@@ -774,98 +754,185 @@ STRICT RULES:
   • a comparison with a related concept
   • a cause-and-effect relationship
   • a quantitative fact or formula
-- Slides must flow logically: start with history/definition, build to core mechanisms, then real-world applications, then limitations or future directions
-- source_title and source_url must be real, credible references that match the exact bullet content
-- Do NOT repeat the same information across slides
+- source_title and source_url must be real, credible references matching the exact bullet content
+- Do NOT repeat the same information
 - Do NOT output anything outside JSON
 """
+        max_tok = 3200
 
-    # In compact mode keep payload smaller for reliability.
-    if compact_mode:
-        max_tok = 2200 if not retry else 2800
-    else:
-        max_tok = 3200 if not retry else 4200
-    raw_text = _call_groq(prompt, max_tokens=max_tok, use_fallback=True)
+    return prompt, max_tok
+
+
+def _generate_chunk(
+    topic: str,
+    chunk_index: int,
+    chunk_size: int,
+    total_slides: int,
+    math_topic: bool,
+    difficulty_hint: str,
+    depth_note: str,
+    compact_note: str,
+    point_length_rule_math: str,
+    point_length_rule_non_math: str,
+    retry: bool = False,
+) -> list:
+    """
+    Generate one chunk of slides and return a validated list.
+    On any parse/API failure, tries once with use_fallback=True before giving up.
+    """
+    prompt, max_tok = _build_slide_prompt(
+        topic, chunk_index, chunk_size, total_slides,
+        math_topic, difficulty_hint, depth_note, compact_note,
+        point_length_rule_math, point_length_rule_non_math,
+    )
+
+    raw_text = _call_groq(prompt, max_tokens=max_tok, use_fallback=retry)
     if not raw_text:
-        print("generate_slides: _call_groq returned None — API call failed.")
         if not retry:
-            return generate_slides(
-                topic,
-                learner_profile=learner_profile,
-                explanation_mode=explanation_mode,
-                compact_mode=compact_mode,
+            print(f"_generate_chunk: API returned None for chunk {chunk_index}, retrying with fallback.")
+            return _generate_chunk(
+                topic, chunk_index, chunk_size, total_slides,
+                math_topic, difficulty_hint, depth_note, compact_note,
+                point_length_rule_math, point_length_rule_non_math,
                 retry=True,
             )
+        print(f"_generate_chunk: giving up on chunk {chunk_index}.")
         return []
 
     raw_text = strip_markdown_fences(raw_text)
-    print(f"generate_slides: raw API response preview: {raw_text[:300]!r}")
+    print(f"_generate_chunk [{chunk_index}]: preview {raw_text[:200]!r}")
 
+    # --- Parse ---
+    slides = None
     try:
         slides = json.loads(raw_text)
     except json.JSONDecodeError as e:
-        print(f"generate_slides: json.loads failed ({e}). Attempting extraction fallback.")
-        # Try to salvage a truncated response by extracting whatever complete
-        # slide objects exist before the truncation point
+        print(f"_generate_chunk [{chunk_index}]: json.loads failed ({e}), trying extraction.")
         json_part = extract_json_array(raw_text)
-        if not json_part:
-            # Last resort: extract all top-level {...} objects individually
-            # using bracket balancing (handles nested arrays like points/sub_steps)
-            slides = _extract_all_objects(raw_text)
-            if slides:
-                print(f"generate_slides: recovered {len(slides)} objects via bracket scan.")
-            else:
-                print("generate_slides: all extraction methods failed.")
-                if not retry:
-                    return generate_slides(
-                        topic,
-                        learner_profile=learner_profile,
-                        explanation_mode=explanation_mode,
-                        compact_mode=compact_mode,
-                        retry=True,
-                    )
-                return []
-        else:
+        if json_part:
             try:
                 slides = json.loads(json_part)
             except json.JSONDecodeError:
+                pass
+        if slides is None:
+            slides = _extract_all_objects(raw_text)
+            if slides:
+                print(f"_generate_chunk [{chunk_index}]: recovered {len(slides)} via bracket scan.")
+            else:
                 if not retry:
-                    return generate_slides(
-                        topic,
-                        learner_profile=learner_profile,
-                        explanation_mode=explanation_mode,
-                        compact_mode=compact_mode,
+                    return _generate_chunk(
+                        topic, chunk_index, chunk_size, total_slides,
+                        math_topic, difficulty_hint, depth_note, compact_note,
+                        point_length_rule_math, point_length_rule_non_math,
                         retry=True,
                     )
                 return []
 
     if isinstance(slides, dict):
         slides = slides.get("slides") or slides.get("data") or []
-
     if not isinstance(slides, list):
         return []
 
     result = validate_slides(slides)
-    print(f"generate_slides: validated {len(result)} slides from {len(slides) if isinstance(slides, list) else '?'} raw slides.")
-    if len(result) < 3 and not retry:
-        print("generate_slides: too few validated slides, retrying once.")
-        return generate_slides(
-            topic,
-            learner_profile=learner_profile,
-            explanation_mode=explanation_mode,
-            compact_mode=compact_mode,
+    print(f"_generate_chunk [{chunk_index}]: validated {len(result)} slides.")
+
+    if len(result) == 0 and not retry:
+        return _generate_chunk(
+            topic, chunk_index, chunk_size, total_slides,
+            math_topic, difficulty_hint, depth_note, compact_note,
+            point_length_rule_math, point_length_rule_non_math,
             retry=True,
         )
-    if len(result) < 2 and raw_text:
-        print("generate_slides: trying JSON repair path.")
-        repaired_slides = _repair_slides_json(raw_text, math_topic=math_topic)
-        if repaired_slides:
-            repaired_valid = validate_slides(repaired_slides)
-            if repaired_valid:
-                result = repaired_valid
-    if result:
-        result = _normalize_point_word_lengths(result, explanation_mode)
     return result
+
+
+def generate_slides(
+    topic: str,
+    learner_profile: dict | None = None,
+    explanation_mode: str = "in_depth",
+    compact_mode: bool = False,
+    retry: bool = False,
+) -> list:
+    explanation_mode = str(explanation_mode or "in_depth").strip().lower()
+    if explanation_mode not in {"brief", "in_depth"}:
+        explanation_mode = "in_depth"
+
+    if explanation_mode == "brief":
+        depth_note = (
+            "\nNOTE: Keep explanations brief and easy to scan. "
+            "Use concise wording and only essential detail."
+        )
+        point_length_rule_math = "- EVERY point text should be around 20 to 25 words"
+        point_length_rule_non_math = "- EVERY bullet point should be around 20 to 25 words"
+    else:
+        depth_note = (
+            "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
+        )
+        point_length_rule_math = "- EVERY point text should be around 50 words (target range 45 to 55 words)"
+        point_length_rule_non_math = "- EVERY bullet point should be around 50 words (target range 45 to 55 words)"
+
+    compact_note = (
+        "\nNOTE: COMPACT MODE is enabled. Keep output concise and manageable to avoid truncation."
+        if compact_mode else ""
+    )
+
+    difficulty_hint = ""
+    if learner_profile:
+        hint = learner_profile.get("difficulty_hint", "normal")
+        profile_summary = learner_profile.get("summary", "")
+        if hint == "simplify":
+            difficulty_hint = (
+                "\nNOTE: This learner has been struggling. Use simpler language, "
+                "more analogies, and concrete step-by-step examples. Avoid jargon. "
+                f"Learner profile: {profile_summary}"
+            )
+        elif hint == "advanced":
+            difficulty_hint = (
+                "\nNOTE: This learner is advanced. Include more technical depth, "
+                "edge cases, and challenging concepts. "
+                f"Learner profile: {profile_summary}"
+            )
+
+    math_topic = is_math_topic(topic)
+
+    # ── Chunked generation ───────────────────────────────────────────────────
+    # Requesting all 12 slides at once overflows the model's output window and
+    # corrupts the JSON.  We instead request CHUNK_SIZE slides per call and
+    # stitch the results together.
+    total_slides = TOTAL_SLIDES
+    chunk_size   = CHUNK_SIZE
+    n_chunks     = -(-total_slides // chunk_size)   # ceiling division
+
+    all_slides: list = []
+    for chunk_idx in range(n_chunks):
+        chunk = _generate_chunk(
+            topic=topic,
+            chunk_index=chunk_idx,
+            chunk_size=chunk_size,
+            total_slides=total_slides,
+            math_topic=math_topic,
+            difficulty_hint=difficulty_hint,
+            depth_note=depth_note,
+            compact_note=compact_note,
+            point_length_rule_math=point_length_rule_math,
+            point_length_rule_non_math=point_length_rule_non_math,
+            retry=False,
+        )
+        all_slides.extend(chunk)
+        print(f"generate_slides: after chunk {chunk_idx}: {len(all_slides)} slides accumulated.")
+
+    # ── Fallback: rescue generation if we got too few slides ─────────────────
+    if len(all_slides) < max(6, total_slides // 2):
+        print("generate_slides: too few slides from chunked run, trying rescue generation.")
+        rescue = generate_slides_rescue(topic, explanation_mode)
+        if rescue:
+            all_slides.extend(rescue)
+
+    if all_slides:
+        all_slides = _normalize_point_word_lengths(all_slides, explanation_mode)
+
+    print(f"generate_slides: final count = {len(all_slides)} slides.")
+    return all_slides
 
 
 # ---------------------------------------------------------------------------
