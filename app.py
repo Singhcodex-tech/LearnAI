@@ -2382,12 +2382,4 @@ def generate_ppt():
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    host = os.environ.get("HOST", "0.0.0.0")
-    try:
-        from waitress import serve
-        print(f"Starting AdaptiveLearn on {host}:{port} via Waitress")
-        serve(app, host=host, port=port, threads=4)
-    except ImportError:
-        print(f"Waitress not installed — falling back to Flask dev server on {host}:{port}")
-        app.run(debug=False, host=host, port=port)
+    app.run(debug=False)
