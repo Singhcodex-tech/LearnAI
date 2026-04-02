@@ -1,0 +1,103 @@
+1. Controlled randomness 
+-Use generation parameters:
+
+temperature = 0.8 – 1.2 → more variation
+top_p = 0.9
+frequency_penalty = 0.5+
+
+👉 This ensures:
+
+Different wording
+Different phrasing
+2. Structure randomization
+-Instead of always generating same structure:
+
+Create multiple templates:
+
+Example:
+
+Template A
+Introduction
+Definition
+Process
+Conclusion
+Template B
+Real-life example
+Concept explanation
+Diagram explanation
+Summary
+Template C
+Question-based format
+Step-by-step explanation
+
+👉 Before generation:
+
+Randomly pick a structure
+
+Now even same topic → different flow
+3. Style variation engine
+-You force the model to write in different styles.
+
+Examples:
+
+Formal academic
+Story-based explanation
+Teacher explaining to class
+Bullet-point heavy
+Analytical tone
+Simplified beginner tone
+4. Paraphrasing layer
+-After generating the assignment:
+
+Pass it again through model:
+
+Rewrite this assignment completely with different sentence structures 
+while keeping meaning exactly same.
+Avoid repeating any phrases.
+
+This acts like:
+
+“Human rewriting”
+5. Idea-level variation
+-Don’t just change words—change thinking path:
+
+For example:
+Topic: Photosynthesis
+
+Different users get:
+
+One focused on chemical process
+One focused on importance in ecosystem
+One focused on real-life applications
+
+ Same topic, different emphasis
+ 6. Similarity check
+ Before sending output:
+
+Compare with previous outputs using:
+cosine similarity (embeddings)
+If similarity > threshold:
+regenerate
+
+6. Final structure 
+-User Input
+   ↓
+Random Structure Selector
+   ↓
+Random Style Selector
+   ↓
+Prompt Builder
+   ↓
+LLM Generation (high temp)
+   ↓
+Paraphrasing Layer
+   ↓
+Similarity Check
+   ↓
+Final Output
+
+
+Front page 
+acknowlegment 
+
+ili format blue format 

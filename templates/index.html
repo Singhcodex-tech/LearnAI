@@ -1596,6 +1596,46 @@
     .hud-ppt-btn:hover { background: rgba(32,197,176,.1); border-color: var(--teal); }
     .hud-ppt-btn:disabled { opacity: .35; cursor: not-allowed; }
 
+    /* ---- HUD Ask AI Tutor button ---- */
+    .hud-ask-btn {
+      display: flex; align-items: center; gap: .4rem;
+      padding: .38rem 1rem;
+      border-radius: 8px;
+      border: 1.5px solid var(--gold);
+      background: rgba(232,160,32,.13);
+      color: var(--gold);
+      font-family: 'Syne', sans-serif;
+      font-size: .75rem; font-weight: 800;
+      letter-spacing: .06em; text-transform: uppercase;
+      cursor: pointer; transition: all .2s;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 0 rgba(232,160,32,0);
+      animation: askPulse 2.8s ease-in-out infinite;
+    }
+    @keyframes askPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(232,160,32,0); }
+      50%       { box-shadow: 0 0 0 5px rgba(232,160,32,.18); }
+    }
+    .hud-ask-btn:hover {
+      background: rgba(232,160,32,.24);
+      border-color: #f5b030;
+      color: #f5b030;
+      animation: none;
+      box-shadow: 0 0 12px rgba(232,160,32,.3);
+    }
+    .hud-ask-btn:active { transform: scale(.96); }
+    .hud-ask-btn .ask-icon { font-size: .95rem; }
+
+    /* chat-section highlight flash when jumped to */
+    .chat-section.highlight-flash {
+      animation: chatFlash .6s ease;
+    }
+    @keyframes chatFlash {
+      0%   { box-shadow: 0 0 0 0 rgba(232,160,32,0); border-color: var(--border2); }
+      30%  { box-shadow: 0 0 0 6px rgba(232,160,32,.25); border-color: var(--gold); }
+      100% { box-shadow: 0 0 0 0 rgba(232,160,32,0); border-color: var(--border2); }
+    }
+
     /* PPT Modal overlay */
     #ppt-modal {
       position: fixed; inset: 0; z-index: 200;
@@ -2008,6 +2048,9 @@
           <span class="xp-label" id="xp-display">⚡ 0 XP</span>
           <span class="xp-streak" id="streak-display"></span>
         </div>
+        <button class="hud-ask-btn" id="hud-ask-btn" onclick="openAskTutor()" title="Ask the AI Tutor a question about this slide">
+          <span class="ask-icon">🤖</span> Ask AI
+        </button>
         <button class="hud-ppt-btn" id="hud-ppt-btn" onclick="openPptModal()" title="Export slides as PowerPoint">
           🎞️ PPT
         </button>
@@ -2847,6 +2890,20 @@ function updateXPDisplay(xpData) {
 // =====================================================================
 function closeChatSection() {
   document.getElementById('chat-section').style.display = 'none';
+}
+
+function openAskTutor() {
+  var chatSection = document.getElementById('chat-section');
+  chatSection.style.display = 'block';
+  chatSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  chatSection.classList.remove('highlight-flash');
+  void chatSection.offsetWidth;
+  chatSection.classList.add('highlight-flash');
+  setTimeout(function() { chatSection.classList.remove('highlight-flash'); }, 700);
+  setTimeout(function() {
+    var inp = document.getElementById('chat-input');
+    if (inp) inp.focus();
+  }, 400);
 }
 
 async function sendChatMessage() {
