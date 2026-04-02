@@ -547,50 +547,76 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
 
 def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
     """
-    API-only rescue generation with simpler constraints to maximize reliability.
-    Intentionally kept small (5 slides / 3 points) so the response never truncates.
-    The caller (generate_slides) may call this multiple times or just supplement.
-    Follows the same definition->types->explanation->details->summary structure.
+    Rescue generation split into 2-slide micro-chunks for maximum reliability.
+    Produces up to 10 slides total (5 pairs) so the caller can fill any gap.
+    Each pair has an explicit role so every call is tiny and unambiguous.
     """
-    min_words = 45 if explanation_mode == "in_depth" else 20
-    prompt = f"""
-You are an expert lecturer. Return ONLY valid JSON array.
+    word_rule = "around 50 words (target range 45 to 55)" if explanation_mode == "in_depth" else "around 20 to 25"
+
+    # 5 pairs — each call asks for exactly 2 slides with clear role instructions
+    rescue_pairs = [
+        (
+            "Slide 1: Definition and Overview — define the topic precisely, its domain, origin, and why it matters.\n"
+            "Slide 2: Types and Classifications — list ALL major types/categories, each with a 1-sentence definition and a named example."
+        ),
+        (
+            "Slide 3: Core Explanation — explain HOW it works: the mechanism, key components, and an analogy.\n"
+            "Slide 4: Key Concepts and Terminology — define the 4 most important technical terms with context."
+        ),
+        (
+            "Slide 5: Real-World Applications — name 4 specific, real applications with companies or systems.\n"
+            "Slide 6: Historical Context and Development — trace the origin, key milestones, and evolution of the topic."
+        ),
+        (
+            "Slide 7: Advantages and Limitations — give specific strengths AND specific weaknesses with evidence.\n"
+            "Slide 8: Comparisons with Related Topics — compare this topic to 2-3 closely related alternatives."
+        ),
+        (
+            "Slide 9: Advanced Details and Edge Cases — cover nuanced, expert-level aspects and special scenarios.\n"
+            "Slide 10: Summary and Recap — recap the key takeaway from each of the previous slides concisely."
+        ),
+    ]
+
+    all_rescue: list = []
+    for pair_instructions in rescue_pairs:
+        prompt = f"""You are an expert lecturer. Return ONLY valid JSON array.
 Topic: {topic}
 
-Generate exactly 5 slides.
+Generate EXACTLY 2 slides as described below:
+{pair_instructions}
+
 Each slide must have exactly 3 points.
 Each point must be an object with keys: text, source_title, source_url.
-In brief mode, each text should be around 20 to 25 words.
-In in-depth mode, each text should be around 50 words (target range 45 to 55 words).
-Use real credible sources.
-No markdown fences. No text outside JSON.
+Each text should be {word_rule} words.
+Use real credible sources. No markdown fences. No text outside JSON.
 """
-    raw = _call_groq(prompt, max_tokens=3600, use_fallback=True)
-    if not raw:
-        return []
-    raw = strip_markdown_fences(raw)
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        arr = extract_json_array(raw)
-        if not arr:
-            repaired = _repair_slides_json(raw, math_topic=is_math_topic(topic))
-            if not repaired:
-                return []
-            data = repaired
-        else:
-            try:
-                data = json.loads(arr)
-            except json.JSONDecodeError:
+        raw = _call_groq(prompt, max_tokens=2000, use_fallback=True)
+        if not raw:
+            continue
+        raw = strip_markdown_fences(raw)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            arr = extract_json_array(raw)
+            if not arr:
                 repaired = _repair_slides_json(raw, math_topic=is_math_topic(topic))
                 if not repaired:
-                    return []
+                    continue
                 data = repaired
-    if isinstance(data, dict):
-        data = data.get("slides") or data.get("data") or []
-    if not isinstance(data, list):
-        return []
-    return validate_slides(data)
+            else:
+                try:
+                    data = json.loads(arr)
+                except json.JSONDecodeError:
+                    continue
+        if isinstance(data, dict):
+            data = data.get("slides") or data.get("data") or []
+        if not isinstance(data, list):
+            continue
+        validated = validate_slides(data)
+        all_rescue.extend(validated)
+        print(f"generate_slides_rescue: pair got {len(validated)} slides, total={len(all_rescue)}.")
+
+    return all_rescue
 
 
 # ---------------------------------------------------------------------------
@@ -623,7 +649,7 @@ def is_math_topic(topic: str) -> bool:
 # ---------------------------------------------------------------------------
 
 TOTAL_SLIDES   = 12   # target number of slides per session
-CHUNK_SIZE     = 3    # slides generated per API call (keeps JSON small & reliable)
+CHUNK_SIZE     = 2    # slides per API call — 2 keeps JSON tiny & nearly corruption-free
 
 
 def _build_slide_prompt(
@@ -664,13 +690,17 @@ def _build_slide_prompt(
         prompt = (
             "You are an expert mathematics professor and textbook author creating rigorous, deeply detailed, exam-quality slides.\n\n"
             "Topic: %s\n"
-            "%s%s%s%s\n\n"
-            "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
+            "%s%s%s\n\n"
+            "=== SLIDE ROLES FOR THIS CHUNK ===\n"
+            "%s\n"
+            "=== END SLIDE ROLES ===\n"
+            "%s\n\n"
+            "IMPORTANT: Return ONLY a valid JSON array of EXACTLY %d slide object(s). No extra text, no markdown fences.\n\n"
             "CRITICAL: Every bullet point must carry its OWN inline equation, detailed explanation, and sub-steps.\n\n"
             "Required JSON structure for EVERY slide:\n"
             "[\n"
             "  {\n"
-            "    \"title\": \"Slide title\",\n"
+            "    \"title\": \"Slide title matching its assigned role\",\n"
             "    \"points\": [\n"
             "      {\n"
             "        \"text\": \"A clear 1-2 sentence explanation of the concept — define it and state when to use it.\",\n"
@@ -699,7 +729,8 @@ def _build_slide_prompt(
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate exactly %d slides\n"
+            "- Generate EXACTLY %d slides — count your objects before outputting\n"
+            "- Each slide MUST follow its assigned role in the role block above\n"
             "- Each slide: exactly 4 points\n"
             "%s\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
@@ -707,36 +738,43 @@ def _build_slide_prompt(
             "- sub_steps: exactly 4 steps, each a short clear string showing the key action and result\n"
             "- source_title and source_url must be specific to each bullet and from real, credible references\n"
             "- worked_example: a clear numeric problem with 4 concise steps\n"
-            "- Slides must progress logically within this chunk\n"
-            "- Do NOT repeat the same formula or example\n"
+            "- Do NOT repeat the same formula or example across slides\n"
             "- Do NOT output anything outside the JSON array\n"
             "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
+            "FINAL CHECK: your JSON array must contain exactly %d object(s).\n"
         ) % (
             topic,
             difficulty_hint,
             depth_note,
             compact_note,
+            role_block,
             position_note,
             n_slides,
+            n_slides,
             point_length_rule_math,
+            n_slides,
         )
-        max_tok = 3800
+        max_tok = 4000
     else:
-        prompt = f"""
-You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
+        prompt = f"""You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
 
 Topic: {topic}
-{difficulty_hint}{depth_note}{compact_note}{position_note}
+{difficulty_hint}{depth_note}{compact_note}
 
-Return ONLY a valid JSON array. No extra text.
+=== SLIDE ROLES FOR THIS CHUNK ===
+{role_block}
+=== END SLIDE ROLES ===
+{position_note}
+
+IMPORTANT: Return ONLY a valid JSON array of EXACTLY {n_slides} slide object(s). No extra text, no markdown fences.
 
 Format:
 [
   {{
-    "title": "Slide title",
+    "title": "Slide title matching the role",
     "points": [
       {{
-        "text": "Detailed explanation sentence",
+        "text": "Detailed explanation sentence following the role instructions",
         "source_title": "Credible source title for this bullet",
         "source_url": "Direct URL/DOI for this bullet source, or empty string if unavailable"
       }}
@@ -745,24 +783,26 @@ Format:
 ]
 
 STRICT RULES:
-- Generate exactly {n_slides} slides
+- Generate EXACTLY {n_slides} slide(s) — count your objects before outputting
+- Each slide MUST follow its assigned role above (definition slide must define, types slide must list types, etc.)
 - Each slide must have exactly 4 bullet points
 {point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
 - EVERY point must explain the concept clearly, including the "what" and briefly the "why"
 - NO vague lines like "It is important", "Has many applications", "This is used in many fields"
 - EVERY point MUST include at least one of:
-  • a precise definition or key term
-  • a core mechanism or process briefly described
-  • a real-world example with a specific name or number
-  • a comparison with a related concept
-  • a cause-and-effect relationship
-  • a quantitative fact or formula
+  a precise definition or key term
+  a core mechanism or process briefly described
+  a real-world example with a specific name or number
+  a comparison with a related concept
+  a cause-and-effect relationship
+  a quantitative fact or formula
 - source_title and source_url must be real, credible references matching the exact bullet content
-- Do NOT repeat the same information
+- Do NOT repeat the same information across slides
 - Do NOT output anything outside JSON
+FINAL CHECK: your JSON array must contain exactly {n_slides} object(s).
 """
-        max_tok = 3200
+        max_tok = 3600
 
     return prompt, max_tok
 
@@ -900,14 +940,16 @@ def generate_slides(
     math_topic = is_math_topic(topic)
 
     # ── Chunked generation ───────────────────────────────────────────────────
-    # Requesting all 12 slides at once overflows the model's output window and
-    # corrupts the JSON.  We instead request CHUNK_SIZE slides per call and
-    # stitch the results together.
-    total_slides = TOTAL_SLIDES
-    chunk_size   = CHUNK_SIZE
-    n_chunks     = -(-total_slides // chunk_size)   # ceiling division
+    # CHUNK_SIZE = 2 keeps each JSON payload tiny so Llama never truncates.
+    # We track results per-slot so failed slots can be retried independently
+    # without discarding the slides that were successfully generated.
+    # Target: 10–12 slides guaranteed via up to 3 rescue passes per slot.
+    total_slides = TOTAL_SLIDES         # 12
+    chunk_size   = CHUNK_SIZE           # 2
+    n_chunks     = -(-total_slides // chunk_size)   # ceil → 6 chunks
 
-    all_slides: list = []
+    # ── Pass 1: generate every chunk once ────────────────────────────────────
+    chunk_results: dict[int, list] = {}
     for chunk_idx in range(n_chunks):
         chunk = _generate_chunk(
             topic=topic,
@@ -922,20 +964,125 @@ def generate_slides(
             point_length_rule_non_math=point_length_rule_non_math,
             retry=False,
         )
-        all_slides.extend(chunk)
-        print(f"generate_slides: after chunk {chunk_idx}: {len(all_slides)} slides accumulated.")
+        chunk_results[chunk_idx] = chunk
+        print(f"generate_slides: pass-1 chunk {chunk_idx} → {len(chunk)} slides.")
 
-    # ── Fallback: rescue generation if we got too few slides ─────────────────
-    if len(all_slides) < max(6, total_slides // 2):
-        print("generate_slides: too few slides from chunked run, trying rescue generation.")
+    # ── Pass 2: retry each short slot (up to 2 retries per slot) ─────────────
+    for chunk_idx in range(n_chunks):
+        expected = min(chunk_size, total_slides - chunk_idx * chunk_size)
+        for attempt in range(2):                     # 2 retry attempts per slot
+            got = len(chunk_results[chunk_idx])
+            if got >= expected:
+                break
+            print(f"generate_slides: chunk {chunk_idx} short ({got}/{expected}), retry {attempt+1}/2…")
+            time.sleep(0.6 * (attempt + 1))
+            retry_chunk = _generate_chunk(
+                topic=topic,
+                chunk_index=chunk_idx,
+                chunk_size=chunk_size,
+                total_slides=total_slides,
+                math_topic=math_topic,
+                difficulty_hint=difficulty_hint,
+                depth_note=depth_note,
+                compact_note=compact_note,
+                point_length_rule_math=point_length_rule_math,
+                point_length_rule_non_math=point_length_rule_non_math,
+                retry=True,
+            )
+            if len(retry_chunk) > got:
+                print(f"generate_slides: chunk {chunk_idx} improved {got}→{len(retry_chunk)}.")
+                chunk_results[chunk_idx] = retry_chunk
+
+    # ── Stitch chunks in slot order ───────────────────────────────────────────
+    all_slides: list = []
+    for chunk_idx in range(n_chunks):
+        all_slides.extend(chunk_results[chunk_idx])
+
+    total_got = len(all_slides)
+    print(f"generate_slides: after all chunk passes: {total_got}/{total_slides} slides.")
+
+    # ── Pass 3: targeted per-slot rescue for any still-missing slides ─────────
+    # Instead of one bulk rescue call, we generate exactly the missing roles
+    # in small 2-slide rescue calls so we stay within safe token limits.
+    if total_got < total_slides:
+        deck_plan = _build_slide_deck_plan(total_slides)
+        for chunk_idx in range(n_chunks):
+            expected = min(chunk_size, total_slides - chunk_idx * chunk_size)
+            have     = len(chunk_results[chunk_idx])
+            if have >= expected:
+                continue
+
+            # Build a mini-rescue prompt targeting the exact missing roles
+            missing_roles = deck_plan[chunk_idx * chunk_size : chunk_idx * chunk_size + expected]
+            missing_roles = missing_roles[have:]          # only what's still missing
+            if not missing_roles:
+                continue
+
+            role_lines = []
+            for i, role in enumerate(missing_roles):
+                role_instr = _ROLE_INSTRUCTIONS.get(role, "").replace("{topic}", topic)
+                role_lines.append(
+                    f"Slide {chunk_idx * chunk_size + have + i + 1} of {total_slides} "
+                    f"— {role.replace('_', ' ').title()}:\n{role_instr}"
+                )
+            role_block = "\n\n".join(role_lines)
+            n_rescue = len(missing_roles)
+            word_rule = (
+                "around 50 words (target 45–55)" if explanation_mode == "in_depth"
+                else "around 20–25 words"
+            )
+            rescue_prompt = f"""You are an expert professor. Return ONLY a valid JSON array.
+Topic: {topic}
+
+Generate EXACTLY {n_rescue} slide(s) following these role instructions:
+
+{role_block}
+
+Each slide: exactly 3 bullet points.
+Each point: object with keys text, source_title, source_url.
+text: {word_rule}.
+No markdown fences. No text outside JSON.
+"""
+            raw = _call_groq(rescue_prompt, max_tokens=2000, use_fallback=True)
+            if raw:
+                raw = strip_markdown_fences(raw)
+                rescued = []
+                try:
+                    rescued = json.loads(raw)
+                except json.JSONDecodeError:
+                    arr = extract_json_array(raw)
+                    if arr:
+                        try:
+                            rescued = json.loads(arr)
+                        except json.JSONDecodeError:
+                            rescued = _extract_all_objects(raw)
+                if isinstance(rescued, list):
+                    rescued = validate_slides(rescued)
+                    if rescued:
+                        chunk_results[chunk_idx].extend(rescued[:n_rescue])
+                        print(f"generate_slides: targeted rescue for chunk {chunk_idx} added {len(rescued[:n_rescue])} slide(s).")
+
+        # Re-stitch after targeted rescue
+        all_slides = []
+        for chunk_idx in range(n_chunks):
+            all_slides.extend(chunk_results[chunk_idx])
+        total_got = len(all_slides)
+        print(f"generate_slides: after targeted rescue: {total_got}/{total_slides} slides.")
+
+    # ── Pass 4: bulk rescue if still critically short (< 8 slides) ───────────
+    if total_got < 8:
+        print(f"generate_slides: critically short ({total_got}), running bulk rescue.")
         rescue = generate_slides_rescue(topic, explanation_mode)
         if rescue:
-            all_slides.extend(rescue)
+            needed = total_slides - total_got
+            all_slides.extend(rescue[:needed])
+            total_got = len(all_slides)
+            print(f"generate_slides: bulk rescue added slides, now at {total_got}.")
 
     if all_slides:
         all_slides = _normalize_point_word_lengths(all_slides, explanation_mode)
 
-    print(f"generate_slides: final count = {len(all_slides)} slides.")
+    print(f"generate_slides: FINAL count = {len(all_slides)} slides.")
     return all_slides
 
 
