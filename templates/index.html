@@ -2179,44 +2179,6 @@ function apiPath(path) {
   }
   return `${path}.php`;
 }
-
-/**
- * safeFetch — wraps fetch() so that non-JSON responses (HTML error pages,
- * proxy pages, etc.) never throw "Unexpected token '<'" in the caller.
- *
- * Usage:  const data = await safeFetch(url, options);
- *   - On success (2xx + valid JSON): returns parsed object.
- *   - On HTTP error with JSON body:  throws Error(body.error || statusText).
- *   - On HTTP error with HTML body:  throws Error("Server error: <status>").
- *   - On network failure:            throws Error("Network error: <message>").
- */
-async function safeFetch(url, options = {}) {
-  let res;
-  try {
-    res = await fetch(url, options);
-  } catch (networkErr) {
-    throw new Error('Network error: ' + networkErr.message);
-  }
-
-  const contentType = res.headers.get('content-type') || '';
-  const isJson = contentType.includes('application/json');
-
-  if (!res.ok) {
-    if (isJson) {
-      let body;
-      try { body = await res.json(); } catch (_) { body = {}; }
-      throw new Error(body.error || body.message || `Server error: ${res.status}`);
-    }
-    throw new Error(`Server error: ${res.status} ${res.statusText}`);
-  }
-
-  // Successful response — parse JSON if declared, otherwise return text.
-  if (isJson) {
-    return res.json();
-  }
-  // For non-JSON success (e.g. binary PPT download handled separately), return res itself.
-  return res;
-}
 // =====================================================================
 // STATE
 // =====================================================================
@@ -2319,11 +2281,14 @@ async function startSession() {
   showScreen('screen-loading');
 
   try {
-    const data = await safeFetch(apiPath('/generate'), {
+    const res = await fetch(apiPath('/generate'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic, explanation_mode: explanationMode }),
     });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Failed to generate slides.');
 
     state.sessionId = data.session_id;
     state.slides    = data.slides;
@@ -2384,11 +2349,13 @@ function setLoading(title, sub) {
     hudBtn.disabled = true;
 
     try {
-      const data = await safeFetch(apiPath('/generate'), {
+      const res = await fetch(apiPath('/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic, explanation_mode: explanationMode }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate slides.');
 
       state.sessionId = data.session_id;
       state.slides    = data.slides;
@@ -2678,11 +2645,14 @@ async function loadQuiz() {
   qs.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   try {
-    const data = await safeFetch(apiPath('/quiz'), {
+    const res = await fetch(apiPath('/quiz'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
     });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Failed to generate quiz.');
 
     state.quizQuestions = data.questions;
     state.quizAnswers   = new Array(data.questions.length).fill(null);
@@ -2835,18 +2805,21 @@ async function sendFeedback(quizScore, understood) {
   };
 
   try {
-    const data = await safeFetch(apiPath('/feedback'), {
+    const res = await fetch(apiPath('/feedback'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(record),
     });
-    state.adaptiveProfile = data.profile;
-    state.performance.push(record);
-    // Update XP
-    if (data.xp) {
-      state.xp = data.xp.total_xp;
-      state.streakSlides = data.xp.streak_slides;
-      updateXPDisplay(data.xp);
+    const data = await res.json();
+    if (res.ok) {
+      state.adaptiveProfile = data.profile;
+      state.performance.push(record);
+      // Update XP
+      if (data.xp) {
+        state.xp = data.xp.total_xp;
+        state.streakSlides = data.xp.streak_slides;
+        updateXPDisplay(data.xp);
+      }
     }
   } catch (_) {}
 }
@@ -2896,7 +2869,7 @@ async function sendChatMessage() {
   msgs.scrollTop = msgs.scrollHeight;
 
   try {
-    const data = await safeFetch(apiPath('/chat'), {
+    const res = await fetch(apiPath('/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2905,8 +2878,11 @@ async function sendChatMessage() {
         question,
       }),
     });
+    const data = await res.json();
     const loadEl = document.getElementById(loadId);
     if (loadEl) loadEl.remove();
+
+    if (!res.ok) throw new Error(data.error || 'Tutor unavailable.');
 
     msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
   } catch (err) {
@@ -2949,7 +2925,7 @@ async function saveNote() {
   setTimeout(() => savedMsg.classList.remove('show'), 2000);
 
   try {
-    await safeFetch(apiPath('/note'), {
+    await fetch(apiPath('/note'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2973,11 +2949,13 @@ async function generateSummary() {
   body.textContent = 'Generating your personalised summary…';
 
   try {
-    const data = await safeFetch(apiPath('/summary'), {
+    const res = await fetch(apiPath('/summary'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: state.sessionId }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to generate summary.');
     body.textContent = data.summary;
     btn.textContent = 'Regenerate';
     btn.disabled = false;
@@ -3008,11 +2986,14 @@ async function triggerReteach() {
   qs.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   try {
-    const data = await safeFetch(apiPath('/reteach'), {
+    const res = await fetch(apiPath('/reteach'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
     });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Reteach failed.');
 
     qs.innerHTML = '';
     loadSlide(state.currentIndex, data.slide);
@@ -3043,7 +3024,8 @@ async function showStats() {
   showScreen('screen-loading');
 
   try {
-    const data = await safeFetch(apiPath(`/stats/${state.sessionId}`));
+    const res = await fetch(apiPath(`/stats/${state.sessionId}`));
+    const data = await res.json();
     renderStats(data);
     showScreen('screen-stats');
   } catch (_) {
@@ -3251,11 +3233,13 @@ async function toggleVisual() {
   vp.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   try {
-    const data = await safeFetch(apiPath('/visual'), {
+    const res = await fetch(apiPath('/visual'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Visual generation failed.');
 
     state.visualLoaded = true;
     renderVisualPanel(vp, data.visual);
@@ -4143,11 +4127,14 @@ async function fetchSources() {
     </div>`;
 
   try {
-    const data = await safeFetch(apiPath('/sources'), {
+    const res = await fetch(apiPath('/sources'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex }),
     });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Failed to load sources.');
 
     renderSources(data.sources || []);
     _sourcesLoaded = true;
