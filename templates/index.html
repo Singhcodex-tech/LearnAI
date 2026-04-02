@@ -263,12 +263,12 @@
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 1rem;
+      gap: .6rem;
       padding: 1rem 1.5rem;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
       flex-shrink: 0;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
     }
     .hud-left {
       display: flex;
@@ -1596,35 +1596,77 @@
     .hud-ppt-btn:hover { background: rgba(32,197,176,.1); border-color: var(--teal); }
     .hud-ppt-btn:disabled { opacity: .35; cursor: not-allowed; }
 
-    /* ---- HUD Ask AI Tutor button ---- */
-    .hud-ask-btn {
-      display: flex; align-items: center; gap: .4rem;
-      padding: .38rem 1rem;
-      border-radius: 8px;
-      border: 1.5px solid var(--gold);
-      background: rgba(232,160,32,.13);
+    /* ---- HUD Inline AI Tutor chat bar ---- */
+    .hud-chat-bar {
+      display: none;
+      width: 100%;
+      flex: 1 1 100%;
+      flex-direction: column;
+      gap: .3rem;
+      order: 3;
+    }
+    .hud-chat-bar.visible { display: flex; }
+    .hud-chat-label {
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
       color: var(--gold);
+      display: flex; align-items: center; gap: .35rem;
+    }
+    .hud-chat-label::before {
+      content: '';
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--gold);
+      animation: goldPulse 1.6s ease-in-out infinite;
+    }
+    @keyframes goldPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: .4; transform: scale(.7); }
+    }
+    .hud-chat-inner {
+      display: flex; gap: .4rem; align-items: center;
+    }
+    .hud-chat-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1.5px solid var(--gold);
+      border-radius: 9px;
+      padding: .55rem .9rem;
+      color: var(--text);
       font-family: 'Syne', sans-serif;
-      font-size: .75rem; font-weight: 800;
-      letter-spacing: .06em; text-transform: uppercase;
-      cursor: pointer; transition: all .2s;
-      flex-shrink: 0;
-      box-shadow: 0 0 0 0 rgba(232,160,32,0);
-      animation: askPulse 2.8s ease-in-out infinite;
+      font-size: .84rem;
+      font-weight: 500;
+      outline: none;
+      resize: none;
+      height: 38px;
+      transition: border-color .2s, box-shadow .2s;
+      box-shadow: 0 0 0 2px rgba(232,160,32,.12);
     }
-    @keyframes askPulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(232,160,32,0); }
-      50%       { box-shadow: 0 0 0 5px rgba(232,160,32,.18); }
-    }
-    .hud-ask-btn:hover {
-      background: rgba(232,160,32,.24);
+    .hud-chat-input:focus {
       border-color: #f5b030;
-      color: #f5b030;
-      animation: none;
-      box-shadow: 0 0 12px rgba(232,160,32,.3);
+      box-shadow: 0 0 0 3px rgba(232,160,32,.22);
     }
-    .hud-ask-btn:active { transform: scale(.96); }
-    .hud-ask-btn .ask-icon { font-size: .95rem; }
+    .hud-chat-input::placeholder { color: var(--text-3); }
+    .hud-chat-send-btn {
+      padding: .5rem 1.1rem;
+      border-radius: 9px;
+      background: var(--gold);
+      color: #080b12;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .8rem; font-weight: 800;
+      letter-spacing: .05em;
+      cursor: pointer;
+      transition: background .2s, transform .1s, opacity .2s;
+      white-space: nowrap; flex-shrink: 0;
+      height: 38px;
+    }
+    .hud-chat-send-btn:hover { background: #f5b030; }
+    .hud-chat-send-btn:active { transform: scale(.96); }
+    .hud-chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
 
     /* chat-section highlight flash when jumped to */
     .chat-section.highlight-flash {
@@ -2048,13 +2090,23 @@
           <span class="xp-label" id="xp-display">⚡ 0 XP</span>
           <span class="xp-streak" id="streak-display"></span>
         </div>
-        <button class="hud-ask-btn" id="hud-ask-btn" onclick="openAskTutor()" title="Ask the AI Tutor a question about this slide">
-          <span class="ask-icon">🤖</span> Ask AI
-        </button>
         <button class="hud-ppt-btn" id="hud-ppt-btn" onclick="openPptModal()" title="Export slides as PowerPoint">
           🎞️ PPT
         </button>
         <div class="timer-badge" id="timer-badge">⏱ 0s</div>
+      </div>
+    </div>
+    <!-- Inline AI Tutor bar -->
+    <div class="hud-chat-bar" id="hud-chat-bar">
+      <span class="hud-chat-label">🤖 Ask AI Tutor</span>
+      <div class="hud-chat-inner">
+        <textarea
+          class="hud-chat-input"
+          id="hud-chat-input"
+          placeholder="Ask anything about this slide…"
+          rows="1"
+        ></textarea>
+        <button class="hud-chat-send-btn" id="hud-chat-send-btn" onclick="sendHudChatMessage()">Ask →</button>
       </div>
     </div>
     <div class="hud-right">
@@ -2602,6 +2654,12 @@ function loadSlide(index, overrideSlide = null) {
   document.getElementById('chat-messages').innerHTML = '';
   document.getElementById('chat-input').value = '';
 
+  // Show HUD inline chat bar
+  const hudChatBar = document.getElementById('hud-chat-bar');
+  if (hudChatBar) { hudChatBar.classList.add('visible'); }
+  const hudChatInput = document.getElementById('hud-chat-input');
+  if (hudChatInput) hudChatInput.value = '';
+
   // Show notes section and load saved note for this slide
   const notesSection = document.getElementById('notes-section');
   notesSection.style.display = 'block';
@@ -2892,28 +2950,15 @@ function closeChatSection() {
   document.getElementById('chat-section').style.display = 'none';
 }
 
-function openAskTutor() {
-  var chatSection = document.getElementById('chat-section');
-  chatSection.style.display = 'block';
-  chatSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  chatSection.classList.remove('highlight-flash');
-  void chatSection.offsetWidth;
-  chatSection.classList.add('highlight-flash');
-  setTimeout(function() { chatSection.classList.remove('highlight-flash'); }, 700);
-  setTimeout(function() {
-    var inp = document.getElementById('chat-input');
-    if (inp) inp.focus();
-  }, 400);
-}
-
-async function sendChatMessage() {
-  const input = document.getElementById('chat-input');
-  const question = input.value.trim();
+// Core chat send function — works for both HUD input and the slide-body chat
+async function _doSendChat(question, inputEl, sendBtnEl) {
   if (!question) return;
+  sendBtnEl.disabled = true;
+  inputEl.value = '';
 
-  const sendBtn = document.getElementById('chat-send-btn');
-  sendBtn.disabled = true;
-  input.value = '';
+  // Ensure the slide-body chat section is visible to show replies
+  const chatSection = document.getElementById('chat-section');
+  chatSection.style.display = 'block';
 
   const msgs = document.getElementById('chat-messages');
 
@@ -2949,17 +2994,31 @@ async function sendChatMessage() {
   }
 
   msgs.scrollTop = msgs.scrollHeight;
-  sendBtn.disabled = false;
-  input.focus();
+  sendBtnEl.disabled = false;
+  inputEl.focus();
+
+  // Scroll replies into view
+  chatSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// Allow Enter to send (Shift+Enter for newline)
+async function sendHudChatMessage() {
+  const input = document.getElementById('hud-chat-input');
+  const btn   = document.getElementById('hud-chat-send-btn');
+  await _doSendChat(input.value.trim(), input, btn);
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const btn   = document.getElementById('chat-send-btn');
+  await _doSendChat(input.value.trim(), input, btn);
+}
+
+// Allow Enter to send from either input (Shift+Enter for newline)
 document.addEventListener('keydown', e => {
-  const ci = document.getElementById('chat-input');
-  if (document.activeElement === ci && e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendChatMessage();
-  }
+  if (e.key !== 'Enter' || e.shiftKey) return;
+  const active = document.activeElement;
+  if (active && active.id === 'hud-chat-input') { e.preventDefault(); sendHudChatMessage(); }
+  if (active && active.id === 'chat-input')     { e.preventDefault(); sendChatMessage(); }
 });
 
 // =====================================================================
