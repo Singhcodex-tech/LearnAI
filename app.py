@@ -1,3 +1,4 @@
+
 import os
 import json
 import re
@@ -550,6 +551,7 @@ def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> li
     API-only rescue generation with simpler constraints to maximize reliability.
     Intentionally kept small (5 slides / 3 points) so the response never truncates.
     The caller (generate_slides) may call this multiple times or just supplement.
+    Follows the same definition->types->explanation->details->summary structure.
     """
     min_words = 45 if explanation_mode == "in_depth" else 20
     prompt = f"""
@@ -650,10 +652,13 @@ def _build_slide_prompt(
 
     # Build a short context note so the model knows where in the deck these
     # slides sit, helping it avoid repeating earlier content.
+    # FIX: removed "Continue the logical progression" which caused the model
+    # to generate continuation-style slides when a new topic was entered,
+    # instead clearly scoping each chunk to the current topic only.
     position_note = (
-        f"\nThis is slides {slide_start}–{slide_end} of {total_slides} total. "
-        "Do NOT repeat concepts or examples from slides before this range. "
-        "Continue the logical progression of the topic."
+        f"\nThis is slides {slide_start}–{slide_end} of {total_slides} total for this topic. "
+        "Each chunk is independent — do NOT carry over any content or context from previous requests. "
+        "Cover only new aspects of the topic not already covered in lower-numbered slides."
     )
 
     if math_topic:
@@ -1541,6 +1546,8 @@ def generate():
         }), 500
 
     session_id = str(uuid.uuid4())
+    # Always create a completely fresh session object — never reuse or modify
+    # an existing session, even if the same topic is requested again.
     sessions[session_id] = {
         "topic": topic,
         "slides": slides,
