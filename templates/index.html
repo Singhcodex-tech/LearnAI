@@ -1668,6 +1668,37 @@
     .hud-chat-send-btn:active { transform: scale(.96); }
     .hud-chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
 
+    /* ---- HUD inline AI answer box ---- */
+    .hud-chat-answer {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-left: 3px solid var(--gold);
+      border-radius: 10px;
+      padding: .65rem 1rem;
+      font-size: .82rem;
+      line-height: 1.6;
+      color: var(--text-2);
+      animation: fadeSlideIn .3s ease;
+      position: relative;
+      word-break: break-word;
+    }
+    .hud-chat-answer.visible { display: block; }
+    .hud-chat-answer.loading-state {
+      color: var(--text-3);
+      font-style: italic;
+    }
+    .hud-chat-answer-close {
+      position: absolute;
+      top: .35rem; right: .5rem;
+      background: none; border: none;
+      color: var(--text-3); font-size: .75rem;
+      cursor: pointer; transition: color .2s;
+      font-family: 'Syne', sans-serif;
+      line-height: 1;
+    }
+    .hud-chat-answer-close:hover { color: var(--gold); }
+
     /* chat-section highlight flash when jumped to */
     .chat-section.highlight-flash {
       animation: chatFlash .6s ease;
@@ -2107,6 +2138,11 @@
           rows="1"
         ></textarea>
         <button class="hud-chat-send-btn" id="hud-chat-send-btn" onclick="sendHudChatMessage()">Ask →</button>
+      </div>
+      <!-- Inline answer shown directly below the input -->
+      <div class="hud-chat-answer" id="hud-chat-answer">
+        <button class="hud-chat-answer-close" onclick="document.getElementById('hud-chat-answer').classList.remove('visible')" title="Dismiss">✕</button>
+        <span id="hud-chat-answer-text"></span>
       </div>
     </div>
     <div class="hud-right">
@@ -2659,6 +2695,11 @@ function loadSlide(index, overrideSlide = null) {
   if (hudChatBar) { hudChatBar.classList.add('visible'); }
   const hudChatInput = document.getElementById('hud-chat-input');
   if (hudChatInput) hudChatInput.value = '';
+  // Clear the inline answer from the previous slide
+  const hudChatAnswer = document.getElementById('hud-chat-answer');
+  if (hudChatAnswer) { hudChatAnswer.classList.remove('visible', 'loading-state'); }
+  const hudChatAnswerText = document.getElementById('hud-chat-answer-text');
+  if (hudChatAnswerText) hudChatAnswerText.textContent = '';
 
   // Show notes section and load saved note for this slide
   const notesSection = document.getElementById('notes-section');
@@ -2997,14 +3038,60 @@ async function _doSendChat(question, inputEl, sendBtnEl) {
   sendBtnEl.disabled = false;
   inputEl.focus();
 
-  // Scroll replies into view
-  chatSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Scroll replies into view within the learning-body scroll container
+  const learningBody = document.getElementById('learning-body');
+  if (learningBody) {
+    setTimeout(() => {
+      learningBody.scrollTo({ top: learningBody.scrollHeight, behavior: 'smooth' });
+    }, 50);
+  }
 }
 
 async function sendHudChatMessage() {
-  const input = document.getElementById('hud-chat-input');
-  const btn   = document.getElementById('hud-chat-send-btn');
-  await _doSendChat(input.value.trim(), input, btn);
+  const input      = document.getElementById('hud-chat-input');
+  const btn        = document.getElementById('hud-chat-send-btn');
+  const answerBox  = document.getElementById('hud-chat-answer');
+  const answerText = document.getElementById('hud-chat-answer-text');
+  const question   = input.value.trim();
+  if (!question) return;
+
+  // Show loading state inline in HUD
+  answerBox.classList.remove('loading-state');
+  answerBox.classList.add('visible', 'loading-state');
+  answerText.textContent = '🤖 Tutor is thinking…';
+
+  btn.disabled = true;
+  input.value  = '';
+
+  try {
+    const res  = await fetch(apiPath('/chat'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id:  state.sessionId,
+        slide_index: state.currentIndex,
+        question,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Tutor unavailable.');
+    answerBox.classList.remove('loading-state');
+    answerText.textContent = data.answer;
+
+    // Also append to the full chat-section below for history
+    const chatSection = document.getElementById('chat-section');
+    chatSection.style.display = 'block';
+    const msgs = document.getElementById('chat-messages');
+    msgs.innerHTML += `<div class="chat-bubble user">${escHtml(question)}</div>`;
+    msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch (err) {
+    answerBox.classList.remove('loading-state');
+    answerText.textContent = '⚠️ ' + err.message;
+  }
+
+  btn.disabled = false;
+  input.focus();
 }
 
 async function sendChatMessage() {
