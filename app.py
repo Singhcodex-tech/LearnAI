@@ -520,13 +520,15 @@ Input slides:
 
 def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
     """
-    Enforce stable word-count ranges locally to reduce regeneration failures.
-    brief: 20-25 words, in_depth: 45-55 words.
+    Enforce minimum word-count per point.
+    brief: min 20 words, in_depth: min 40 words.
+    We do NOT truncate — longer points are fine. We only flag and keep short ones
+    as-is (expansion is done by the LLM during generation with prompt rules).
     """
     if explanation_mode == "brief":
-        min_w, max_w = 20, 25
+        min_w = 15   # allow slightly under 20 so we don't discard borderline points
     else:
-        min_w, max_w = 45, 55
+        min_w = 35   # allow slightly under 45 so minor shortfalls don't get culled
 
     for slide in slides:
         for p in slide.get("points", []):
@@ -535,12 +537,10 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
             text = str(p.get("text", "")).strip()
             if not text:
                 continue
-
             words = text.split()
-            if len(words) > max_w:
-                text = " ".join(words[:max_w]).rstrip(" ,;:-")
-                if text and text[-1] not in ".!?":
-                    text += "."
+            if len(words) < min_w:
+                print(f"_normalize: short point ({len(words)} words) in '{slide.get('title','')}': {text[:60]!r}")
+            # Never truncate — keep the full text as returned by the model
             p["text"] = text
     return slides
 
@@ -652,6 +652,94 @@ TOTAL_SLIDES   = 12   # target number of slides per session
 CHUNK_SIZE     = 2    # slides per API call — 2 keeps JSON tiny & nearly corruption-free
 
 
+# ---------------------------------------------------------------------------
+# Deck plan: maps each of the 12 slide slots to a named role, and provides
+# detailed per-role generation instructions used in _build_slide_prompt.
+# ---------------------------------------------------------------------------
+
+_ROLE_INSTRUCTIONS: dict[str, str] = {
+    "definition_overview": (
+        "Define {topic} precisely. State the domain it belongs to, its origin or inventor, "
+        "and why it is important. Each point must give a concrete fact, not a vague statement."
+    ),
+    "types_classifications": (
+        "List ALL major types or categories of {topic}. For each type, give a 1-sentence "
+        "definition AND a named real-world example. Do not just name the types — explain them."
+    ),
+    "core_explanation": (
+        "Explain HOW {topic} works. Describe the core mechanism, the key components involved, "
+        "and how they interact. Include a relatable analogy for one of the points."
+    ),
+    "key_concepts_terminology": (
+        "Define the 4 most important technical terms or concepts within {topic}. "
+        "For each term: state the definition, then give a concrete example of it in use."
+    ),
+    "real_world_applications": (
+        "Name 4 specific, real-world applications of {topic}. For each application, name "
+        "the company, system, or domain using it, and briefly explain what role {topic} plays."
+    ),
+    "historical_context": (
+        "Trace the historical development of {topic}: who introduced it, when, what problem "
+        "it solved, and how it has evolved. Each point covers a distinct milestone."
+    ),
+    "advantages_limitations": (
+        "Give specific strengths AND specific weaknesses of {topic}. Each point must state "
+        "a concrete advantage or limitation with a reason or evidence — not vague claims."
+    ),
+    "comparisons": (
+        "Compare {topic} to 2–3 closely related alternatives. For each comparison, state "
+        "what is similar, what is different, and when you would choose one over the other."
+    ),
+    "advanced_details": (
+        "Cover nuanced, expert-level aspects of {topic}: edge cases, special conditions, "
+        "known pitfalls, and how practitioners handle them in real deployments."
+    ),
+    "deep_dive_1": (
+        "Go deeper on one of the most complex or interesting sub-topics within {topic}. "
+        "Explain the internal mechanics and include a specific technical detail or formula."
+    ),
+    "deep_dive_2": (
+        "Explore a second advanced sub-topic of {topic} not covered in previous slides. "
+        "Focus on a detail that surprises most learners or is frequently misunderstood."
+    ),
+    "summary_recap": (
+        "Summarise the key takeaway from the entire lecture on {topic}. "
+        "Each point recaps one major theme from the earlier slides in a crisp, memorable sentence. "
+        "End with the single most important insight a learner should remember."
+    ),
+}
+
+
+def _build_slide_deck_plan(total_slides: int) -> list[str]:
+    """
+    Return an ordered list of role keys for a deck of `total_slides` slides.
+    The order is fixed: definition → types → core → terminology → applications
+    → history → advantages → comparisons → advanced → deep_dive_1 →
+    deep_dive_2 → summary.  Extra slots repeat deep_dive roles.
+    """
+    base_plan = [
+        "definition_overview",
+        "types_classifications",
+        "core_explanation",
+        "key_concepts_terminology",
+        "real_world_applications",
+        "historical_context",
+        "advantages_limitations",
+        "comparisons",
+        "advanced_details",
+        "deep_dive_1",
+        "deep_dive_2",
+        "summary_recap",
+    ]
+    if total_slides <= len(base_plan):
+        return base_plan[:total_slides]
+    # Pad with repeating deep_dives if someone requests >12 slides
+    plan = base_plan[:]
+    extras = ["deep_dive_1", "deep_dive_2"] * ((total_slides - len(base_plan)) // 2 + 1)
+    plan.extend(extras[: total_slides - len(base_plan)])
+    return plan
+
+
 def _build_slide_prompt(
     topic: str,
     chunk_index: int,
@@ -685,6 +773,20 @@ def _build_slide_prompt(
         "Each chunk is independent — do NOT carry over any content or context from previous requests. "
         "Cover only new aspects of the topic not already covered in lower-numbered slides."
     )
+
+    # Build role_block: explicit per-slide instructions for this chunk
+    deck_plan = _build_slide_deck_plan(total_slides)
+    role_lines = []
+    for i in range(n_slides):
+        slide_num = slide_start + i
+        role_idx = slide_start - 1 + i
+        role_key = deck_plan[role_idx] if role_idx < len(deck_plan) else "deep_dive_1"
+        role_instr = _ROLE_INSTRUCTIONS.get(role_key, "Cover a new aspect of the topic.").replace("{topic}", topic)
+        role_label = role_key.replace("_", " ").title()
+        role_lines.append(
+            "Slide " + str(slide_num) + " of " + str(total_slides) + " - " + role_label + ":\n" + role_instr
+        )
+    role_block = "\n\n".join(role_lines)
 
     if math_topic:
         prompt = (
@@ -2537,5 +2639,13 @@ def generate_ppt():
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run(debug=False)
-#Just for the commit
+    port = int(os.environ.get("PORT", 5000))
+    host = os.environ.get("HOST", "0.0.0.0")
+    try:
+        from waitress import serve
+        print(f"Starting server with Waitress on {host}:{port}")
+        serve(app, host=host, port=port, threads=4)
+    except ImportError:
+        print("Waitress not found — falling back to Flask dev server.")
+        print("Install waitress for production: pip install waitress")
+        app.run(debug=False, host=host, port=port)
