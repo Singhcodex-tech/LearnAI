@@ -550,17 +550,23 @@ def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> li
     API-only rescue generation with simpler constraints to maximize reliability.
     Intentionally kept small (5 slides / 3 points) so the response never truncates.
     The caller (generate_slides) may call this multiple times or just supplement.
+    Follows the same definition->types->explanation->details->summary structure.
     """
-    min_words = 45 if explanation_mode == "in_depth" else 20
+    word_rule = "around 50 words (target range 45 to 55)" if explanation_mode == "in_depth" else "around 20 to 25"
     prompt = f"""
 You are an expert lecturer. Return ONLY valid JSON array.
 Topic: {topic}
 
-Generate exactly 5 slides.
+Generate exactly 5 slides following this EXACT structure:
+  Slide 1: Definition and Overview - define the topic, its domain, origin, and significance
+  Slide 2: Types and Classifications - list all major types with definitions and examples
+  Slide 3: Core Explanation - explain how it works, the mechanism, and key components
+  Slide 4: Applications and Key Concepts - real-world uses and important terms
+  Slide 5: Summary and Recap - recap the key takeaways
+
 Each slide must have exactly 3 points.
 Each point must be an object with keys: text, source_title, source_url.
-In brief mode, each text should be around 20 to 25 words.
-In in-depth mode, each text should be around 50 words (target range 45 to 55 words).
+Each text should be {word_rule} words.
 Use real credible sources.
 No markdown fences. No text outside JSON.
 """
@@ -625,6 +631,131 @@ TOTAL_SLIDES   = 12   # target number of slides per session
 CHUNK_SIZE     = 3    # slides generated per API call (keeps JSON small & reliable)
 
 
+def _build_slide_deck_plan(total_slides: int) -> list[str]:
+    """
+    Return a fixed slide-role plan for a total_slides-length deck.
+    This ensures every new topic always starts from slide 1 with a definition
+    and never 'continues' from a previous session.
+    Roles: definition, types, explanation, deep_dive (repeating), summary
+    """
+    if total_slides <= 0:
+        return []
+    roles = []
+    # Slide 1: Definition
+    roles.append("definition")
+    # Slide 2: Types / Classifications
+    if total_slides >= 2:
+        roles.append("types")
+    # Slide 3: Core explanation / How it works
+    if total_slides >= 3:
+        roles.append("core_explanation")
+    # Remaining slides before the last: rotating deep-dive topics
+    deep_dive_labels = [
+        "key_concepts",
+        "mechanisms_and_processes",
+        "real_world_applications",
+        "historical_context_and_development",
+        "advantages_and_limitations",
+        "comparisons_and_related_topics",
+        "advanced_details",
+        "case_studies",
+        "current_research_and_trends",
+    ]
+    deep_count = total_slides - len(roles) - 1  # -1 for summary at end
+    for i in range(max(0, deep_count)):
+        roles.append(deep_dive_labels[i % len(deep_dive_labels)])
+    # Last slide: summary / recap
+    if total_slides >= 2:
+        roles.append("summary_and_recap")
+    return roles[:total_slides]
+
+
+# Pre-compute the deck plan once for the default slide count
+_DECK_PLAN = _build_slide_deck_plan(12)
+
+_ROLE_INSTRUCTIONS: dict[str, str] = {
+    "definition": (
+        "SLIDE ROLE: Definition & Overview\n"
+        "This is the FIRST slide of a BRAND NEW topic. Start completely fresh — "
+        "do NOT assume any prior knowledge or continue from any previous session.\n"
+        "This slide must cover:\n"
+        "  1. A precise, authoritative definition of '{topic}'\n"
+        "  2. The origin or etymology of the term if relevant\n"
+        "  3. The broad domain/field it belongs to\n"
+        "  4. Why this topic matters — its significance or impact\n"
+    ),
+    "types": (
+        "SLIDE ROLE: Types & Classifications\n"
+        "This slide must cover ALL major types, categories, or variants of '{topic}'.\n"
+        "For each type:\n"
+        "  • Give its exact name and a clear 1-sentence definition\n"
+        "  • Explain what makes it distinct from the other types\n"
+        "  • Mention a concrete real-world example of that type\n"
+        "Aim for 3–5 distinct types/categories. Use a comparison approach.\n"
+    ),
+    "core_explanation": (
+        "SLIDE ROLE: Core Explanation — How It Works\n"
+        "Explain the fundamental mechanism, process, or working principle of '{topic}'.\n"
+        "Cover:\n"
+        "  • The step-by-step process or mechanism\n"
+        "  • Key components or elements involved\n"
+        "  • How the parts interact or relate\n"
+        "  • A concrete analogy or example to make it intuitive\n"
+    ),
+    "key_concepts": (
+        "SLIDE ROLE: Key Concepts & Terminology\n"
+        "Define and explain the most important technical terms and concepts within '{topic}'.\n"
+        "Each point must introduce a specific concept with its definition and context.\n"
+    ),
+    "mechanisms_and_processes": (
+        "SLIDE ROLE: Mechanisms & Processes\n"
+        "Describe the underlying processes, algorithms, or mechanisms that drive '{topic}'.\n"
+        "Include cause-and-effect relationships, formulas where applicable, and step-by-step logic.\n"
+    ),
+    "real_world_applications": (
+        "SLIDE ROLE: Real-World Applications\n"
+        "Cover specific, named real-world applications and use cases of '{topic}'.\n"
+        "Each point must name a real company, system, industry, or example — no vague generalities.\n"
+    ),
+    "historical_context_and_development": (
+        "SLIDE ROLE: Historical Context & Development\n"
+        "Trace the history and evolution of '{topic}': who developed it, when, key milestones, "
+        "and how it has changed over time.\n"
+    ),
+    "advantages_and_limitations": (
+        "SLIDE ROLE: Advantages & Limitations\n"
+        "Give a balanced analysis: specific advantages/strengths AND specific disadvantages/limitations "
+        "of '{topic}'. Include quantitative comparisons or named trade-offs where possible.\n"
+    ),
+    "comparisons_and_related_topics": (
+        "SLIDE ROLE: Comparisons & Related Topics\n"
+        "Compare '{topic}' with closely related concepts, alternatives, or competing approaches. "
+        "Use specific named comparisons and explain when to choose one over another.\n"
+    ),
+    "advanced_details": (
+        "SLIDE ROLE: Advanced Details & Deeper Dive\n"
+        "Cover nuanced, technical, or advanced aspects of '{topic}' that go beyond the basics. "
+        "Include edge cases, special scenarios, or expert-level insights.\n"
+    ),
+    "case_studies": (
+        "SLIDE ROLE: Case Studies & Examples\n"
+        "Present 3–4 concrete, named case studies or detailed examples where '{topic}' was applied "
+        "or played a key role. Include specific outcomes, numbers, or results.\n"
+    ),
+    "current_research_and_trends": (
+        "SLIDE ROLE: Current Research & Trends\n"
+        "Describe the latest developments, open research questions, and emerging trends in '{topic}'. "
+        "Reference specific recent work, researchers, or organizations where known.\n"
+    ),
+    "summary_and_recap": (
+        "SLIDE ROLE: Summary & Recap\n"
+        "This is the FINAL slide. Summarize the entire topic '{topic}' covered in this session.\n"
+        "Each point must recap one major concept/theme from the session as a concise takeaway. "
+        "End with a forward-looking statement about future directions or further study.\n"
+    ),
+}
+
+
 def _build_slide_prompt(
     topic: str,
     chunk_index: int,
@@ -643,25 +774,46 @@ def _build_slide_prompt(
 
     chunk_index is 0-based; slide numbers within the overall deck are
     [chunk_index*chunk_size + 1 … chunk_index*chunk_size + chunk_size].
+    Each chunk now has an explicit role-based structure so slides never
+    'continue' from a previous session or drift mid-generation.
     """
     slide_start = chunk_index * chunk_size + 1
     slide_end   = min(slide_start + chunk_size - 1, total_slides)
     n_slides    = slide_end - slide_start + 1
 
-    # Build a short context note so the model knows where in the deck these
-    # slides sit, helping it avoid repeating earlier content.
+    # Build per-slide role instructions for this chunk
+    deck_plan = _build_slide_deck_plan(total_slides)
+    chunk_roles = deck_plan[(slide_start - 1): slide_end]
+
+    # Build a role block that tells the model exactly what each slide in this
+    # chunk should cover — this is the core fix for the continuation bug.
+    role_lines = []
+    for i, role in enumerate(chunk_roles):
+        role_instr = _ROLE_INSTRUCTIONS.get(role, "")
+        role_instr = role_instr.replace("{topic}", topic)
+        role_lines.append(
+            f"Slide {slide_start + i} of {total_slides} — {role.replace('_', ' ').title()}:\n{role_instr}"
+        )
+    role_block = "\n\n".join(role_lines)
+
     position_note = (
-        f"\nThis is slides {slide_start}–{slide_end} of {total_slides} total. "
-        "Do NOT repeat concepts or examples from slides before this range. "
-        "Continue the logical progression of the topic."
+        f"\n\nCHUNK CONTEXT: You are generating slides {slide_start}–{slide_end} of {total_slides}. "
+        "This is a FRESH, COMPLETE topic from the very beginning. "
+        "Do NOT assume any previous context or session. "
+        "Generate EXACTLY the slides described in the role instructions above, in order. "
+        "Do NOT skip, combine, or reorder slides."
     )
 
     if math_topic:
         prompt = (
             "You are an expert mathematics professor and textbook author creating rigorous, deeply detailed, exam-quality slides.\n\n"
             "Topic: %s\n"
-            "%s%s%s%s\n\n"
-            "Return ONLY a valid JSON array. No extra text, no markdown fences.\n\n"
+            "%s%s%s\n\n"
+            "=== SLIDE ROLES FOR THIS CHUNK ===\n"
+            "%s\n"
+            "=== END SLIDE ROLES ===\n"
+            "%s\n\n"
+            "Return ONLY a valid JSON array of exactly %d slide objects. No extra text, no markdown fences.\n\n"
             "CRITICAL: Every bullet point must carry its OWN inline equation, detailed explanation, and sub-steps.\n\n"
             "Required JSON structure for EVERY slide:\n"
             "[\n"
@@ -695,7 +847,7 @@ def _build_slide_prompt(
             "  }\n"
             "]\n\n"
             "STRICT RULES:\n"
-            "- Generate exactly %d slides\n"
+            "- Generate EXACTLY %d slides in the same order as the role instructions\n"
             "- Each slide: exactly 4 points\n"
             "%s\n"
             "- EVERY point MUST be an OBJECT (not a string) with keys: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
@@ -703,8 +855,8 @@ def _build_slide_prompt(
             "- sub_steps: exactly 4 steps, each a short clear string showing the key action and result\n"
             "- source_title and source_url must be specific to each bullet and from real, credible references\n"
             "- worked_example: a clear numeric problem with 4 concise steps\n"
-            "- Slides must progress logically within this chunk\n"
-            "- Do NOT repeat the same formula or example\n"
+            "- Each slide MUST follow the role instructions for its position — slide 1 must be a definition, slide 2 must cover types, etc.\n"
+            "- Do NOT repeat the same formula or example across slides\n"
             "- Do NOT output anything outside the JSON array\n"
             "- Do NOT use plain strings for points — ALWAYS use the object format above\n"
         ) % (
@@ -712,27 +864,33 @@ def _build_slide_prompt(
             difficulty_hint,
             depth_note,
             compact_note,
+            role_block,
             position_note,
+            n_slides,
             n_slides,
             point_length_rule_math,
         )
         max_tok = 3800
     else:
-        prompt = f"""
-You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
+        prompt = f"""You are an expert university professor and textbook author creating deeply detailed, lecture-quality academic slides.
 
 Topic: {topic}
-{difficulty_hint}{depth_note}{compact_note}{position_note}
+{difficulty_hint}{depth_note}{compact_note}
 
-Return ONLY a valid JSON array. No extra text.
+=== SLIDE ROLES FOR THIS CHUNK ===
+{role_block}
+=== END SLIDE ROLES ===
+{position_note}
+
+Return ONLY a valid JSON array of exactly {n_slides} slide objects. No extra text, no markdown fences.
 
 Format:
 [
   {{
-    "title": "Slide title",
+    "title": "Slide title matching the role",
     "points": [
       {{
-        "text": "Detailed explanation sentence",
+        "text": "Detailed explanation sentence following the role instructions",
         "source_title": "Credible source title for this bullet",
         "source_url": "Direct URL/DOI for this bullet source, or empty string if unavailable"
       }}
@@ -741,7 +899,8 @@ Format:
 ]
 
 STRICT RULES:
-- Generate exactly {n_slides} slides
+- Generate EXACTLY {n_slides} slides in the same order as the role instructions above
+- Each slide MUST follow its assigned role — the first slide must define the topic, second must cover types, etc.
 - Each slide must have exactly 4 bullet points
 {point_length_rule_non_math}
 - EVERY bullet point MUST be an object with keys: text, source_title, source_url
@@ -755,7 +914,7 @@ STRICT RULES:
   • a cause-and-effect relationship
   • a quantitative fact or formula
 - source_title and source_url must be real, credible references matching the exact bullet content
-- Do NOT repeat the same information
+- Do NOT repeat the same information across slides
 - Do NOT output anything outside JSON
 """
         max_tok = 3200
@@ -1541,6 +1700,8 @@ def generate():
         }), 500
 
     session_id = str(uuid.uuid4())
+    # Always create a completely fresh session object — never reuse or modify
+    # an existing session, even if the same topic is requested again.
     sessions[session_id] = {
         "topic": topic,
         "slides": slides,
