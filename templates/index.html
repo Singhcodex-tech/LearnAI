@@ -582,7 +582,7 @@
     .slide-card::before {
       content: '';
       position: absolute; top: 0; left: 0;
-      width: 3px; height: 100%;
+      width: 4px; height: 100%;
       background: linear-gradient(180deg, var(--accent), var(--teal));
     }
     @keyframes fadeUp {
@@ -605,7 +605,7 @@
       font-family: 'Playfair Display', serif;
       font-size: clamp(1.25rem, 2.5vw, 1.75rem);
       font-weight: 700;
-      color: var(--text);
+      color: #ffffff;
       line-height: 1.2;
       margin-bottom: 1.4rem;
     }
@@ -623,25 +623,26 @@
       padding: .9rem 1rem;
       background: var(--surface);
       border-radius: 10px;
-      border: 1px solid var(--border);
-      font-size: .88rem;
-      line-height: 1.65;
-      color: var(--text2);
+      border: 1px solid var(--border2);
+      font-size: .9rem;
+      line-height: 1.7;
+      color: var(--text);
       animation: fadeUp .35s ease both;
-      transition: border-color .2s;
+      transition: border-color .2s, background .2s;
     }
-    .slide-point:hover { border-color: var(--border2); }
-    .slide-point.reteach-point { border-color: rgba(34,211,184,.15); }
+    .slide-point:hover { border-color: var(--accent); background: rgba(108,140,255,.04); }
+    .slide-point.reteach-point { border-color: rgba(34,211,184,.3); }
 
     .pt-bullet {
       flex-shrink: 0;
-      width: 5px; height: 5px;
+      width: 8px; height: 8px;
       border-radius: 50%;
       background: var(--accent);
-      margin-top: .58rem;
+      margin-top: .55rem;
+      box-shadow: 0 0 6px rgba(108,140,255,.5);
     }
-    .reteach-point .pt-bullet { background: var(--teal); }
-    .pt-main { flex: 1; }
+    .reteach-point .pt-bullet { background: var(--teal); box-shadow: 0 0 6px rgba(34,211,184,.5); }
+    .pt-main { flex: 1; color: var(--text); }
     .pt-source {
       margin-top: .4rem;
       font-size: .74rem;
@@ -917,26 +918,33 @@
     /* ── Chat section ── */
     .chat-section {
       background: var(--card);
-      border: 1px solid var(--border2);
+      border: 1px solid rgba(108,140,255,.3);
       border-radius: var(--radius);
       overflow: hidden;
       animation: fadeUp .4s ease;
-      display: none;
+      box-shadow: 0 0 0 1px rgba(108,140,255,.08), 0 4px 20px rgba(0,0,0,.25);
+    }
+    .chat-section::before {
+      content: '';
+      display: block;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--teal));
     }
     .chat-head {
       display: flex; align-items: center; justify-content: space-between;
       padding: .85rem 1.25rem;
       border-bottom: 1px solid var(--border);
+      background: rgba(108,140,255,.05);
     }
     .chat-head-label {
-      font-size: .7rem; font-weight: 700;
-      letter-spacing: .14em; text-transform: uppercase;
-      color: var(--text3);
+      font-size: .82rem; font-weight: 700;
+      color: var(--text);
       display: flex; align-items: center; gap: .5rem;
     }
     .chat-head-label::before {
-      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
       background: var(--accent); animation: glowPulse 2s infinite;
+      flex-shrink: 0;
     }
     @keyframes glowPulse {
       0%,100% { opacity: 1; } 50% { opacity: .4; }
@@ -948,60 +956,63 @@
     }
     .chat-close:hover { color: var(--text); }
     .chat-msgs {
-      padding: 1rem 1.25rem;
-      max-height: 220px;
+      padding: .85rem 1.25rem;
+      max-height: 260px;
       overflow-y: auto;
       display: flex; flex-direction: column; gap: .6rem;
     }
     .chat-bubble {
-      padding: .65rem .9rem;
+      padding: .7rem 1rem;
       border-radius: 10px;
-      font-size: .85rem;
-      line-height: 1.55;
-      max-width: 88%;
+      font-size: .87rem;
+      line-height: 1.6;
+      max-width: 92%;
     }
     .chat-bubble.user {
       align-self: flex-end;
-      background: rgba(108,140,255,.15);
-      border: 1px solid rgba(108,140,255,.25);
+      background: rgba(108,140,255,.2);
+      border: 1px solid rgba(108,140,255,.35);
       color: var(--text);
+      font-weight: 500;
     }
     .chat-bubble.tutor {
       align-self: flex-start;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text2);
+      background: var(--card2);
+      border: 1px solid var(--border2);
+      color: var(--text);
     }
-    .chat-bubble.loading { color: var(--text3); font-style: italic; background: var(--surface); border: 1px solid var(--border); align-self: flex-start; }
+    .chat-bubble.loading { color: var(--text2); font-style: italic; background: var(--surface); border: 1px solid var(--border); align-self: flex-start; }
     .chat-input-row {
       display: flex; gap: .5rem;
       padding: .75rem 1.25rem;
       border-top: 1px solid var(--border);
+      background: rgba(108,140,255,.03);
     }
     .chat-input {
       flex: 1;
       background: var(--surface);
       border: 1px solid var(--border2);
       border-radius: 8px;
-      padding: .6rem .85rem;
+      padding: .65rem .95rem;
       color: var(--text);
       font-family: 'Outfit', sans-serif;
-      font-size: .85rem;
+      font-size: .88rem;
       outline: none;
-      transition: border-color .2s;
+      transition: border-color .2s, box-shadow .2s;
     }
-    .chat-input:focus { border-color: var(--accent); }
+    .chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(108,140,255,.12); }
     .chat-input::placeholder { color: var(--text3); }
     .chat-send-btn {
       display: flex; align-items: center; justify-content: center;
-      width: 34px; height: 34px; flex-shrink: 0;
+      width: 36px; height: 36px; flex-shrink: 0;
       background: var(--accent);
       border: none; border-radius: 8px;
-      color: #fff; font-size: .9rem;
-      cursor: pointer; transition: background .18s;
+      color: #fff; font-size: 1rem; font-weight: 700;
+      cursor: pointer; transition: background .18s, transform .15s;
     }
-    .chat-send-btn:hover { background: #7d9bff; }
-    .chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .chat-send-btn:hover { background: #7d9bff; transform: translateY(-1px); }
+    .chat-send-btn:active { transform: translateY(0); }
+    .chat-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
     /* ── Visual panel ── */
     .visual-toggle-btn {
@@ -2162,6 +2173,21 @@ function loadSlide(index) {
 
   body.innerHTML = `
     ${bannerHtml}
+
+    <div class="chat-section" id="chat-section">
+      <div class="chat-head">
+        <div class="chat-head-label">🤖 AI Tutor — Ask anything about this slide</div>
+      </div>
+      <div class="chat-msgs" id="chat-messages">
+        <div class="chat-bubble tutor" style="font-style:italic;color:var(--text3);">Hi! I'm your AI tutor. Ask me anything about <strong style="color:var(--text2)">${escHtml(slide.title)}</strong> — definitions, examples, deep dives, anything.</div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" class="chat-input" id="chat-input"
+          placeholder="Ask a question about this slide…" autocomplete="off" />
+        <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">↑</button>
+      </div>
+    </div>
+
     <div class="slide-card">
       <div class="${tagCls}">${tagText}</div>
       <div class="slide-title">${escHtml(slide.title)}</div>
@@ -2198,19 +2224,6 @@ function loadSlide(index) {
     <div class="quiz-section" id="quiz-section">
       <div style="text-align:center; padding:1.25rem; color:var(--text3); font-size:.85rem;">
         ⬆ Rate your understanding to unlock the quiz
-      </div>
-    </div>
-
-    <div class="chat-section" id="chat-section">
-      <div class="chat-head">
-        <div class="chat-head-label">AI Tutor Chat</div>
-        <span class="chat-close" onclick="closeChatSection()">✕</span>
-      </div>
-      <div class="chat-msgs" id="chat-messages"></div>
-      <div class="chat-input-row">
-        <input type="text" class="chat-input" id="chat-input"
-          placeholder="Ask anything about this slide…" autocomplete="off" />
-        <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">↑</button>
       </div>
     </div>
 
@@ -2427,12 +2440,12 @@ async function sendHudChatMessage() {
     text.textContent = data.answer;
 
     // Also add to full chat section
-    const chatSection = document.getElementById('chat-section');
-    chatSection.style.display = 'block';
     const msgs = document.getElementById('chat-messages');
-    msgs.innerHTML += `<div class="chat-bubble user">${escHtml(q)}</div>`;
-    msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
-    msgs.scrollTop = msgs.scrollHeight;
+    if (msgs) {
+      msgs.innerHTML += `<div class="chat-bubble user">${escHtml(q)}</div>`;
+      msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+    }
   } catch (err) {
     answer.classList.remove('loading-state');
     text.textContent = '⚠️ ' + err.message;
@@ -2446,9 +2459,8 @@ async function _doSendChat(question, inputEl, sendBtnEl) {
   if (!question) return;
   sendBtnEl.disabled = true;
   inputEl.value = '';
-  const chatSection = document.getElementById('chat-section');
-  chatSection.style.display = 'block';
   const msgs = document.getElementById('chat-messages');
+  if (!msgs) { sendBtnEl.disabled = false; return; }
   msgs.innerHTML += `<div class="chat-bubble user">${escHtml(question)}</div>`;
   const loadId = 'cl-' + Date.now();
   msgs.innerHTML += `<div class="chat-bubble loading" id="${loadId}">Tutor is thinking…</div>`;
@@ -2471,8 +2483,8 @@ async function _doSendChat(question, inputEl, sendBtnEl) {
   msgs.scrollTop = msgs.scrollHeight;
   sendBtnEl.disabled = false;
   inputEl.focus();
-  const lb = document.getElementById('learning-body');
-  if (lb) setTimeout(() => lb.scrollTo({ top: lb.scrollHeight, behavior: 'smooth' }), 50);
+  // Scroll chat msgs so latest answer is visible
+  setTimeout(() => msgs.scrollTop = msgs.scrollHeight, 50);
 }
 
 async function sendChatMessage() {
@@ -2482,8 +2494,7 @@ async function sendChatMessage() {
 }
 
 function closeChatSection() {
-  const cs = document.getElementById('chat-section');
-  if (cs) cs.style.display = 'none';
+  // Chat is always visible - this is a no-op kept for compatibility
 }
 
 // ─── NOTES ───────────────────────────────────────────────────────────────────
