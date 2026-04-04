@@ -593,67 +593,183 @@ def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> li
 # Structured Learning Control — Subject / Mode / Depth prompt builder
 # ---------------------------------------------------------------------------
 
-VALID_SUBJECTS = {"Math", "English", "Coding"}
-VALID_MODES    = {"Learn", "Practice", "Test"}
-VALID_DEPTHS   = {"Beginner", "Exam", "Advanced"}
+VALID_MODES  = {"Learn", "Practice", "Test"}
+VALID_DEPTHS = {"Beginner", "Exam", "Advanced"}
+
+# Every subject gets its own mode × depth matrix.
+# Keys must exactly match what the frontend sends (title-cased).
+_SUBJECT_MODE_INSTRUCTIONS: dict[str, dict[str, str]] = {
+    # ── STEM ────────────────────────────────────────────────────────────
+    "Math": {
+        "Learn":    "Explain the concept step-by-step with clear worked examples. "
+                    "Show each calculation stage and define every symbol used.",
+        "Practice": "Generate realistic practice problems (numeric, word-problem, proof) "
+                    "with full solutions and reasoning shown at each step.",
+        "Test":     "Generate exam-style questions ONLY. Do NOT include answers, "
+                    "hints, or solutions anywhere in the slide content.",
+    },
+    "Physics": {
+        "Learn":    "Explain the physical law or phenomenon with intuition first, "
+                    "then derive the governing equations step-by-step with SI units.",
+        "Practice": "Provide quantitative physics problems with full worked solutions, "
+                    "including free-body diagrams or vector descriptions where relevant.",
+        "Test":     "Pose physics problems with given data and ask for derivations or "
+                    "numerical answers ONLY. Do NOT include solutions or hints.",
+    },
+    "Chemistry": {
+        "Learn":    "Explain chemical concepts with reaction mechanisms, bonding diagrams, "
+                    "and real-world examples of compounds or processes.",
+        "Practice": "Provide stoichiometry, reaction-balancing, or mechanism exercises "
+                    "with complete solutions and mole/unit tracking shown.",
+        "Test":     "Present chemical problems or name-the-product tasks ONLY. "
+                    "Do NOT include answers, structures, or explanations.",
+    },
+    "Biology": {
+        "Learn":    "Explain biological processes and structures using clear diagrams "
+                    "described in text, real organism examples, and function-structure links.",
+        "Practice": "Provide labelling exercises, process-ordering tasks, or case-study "
+                    "questions with model answers and common-mistake notes.",
+        "Test":     "Generate structured biology questions and diagrams-to-label ONLY. "
+                    "Do NOT include answers or model responses.",
+    },
+    "Coding": {
+        "Learn":    "Explain the programming concept clearly, then show a concise working "
+                    "code example. Break down each line and explain why it is written that way.",
+        "Practice": "Provide a coding challenge with input/output examples and a partial "
+                    "skeleton or hint. Include the full correct solution with explanation.",
+        "Test":     "Present programming problems and specifications ONLY. Do NOT include "
+                    "solutions, pseudocode answers, or implementation hints.",
+    },
+    "Computer Science": {
+        "Learn":    "Explain CS theory (algorithms, data structures, complexity) with "
+                    "step-by-step traces, pseudocode, and Big-O analysis.",
+        "Practice": "Provide algorithm design or analysis exercises with full solutions, "
+                    "including time/space complexity justification.",
+        "Test":     "Pose CS theory or algorithm questions ONLY. Do NOT include "
+                    "solutions, proofs, or complexity answers.",
+    },
+    "Statistics": {
+        "Learn":    "Explain statistical concepts with formulas, real datasets, and "
+                    "interpretation of results in plain language.",
+        "Practice": "Provide calculation exercises (hypothesis tests, confidence intervals, "
+                    "regression) with full worked solutions and interpretation.",
+        "Test":     "Present statistical problems with data tables ONLY. "
+                    "Do NOT include calculations, p-values, or conclusions.",
+    },
+    # ── HUMANITIES ──────────────────────────────────────────────────────
+    "English": {
+        "Learn":    "Explain grammar rules or literary concepts with clear examples "
+                    "and counter-examples. Use real sentences to illustrate every rule.",
+        "Practice": "Provide writing or grammar correction exercises. Include model "
+                    "answers and explanations of common mistakes.",
+        "Test":     "Generate comprehension tasks, essay prompts, or grammar exercises "
+                    "ONLY. Do NOT include model answers or corrections.",
+    },
+    "History": {
+        "Learn":    "Narrate historical events with causes, key figures, dates, and "
+                    "long-term consequences. Connect events to broader patterns.",
+        "Practice": "Provide source-analysis or essay-structure exercises based on "
+                    "real historical documents, with model responses.",
+        "Test":     "Pose source-based or essay questions ONLY. "
+                    "Do NOT include model answers or mark schemes.",
+    },
+    "Geography": {
+        "Learn":    "Explain physical or human geography concepts with real place examples, "
+                    "statistics, and cause-effect chains.",
+        "Practice": "Provide case-study analysis or map-interpretation exercises "
+                    "with full model answers and data commentary.",
+        "Test":     "Present geography questions or data-response tasks ONLY. "
+                    "Do NOT include answers or explanations.",
+    },
+    "Philosophy": {
+        "Learn":    "Introduce the philosophical argument, key thinkers, objections, "
+                    "and counter-arguments with clear logical structure.",
+        "Practice": "Provide argument-analysis or essay-plan tasks with model responses "
+                    "demonstrating critical evaluation techniques.",
+        "Test":     "Pose philosophical essay questions or argument-analysis tasks ONLY. "
+                    "Do NOT include model answers or evaluation commentary.",
+    },
+    # ── APPLIED / PROFESSIONAL ──────────────────────────────────────────
+    "Economics": {
+        "Learn":    "Explain economic theory with real-world data, diagrams described "
+                    "in text (supply/demand, curves), and policy implications.",
+        "Practice": "Provide calculation or diagram-analysis exercises (elasticity, "
+                    "GDP, market equilibrium) with full solutions.",
+        "Test":     "Present economics data-response or essay questions ONLY. "
+                    "Do NOT include answers, calculations, or diagram descriptions.",
+    },
+    "Business": {
+        "Learn":    "Explain business concepts (strategy, finance, marketing, HR) with "
+                    "real company examples, frameworks, and key metrics.",
+        "Practice": "Provide case-study analysis tasks or financial calculation exercises "
+                    "with model answers and evaluation criteria.",
+        "Test":     "Pose business case-study or essay questions ONLY. "
+                    "Do NOT include model answers or mark schemes.",
+    },
+    "Law": {
+        "Learn":    "Explain legal principles, landmark cases, and statutes clearly. "
+                    "Use the IRAC framework (Issue, Rule, Application, Conclusion).",
+        "Practice": "Provide problem scenarios requiring legal analysis with model "
+                    "IRAC answers and note on jurisdiction where relevant.",
+        "Test":     "Present legal problem questions or essay prompts ONLY. "
+                    "Do NOT include model answers, case citations, or analysis.",
+    },
+    "Medicine": {
+        "Learn":    "Explain anatomy, physiology, or clinical concepts with mechanisms, "
+                    "pathophysiology, and real clinical presentations.",
+        "Practice": "Provide clinical vignette exercises with full diagnostic reasoning, "
+                    "differential diagnoses, and management plans.",
+        "Test":     "Present clinical vignettes or MCQ stems ONLY. "
+                    "Do NOT include diagnoses, reasoning, or management answers.",
+    },
+    "Psychology": {
+        "Learn":    "Explain psychological theories, key studies, and real-world "
+                    "applications with evaluation of strengths and limitations.",
+        "Practice": "Provide essay-plan or study-evaluation exercises with model "
+                    "answers demonstrating PEEL structure.",
+        "Test":     "Pose psychology essay or short-answer questions ONLY. "
+                    "Do NOT include model answers or study details.",
+    },
+}
+
+VALID_SUBJECTS = set(_SUBJECT_MODE_INSTRUCTIONS.keys())
+
+# Depth modifiers apply to ALL subjects uniformly
+_DEPTH_INSTRUCTIONS: dict[str, str] = {
+    "Beginner":  "Use simple, jargon-free language. Assume no prior knowledge. "
+                 "Include everyday analogies and small, accessible examples.",
+    "Exam":      "Use structured, moderately detailed explanations suited to exam "
+                 "preparation. Balance clarity with academic rigour and use precise terminology.",
+    "Advanced":  "Use precise technical language and provide deep, challenging content. "
+                 "Include edge cases, nuances, competing theories, and expert-level detail.",
+}
 
 
 def build_learning_context(subject: str, mode: str, depth: str) -> str:
     """
-    Return a short instruction paragraph that is prepended to every slide
-    prompt when the user has selected Subject / Mode / Depth controls.
-    Returns an empty string if any value is absent or invalid.
+    Return an instruction block prepended to every slide prompt when the user
+    picks Subject + Mode + Depth.  Returns "" if any value is missing/invalid
+    so the default university-professor prompt is used unchanged.
+    All three controls must be set for the optimised prompt to activate.
     """
-    subject = subject.strip().title() if subject else ""
-    mode    = mode.strip().title()    if mode    else ""
-    depth   = depth.strip().title()   if depth   else ""
+    subject = (subject or "").strip()
+    mode    = (mode    or "").strip().title()
+    depth   = (depth   or "").strip().title()
 
-    if subject not in VALID_SUBJECTS or mode not in VALID_MODES or depth not in VALID_DEPTHS:
+    # Normalise subject capitalisation against known keys
+    subject_match = next(
+        (s for s in VALID_SUBJECTS if s.lower() == subject.lower()), ""
+    )
+
+    if not subject_match or mode not in VALID_MODES or depth not in VALID_DEPTHS:
+        # Incomplete selection → fall through to default professor prompt (no change)
         return ""
 
-    # ── Mode instruction ──────────────────────────────────────────────────
-    mode_instructions = {
-        "Math": {
-            "Learn":    "Explain the concept step-by-step with clear worked examples. "
-                        "Show each calculation stage and define every symbol used.",
-            "Practice": "Generate realistic practice problems with full solutions shown. "
-                        "Include variety: numeric, word-problem, and proof styles.",
-            "Test":     "Generate exam-style questions ONLY. Do NOT include answers, "
-                        "hints, or solutions in any point text.",
-        },
-        "English": {
-            "Learn":    "Explain grammar rules or literary concepts with clear examples "
-                        "and counter-examples. Use real sentences to illustrate.",
-            "Practice": "Provide writing or grammar exercises. Include model answers "
-                        "and explanations of common mistakes.",
-            "Test":     "Generate tasks and questions ONLY. Do NOT include model answers, "
-                        "corrections, or explanations within any point text.",
-        },
-        "Coding": {
-            "Learn":    "Explain the concept, then show a concise working code example. "
-                        "Break down each line and explain why it is written that way.",
-            "Practice": "Provide a coding challenge with input/output examples and "
-                        "a hint or partial skeleton. Include the full solution.",
-            "Test":     "Present problems and specifications ONLY. Do NOT include "
-                        "solutions, pseudocode answers, or implementation hints.",
-        },
-    }
-
-    # ── Depth instruction ─────────────────────────────────────────────────
-    depth_instructions = {
-        "Beginner":  "Use simple, jargon-free language. Assume no prior knowledge. "
-                     "Include everyday analogies and small, easy examples.",
-        "Exam":      "Use structured, moderately detailed explanations appropriate "
-                     "for exam preparation. Balance clarity with academic rigour.",
-        "Advanced":  "Use precise technical language and provide deep, challenging "
-                     "content. Include edge cases, nuances, and expert-level detail.",
-    }
-
-    mode_text  = mode_instructions[subject][mode]
-    depth_text = depth_instructions[depth]
+    mode_text  = _SUBJECT_MODE_INSTRUCTIONS[subject_match][mode]
+    depth_text = _DEPTH_INSTRUCTIONS[depth]
 
     return (
-        f"LEARNING CONTEXT — Subject: {subject} | Mode: {mode} | Depth: {depth}\n"
+        f"LEARNING CONTEXT — Subject: {subject_match} | Mode: {mode} | Depth: {depth}\n"
         f"Mode instruction: {mode_text}\n"
         f"Depth instruction: {depth_text}\n"
     )
