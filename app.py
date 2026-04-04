@@ -527,7 +527,7 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
     This version only logs short points so we can monitor quality without
     destroying any content.
     """
-    if explanation_mode == "brief":
+    if explanation_mode in {"brief", "eli5"}:
         min_w = 15
     else:
         min_w = 35
@@ -558,12 +558,12 @@ def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> li
     """
     point_length_rule = (
         "- Every point text should be around 50 words (target range 45-55 words)"
-        if explanation_mode == "in_depth"
+        if explanation_mode not in {"brief", "eli5"}
         else "- Every point text should be around 20 to 25 words"
     )
     depth_note = (
         "\nNOTE: Explain in depth with concrete details."
-        if explanation_mode == "in_depth"
+        if explanation_mode not in {"brief", "eli5"}
         else "\nNOTE: Keep explanations brief and easy to scan."
     )
     math_topic = is_math_topic(topic)
@@ -856,18 +856,59 @@ def generate_slides(
     retry: bool = False,
 ) -> list:
     explanation_mode = str(explanation_mode or "in_depth").strip().lower()
-    if explanation_mode not in {"brief", "in_depth"}:
+    valid_modes = {"brief", "in_depth", "eli5", "academic", "practical", "socratic"}
+    if explanation_mode not in valid_modes:
         explanation_mode = "in_depth"
 
+    # ── Per-mode depth notes and length rules ────────────────────────────────
     if explanation_mode == "brief":
         depth_note = (
             "\nNOTE: Keep explanations brief and easy to scan. "
-            "Use concise wording and only essential detail."
+            "Use concise, punchy wording and only the most essential details. "
+            "Skip all background — focus on key facts only."
         )
         point_length_rule = "- Every point text should be around 20 to 25 words"
-    else:
+
+    elif explanation_mode == "eli5":
         depth_note = (
-            "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details."
+            "\nNOTE: Explain Like I'm 5 (ELI5). Use the simplest possible language — "
+            "everyday analogies, short sentences, zero jargon. "
+            "Imagine you are explaining to a curious 10-year-old using toy cars, pizza, or playground examples. "
+            "Every abstract concept must be grounded with a concrete real-world comparison."
+        )
+        point_length_rule = "- Every point text should be around 25 to 35 words, using simple words and a friendly analogy"
+
+    elif explanation_mode == "academic":
+        depth_note = (
+            "\nNOTE: Academic style. Write at university-level precision. "
+            "Use correct technical terminology, cite theoretical frameworks where applicable, "
+            "reference seminal thinkers or papers by name, and include nuanced distinctions. "
+            "Suitable for an undergraduate or graduate student preparing for an exam."
+        )
+        point_length_rule = "- Every point text should be around 55 to 65 words, using precise academic language"
+
+    elif explanation_mode == "practical":
+        depth_note = (
+            "\nNOTE: Practical / applied style. Focus entirely on how this is used in the real world. "
+            "Every point must include a concrete use-case, tool name, industry example, or step-by-step action. "
+            "Skip theory unless it directly explains a practical outcome. "
+            "Think: what would a practitioner or engineer actually need to know to do their job?"
+        )
+        point_length_rule = "- Every point text should be around 40 to 50 words, each anchored to a real-world example or action"
+
+    elif explanation_mode == "socratic":
+        depth_note = (
+            "\nNOTE: Socratic style. Each bullet point should be framed as a question-and-answer pair "
+            "or provoke deeper thinking. Start each point with a rhetorical or probing question, "
+            "then answer it concisely. The goal is to make the student think critically, "
+            "not just memorise facts. Challenge assumptions where appropriate."
+        )
+        point_length_rule = "- Every point text should start with a question and then answer it, totalling around 40 to 50 words"
+
+    else:  # in_depth (default)
+        depth_note = (
+            "\nNOTE: Explain in depth. Include richer context, clear reasoning, and concrete details. "
+            "Cover the 'what', 'why', and 'how'. Include mechanisms, causes, and real examples."
         )
         point_length_rule = "- Every point text should be around 50 words (target range 45–55 words)"
 
@@ -1508,7 +1549,8 @@ def generate():
         return jsonify({"error": "No topic provided"}), 400
     if len(topic) > MAX_TOPIC_LENGTH:
         return jsonify({"error": f"Topic must be {MAX_TOPIC_LENGTH} characters or fewer"}), 400
-    if explanation_mode not in {"brief", "in_depth"}:
+    valid_modes = {"brief", "in_depth", "eli5", "academic", "practical", "socratic"}
+    if explanation_mode not in valid_modes:
         explanation_mode = "in_depth"
 
     slides = []
@@ -1586,16 +1628,9 @@ def set_explain_mode():
         return jsonify({"error": "Session not found"}), 404
 
     raw_mode = str(data.get("explanation_mode", "in_depth")).strip().lower()
-    # Map frontend UI modes to backend supported modes
-    mode_map = {
-        "in_depth":  "in_depth",
-        "brief":     "brief",
-        "eli5":      "brief",       # ELI5 → brief with simpler content
-        "academic":  "in_depth",    # Academic → in_depth
-        "practical": "in_depth",    # Practical → in_depth
-        "socratic":  "in_depth",    # Socratic → in_depth
-    }
-    mapped = mode_map.get(raw_mode, "in_depth")
+    # All 6 modes are now natively supported
+    valid_modes = {"in_depth", "brief", "eli5", "academic", "practical", "socratic"}
+    mapped = raw_mode if raw_mode in valid_modes else "in_depth"
     session["explanation_mode"] = mapped
     return jsonify({"explanation_mode": mapped})
 
