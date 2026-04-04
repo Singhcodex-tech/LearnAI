@@ -590,6 +590,76 @@ def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> li
 
 
 # ---------------------------------------------------------------------------
+# Structured Learning Control — Subject / Mode / Depth prompt builder
+# ---------------------------------------------------------------------------
+
+VALID_SUBJECTS = {"Math", "English", "Coding"}
+VALID_MODES    = {"Learn", "Practice", "Test"}
+VALID_DEPTHS   = {"Beginner", "Exam", "Advanced"}
+
+
+def build_learning_context(subject: str, mode: str, depth: str) -> str:
+    """
+    Return a short instruction paragraph that is prepended to every slide
+    prompt when the user has selected Subject / Mode / Depth controls.
+    Returns an empty string if any value is absent or invalid.
+    """
+    subject = subject.strip().title() if subject else ""
+    mode    = mode.strip().title()    if mode    else ""
+    depth   = depth.strip().title()   if depth   else ""
+
+    if subject not in VALID_SUBJECTS or mode not in VALID_MODES or depth not in VALID_DEPTHS:
+        return ""
+
+    # ── Mode instruction ──────────────────────────────────────────────────
+    mode_instructions = {
+        "Math": {
+            "Learn":    "Explain the concept step-by-step with clear worked examples. "
+                        "Show each calculation stage and define every symbol used.",
+            "Practice": "Generate realistic practice problems with full solutions shown. "
+                        "Include variety: numeric, word-problem, and proof styles.",
+            "Test":     "Generate exam-style questions ONLY. Do NOT include answers, "
+                        "hints, or solutions in any point text.",
+        },
+        "English": {
+            "Learn":    "Explain grammar rules or literary concepts with clear examples "
+                        "and counter-examples. Use real sentences to illustrate.",
+            "Practice": "Provide writing or grammar exercises. Include model answers "
+                        "and explanations of common mistakes.",
+            "Test":     "Generate tasks and questions ONLY. Do NOT include model answers, "
+                        "corrections, or explanations within any point text.",
+        },
+        "Coding": {
+            "Learn":    "Explain the concept, then show a concise working code example. "
+                        "Break down each line and explain why it is written that way.",
+            "Practice": "Provide a coding challenge with input/output examples and "
+                        "a hint or partial skeleton. Include the full solution.",
+            "Test":     "Present problems and specifications ONLY. Do NOT include "
+                        "solutions, pseudocode answers, or implementation hints.",
+        },
+    }
+
+    # ── Depth instruction ─────────────────────────────────────────────────
+    depth_instructions = {
+        "Beginner":  "Use simple, jargon-free language. Assume no prior knowledge. "
+                     "Include everyday analogies and small, easy examples.",
+        "Exam":      "Use structured, moderately detailed explanations appropriate "
+                     "for exam preparation. Balance clarity with academic rigour.",
+        "Advanced":  "Use precise technical language and provide deep, challenging "
+                     "content. Include edge cases, nuances, and expert-level detail.",
+    }
+
+    mode_text  = mode_instructions[subject][mode]
+    depth_text = depth_instructions[depth]
+
+    return (
+        f"LEARNING CONTEXT — Subject: {subject} | Mode: {mode} | Depth: {depth}\n"
+        f"Mode instruction: {mode_text}\n"
+        f"Depth instruction: {depth_text}\n"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Math topic detection
 # ---------------------------------------------------------------------------
 
@@ -672,6 +742,7 @@ def _build_single_slide_prompt(
     difficulty_hint: str,
     depth_note: str,
     point_length_rule: str,
+    learning_context: str = "",
 ) -> tuple[str, int]:
     """
     Build a prompt that requests exactly ONE slide.
@@ -686,9 +757,13 @@ def _build_single_slide_prompt(
         f"What this slide must cover: {role_instruction}\n"
     )
 
+    # Prepend structured learning context if provided
+    ctx_block = f"{learning_context}\n" if learning_context else ""
+
     if math_topic:
         prompt = (
             "You are an expert mathematics professor creating one rigorous, exam-quality slide.\n\n"
+            f"{ctx_block}"
             f"{position_ctx}"
             f"{difficulty_hint}{depth_note}\n\n"
             "Return ONLY a valid JSON object (a single slide). No markdown fences. No extra text.\n\n"
@@ -734,6 +809,7 @@ def _build_single_slide_prompt(
     else:
         prompt = (
             "You are an expert university professor creating one deeply detailed, lecture-quality slide.\n\n"
+            f"{ctx_block}"
             f"{position_ctx}"
             f"{difficulty_hint}{depth_note}\n\n"
             "Return ONLY a valid JSON object (a single slide). No markdown fences. No extra text.\n\n"
@@ -774,6 +850,7 @@ def _generate_single_slide(
     depth_note: str,
     point_length_rule: str,
     retry: bool = False,
+    learning_context: str = "",
 ) -> dict | None:
     """
     Call the API for exactly one slide and return a validated slide dict (or None).
@@ -781,6 +858,7 @@ def _generate_single_slide(
     prompt, max_tok = _build_single_slide_prompt(
         topic, slide_number, role_title, role_instruction,
         math_topic, difficulty_hint, depth_note, point_length_rule,
+        learning_context=learning_context,
     )
 
     raw = _call_groq(prompt, max_tokens=max_tok, use_fallback=retry)
@@ -790,7 +868,7 @@ def _generate_single_slide(
             return _generate_single_slide(
                 topic, slide_number, role_title, role_instruction,
                 math_topic, difficulty_hint, depth_note, point_length_rule,
-                retry=True,
+                retry=True, learning_context=learning_context,
             )
         print(f"_generate_single_slide [{slide_number}]: giving up.")
         return None
@@ -830,7 +908,7 @@ def _generate_single_slide(
             return _generate_single_slide(
                 topic, slide_number, role_title, role_instruction,
                 math_topic, difficulty_hint, depth_note, point_length_rule,
-                retry=True,
+                retry=True, learning_context=learning_context,
             )
         return None
 
@@ -840,7 +918,7 @@ def _generate_single_slide(
             return _generate_single_slide(
                 topic, slide_number, role_title, role_instruction,
                 math_topic, difficulty_hint, depth_note, point_length_rule,
-                retry=True,
+                retry=True, learning_context=learning_context,
             )
         return None
 
@@ -854,6 +932,7 @@ def generate_slides(
     explanation_mode: str = "in_depth",
     compact_mode: bool = False,
     retry: bool = False,
+    learning_context: str = "",
 ) -> list:
     explanation_mode = str(explanation_mode or "in_depth").strip().lower()
     if explanation_mode not in {"brief", "in_depth"}:
@@ -907,6 +986,7 @@ def generate_slides(
             difficulty_hint=difficulty_hint,
             depth_note=depth_note,
             point_length_rule=point_length_rule,
+            learning_context=learning_context,
         )
         if slide is not None:
             all_slides.append(slide)
@@ -1494,7 +1574,13 @@ def health():
 def generate():
     """
     Start a new learning session.
-    Body: { "topic": "...", "explanation_mode": "brief" | "in_depth" }
+    Body: {
+      "topic": "...",
+      "explanation_mode": "brief" | "in_depth",
+      "subject": "Math" | "English" | "Coding",   (optional)
+      "mode":    "Learn" | "Practice" | "Test",    (optional)
+      "depth":   "Beginner" | "Exam" | "Advanced"  (optional)
+    }
     Returns: { "session_id": "...", "slides": [...] }
     """
     _prune_sessions()
@@ -1511,9 +1597,16 @@ def generate():
     if explanation_mode not in {"brief", "in_depth"}:
         explanation_mode = "in_depth"
 
+    # Structured learning controls (optional)
+    subject = str(data.get("subject", "")).strip()
+    mode    = str(data.get("mode",    "")).strip()
+    depth   = str(data.get("depth",   "")).strip()
+    learning_context = build_learning_context(subject, mode, depth)
+
     slides = []
     for attempt in range(3):
-        slides = generate_slides(topic, explanation_mode=explanation_mode, compact_mode=False)
+        slides = generate_slides(topic, explanation_mode=explanation_mode,
+                                 compact_mode=False, learning_context=learning_context)
         if slides:
             break
         print(f"[/generate] Attempt {attempt + 1}/3 failed for topic='{topic}'. Retrying...")
@@ -1522,7 +1615,8 @@ def generate():
     if not slides:
         print(f"[/generate] Switching to compact generation for topic='{topic}'.")
         for attempt in range(3):
-            slides = generate_slides(topic, explanation_mode=explanation_mode, compact_mode=True)
+            slides = generate_slides(topic, explanation_mode=explanation_mode,
+                                     compact_mode=True, learning_context=learning_context)
             if slides:
                 break
             print(f"[/generate] Compact attempt {attempt + 1}/3 failed for topic='{topic}'. Retrying...")
@@ -1537,18 +1631,19 @@ def generate():
         }), 500
 
     session_id = str(uuid.uuid4())
-    # Always create a completely fresh session object — never reuse or modify
-    # an existing session, even if the same topic is requested again.
     sessions[session_id] = {
         "topic": topic,
         "slides": slides,
         "performance": [],
         "created_at": time.time(),
-        "quiz_cache": {},      # { slide_index_str: [questions] }
-        "visual_cache": {},    # { slide_index_str: visual_dict }
-        "sources_cache": {},   # { slide_index_str: [sources] }
-        "notes": {},           # { slide_index_str: "text" }
+        "quiz_cache": {},
+        "visual_cache": {},
+        "sources_cache": {},
+        "notes": {},
         "explanation_mode": explanation_mode,
+        "subject": subject,
+        "mode": mode,
+        "depth": depth,
         "xp": 0,
         "streak_slides": 0,
     }
