@@ -1556,6 +1556,50 @@ def generate():
     return jsonify({"session_id": session_id, "slides": slides, "explanation_mode": explanation_mode})
 
 
+# Alias — frontend calls /start; backend logic lives in /generate
+@app.route("/start", methods=["POST"])
+@app.route("/start.php", methods=["POST"])
+@limiter.limit("10 per minute")
+def start():
+    return generate()
+
+
+# ---------------------------------------------------------------------------
+# NEW: Change explanation mode mid-session
+# ---------------------------------------------------------------------------
+@app.route("/set_explain_mode", methods=["POST"])
+@app.route("/set_explain_mode.php", methods=["POST"])
+@limiter.limit("20 per minute")
+def set_explain_mode():
+    """
+    Update the explanation mode for an active session.
+    Body: { "session_id": "...", "explanation_mode": "brief" | "in_depth" | "eli5" | "academic" | "practical" | "socratic" }
+    Returns: { "explanation_mode": "..." }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    raw_mode = str(data.get("explanation_mode", "in_depth")).strip().lower()
+    # Map frontend UI modes to backend supported modes
+    mode_map = {
+        "in_depth":  "in_depth",
+        "brief":     "brief",
+        "eli5":      "brief",       # ELI5 → brief with simpler content
+        "academic":  "in_depth",    # Academic → in_depth
+        "practical": "in_depth",    # Practical → in_depth
+        "socratic":  "in_depth",    # Socratic → in_depth
+    }
+    mapped = mode_map.get(raw_mode, "in_depth")
+    session["explanation_mode"] = mapped
+    return jsonify({"explanation_mode": mapped})
+
+
 @app.route("/quiz", methods=["POST"])
 @app.route("/quiz.php", methods=["POST"])
 @limiter.limit("20 per minute")
