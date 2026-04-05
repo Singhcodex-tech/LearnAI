@@ -2124,6 +2124,202 @@
     .btn-load-sources:hover { background: rgba(232,160,32,.1); border-color: var(--gold); }
     .btn-load-sources:disabled { opacity: .4; cursor: not-allowed; }
 
+    /* ===================== MATH TUTOR PANEL ===================== */
+    .math-tutor-panel {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      margin-top: 1.5rem;
+      overflow: hidden;
+    }
+    .math-tutor-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .85rem 1.25rem;
+      background: linear-gradient(135deg, rgba(232,160,32,.08) 0%, rgba(32,197,176,.06) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .math-tutor-label {
+      font-size: .78rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--gold);
+      display: flex; align-items: center; gap: .45rem;
+    }
+    .math-tutor-mode-badge {
+      font-size: .68rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; padding: .2rem .6rem;
+      border-radius: 20px; background: rgba(32,197,176,.12);
+      border: 1px solid var(--teal-dim); color: var(--teal);
+    }
+    .math-tutor-body { padding: 1.25rem; }
+
+    .math-problem-box {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-left: 3px solid var(--gold);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      font-size: .92rem; line-height: 1.65;
+      color: var(--text);
+    }
+    .math-problem-label {
+      font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--gold-dim);
+      margin-bottom: .4rem;
+    }
+
+    .math-step-prompt {
+      background: rgba(32,197,176,.06);
+      border: 1px solid var(--teal-dim);
+      border-radius: 10px;
+      padding: .85rem 1rem;
+      margin-bottom: 1rem;
+      font-size: .9rem; line-height: 1.6; color: var(--teal);
+    }
+    .math-step-label {
+      font-size: .68rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--teal-dim); margin-bottom: .3rem;
+    }
+
+    .math-progress {
+      display: flex; align-items: center; gap: .5rem;
+      margin-bottom: 1rem;
+    }
+    .math-progress-bar {
+      flex: 1; height: 4px; background: var(--border);
+      border-radius: 2px; overflow: hidden;
+    }
+    .math-progress-fill {
+      height: 100%; background: var(--teal);
+      border-radius: 2px; transition: width .4s ease;
+    }
+    .math-progress-text {
+      font-size: .7rem; font-weight: 700; color: var(--text-3);
+      font-family: var(--mono); white-space: nowrap;
+    }
+
+    .math-feedback {
+      border-radius: 10px; padding: .75rem 1rem;
+      margin-bottom: 1rem; font-size: .88rem; line-height: 1.55;
+      animation: feedbackSlide .3s ease;
+    }
+    @keyframes feedbackSlide {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .math-feedback.correct {
+      background: rgba(62,200,122,.08);
+      border: 1px solid rgba(62,200,122,.3);
+      color: var(--green);
+    }
+    .math-feedback.incorrect {
+      background: rgba(224,84,84,.08);
+      border: 1px solid rgba(224,84,84,.3);
+      color: var(--red);
+    }
+    .math-feedback.hint { color: var(--gold); }
+
+    .math-solution-steps {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: .9rem 1rem;
+      margin-bottom: 1rem;
+    }
+    .math-solution-step {
+      display: flex; gap: .75rem; align-items: flex-start;
+      padding: .45rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: .87rem; line-height: 1.55; color: var(--text-2);
+    }
+    .math-solution-step:last-child { border-bottom: none; }
+    .math-solution-step-num {
+      min-width: 22px; height: 22px;
+      background: var(--teal-dim); color: var(--teal);
+      border-radius: 50%; font-size: .7rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: .1rem; font-family: var(--mono);
+    }
+
+    .math-answer-box {
+      background: rgba(232,160,32,.06);
+      border: 1px solid var(--gold-dim);
+      border-radius: 10px; padding: .75rem 1rem;
+      margin-bottom: 1rem; font-size: .92rem;
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .math-answer-label {
+      font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .08em; color: var(--gold-dim);
+      flex-shrink: 0;
+    }
+    .math-answer-value { color: var(--gold); font-weight: 600; }
+
+    .math-similar {
+      margin-top: .75rem;
+    }
+    .math-similar-label {
+      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-3); margin-bottom: .5rem;
+    }
+    .math-similar-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: .55rem .85rem;
+      font-size: .85rem; color: var(--text-2);
+      margin-bottom: .4rem; cursor: pointer;
+      transition: border-color .2s, color .2s;
+    }
+    .math-similar-item:hover {
+      border-color: var(--gold-dim); color: var(--text);
+    }
+
+    .math-input-row {
+      display: flex; gap: .6rem; margin-top: .5rem;
+    }
+    .math-input {
+      flex: 1; background: var(--surface);
+      border: 1px solid var(--border2); border-radius: 10px;
+      padding: .65rem .9rem; color: var(--text);
+      font-family: var(--mono); font-size: .9rem;
+      resize: none; outline: none;
+      transition: border-color .2s;
+      min-height: 42px;
+    }
+    .math-input:focus { border-color: var(--teal); }
+    .math-input::placeholder { color: var(--text-3); }
+
+    .math-btn {
+      padding: .6rem 1.1rem; border: none; border-radius: 10px;
+      font-family: 'Syne', sans-serif; font-size: .82rem; font-weight: 700;
+      cursor: pointer; transition: all .2s; white-space: nowrap;
+    }
+    .math-btn-primary {
+      background: var(--teal); color: #080b12;
+    }
+    .math-btn-primary:hover { filter: brightness(1.1); }
+    .math-btn-primary:disabled { opacity: .4; cursor: not-allowed; filter: none; }
+    .math-btn-ghost {
+      background: transparent; color: var(--text-2);
+      border: 1px solid var(--border2);
+    }
+    .math-btn-ghost:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+    .math-action-row {
+      display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .9rem;
+    }
+
+    .math-direct-solve-box {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 10px; padding: .9rem 1rem;
+      margin-bottom: 1rem; font-size: .87rem;
+      line-height: 1.65; color: var(--text-2);
+      white-space: pre-wrap;
+    }
+    .math-loader {
+      display: flex; align-items: center; gap: .6rem;
+      color: var(--text-3); font-size: .85rem; padding: .5rem 0;
+    }
+
   </style>
 </head>
 <body>
@@ -2343,6 +2539,22 @@
       </div>
     </div>
 
+    <!-- Math Interactive Tutor (shown only when subject=Math) -->
+    <div id="math-tutor-section" style="display:none;">
+      <div class="math-tutor-panel">
+        <div class="math-tutor-header">
+          <div class="math-tutor-label">📐 Math Interactive Tutor</div>
+          <span class="math-tutor-mode-badge" id="math-tutor-mode-badge">Tutor Mode</span>
+        </div>
+        <div class="math-tutor-body" id="math-tutor-body">
+          <div class="math-action-row">
+            <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Generate Problem</button>
+            <button class="math-btn math-btn-ghost" onclick="mathSolveToggle()">⚡ Direct Solve</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Learner Notes -->
     <div id="notes-section" class="notes-section" style="display:none;">
       <div class="notes-header" onclick="toggleNotes()">
@@ -2462,6 +2674,9 @@ const state = {
   chatHistory: [],            // [{role:'user'|'tutor', text}] per session
   notesBySlide: {},           // { slideIndex: "text" }
   notesOpen: false,
+  subject: '',              // active subject (e.g. 'Math')
+  mathTutorState: null,     // { problem, steps, stepIndex, finalAnswer, similarProblems, completed }
+  mathSolveMode: false,     // true = direct solve input visible
 };
 
 // =====================================================================
@@ -2587,6 +2802,9 @@ async function startSession() {
     state.streakSlides = 0;
     state.chatHistory = [];
     state.notesBySlide = {};
+    state.subject = subject;
+    state.mathTutorState = null;
+    state.mathSolveMode = false;
 
     document.getElementById('hud-topic').textContent = topic;
     showScreen('screen-learning');
@@ -2659,6 +2877,9 @@ function setLoading(title, sub) {
       state.streakSlides = 0;
       state.chatHistory = [];
       state.notesBySlide = {};
+      state.subject = subject;
+      state.mathTutorState = null;
+      state.mathSolveMode = false;
 
       document.getElementById('hud-topic').textContent = topic;
       showScreen('screen-learning');
@@ -2875,6 +3096,17 @@ function loadSlide(index, overrideSlide = null) {
 
   // Reset sources panel for new slide
   resetSources();
+
+  // Show / reset Math Tutor panel when subject is Math
+  const mathSection = document.getElementById('math-tutor-section');
+  if (state.subject && state.subject.toLowerCase() === 'math') {
+    mathSection.style.display = 'block';
+    state.mathTutorState = null;
+    state.mathSolveMode  = false;
+    mathTutorRenderInitial();
+  } else {
+    mathSection.style.display = 'none';
+  }
 
   // Scroll to top
   document.getElementById('learning-body').scrollTop = 0;
@@ -3271,6 +3503,301 @@ document.addEventListener('keydown', e => {
 });
 
 // =====================================================================
+// MATH INTERACTIVE TUTOR
+// =====================================================================
+
+function mathRenderKatex(container) {
+  if (window.renderMathInElement) {
+    renderMathInElement(container, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$',  right: '$',  display: false}
+      ],
+      throwOnError: false
+    });
+  }
+}
+
+function mathTutorRenderInitial() {
+  const body = document.getElementById('math-tutor-body');
+  const badge = document.getElementById('math-tutor-mode-badge');
+  badge.textContent = 'Tutor Mode';
+  body.innerHTML = `
+    <p style="font-size:.85rem;color:var(--text-3);margin-bottom:1rem;line-height:1.55;">
+      Work through a problem step-by-step, or paste any math question for an instant solution.
+    </p>
+    <div class="math-action-row">
+      <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Generate Problem</button>
+      <button class="math-btn math-btn-ghost" onclick="mathSolveToggle()">⚡ Direct Solve</button>
+    </div>
+    <div id="math-solve-input-area" style="display:none;margin-top:.9rem;">
+      <div class="math-input-row">
+        <textarea class="math-input" id="math-direct-input" placeholder="Type your math question… e.g. integrate x²·sin(x)" rows="2"></textarea>
+        <button class="math-btn math-btn-primary" id="math-direct-btn" onclick="mathDirectSolve()">Solve →</button>
+      </div>
+    </div>
+  `;
+}
+
+function mathSolveToggle() {
+  state.mathSolveMode = !state.mathSolveMode;
+  const area = document.getElementById('math-solve-input-area');
+  if (area) {
+    area.style.display = state.mathSolveMode ? 'block' : 'none';
+    if (state.mathSolveMode) {
+      const badge = document.getElementById('math-tutor-mode-badge');
+      if (badge) badge.textContent = 'Direct Solve';
+      document.getElementById('math-direct-input')?.focus();
+    }
+  }
+}
+
+async function mathDirectSolve() {
+  const input = document.getElementById('math-direct-input');
+  const btn   = document.getElementById('math-direct-btn');
+  const question = (input?.value || '').trim();
+  if (!question) { showToast('Enter a math question first.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Solving…';
+  const body = document.getElementById('math-tutor-body');
+  const badge = document.getElementById('math-tutor-mode-badge');
+  badge.textContent = 'Direct Solve';
+
+  // Show loader
+  const resultId = 'math-solve-result';
+  let resultEl = document.getElementById(resultId);
+  if (!resultEl) {
+    resultEl = document.createElement('div');
+    resultEl.id = resultId;
+    body.appendChild(resultEl);
+  }
+  resultEl.innerHTML = `<div class="math-loader"><div class="loading-ring" style="width:20px;height:20px;"></div> Solving…</div>`;
+
+  try {
+    const res = await fetch(apiPath('/math_tutor'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, message: question, action: 'solve' }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Solve failed.');
+
+    resultEl.innerHTML = `
+      <div class="math-problem-box" style="margin-top:.75rem;">
+        <div class="math-problem-label">✏️ Question</div>
+        <div>${escHtml(question)}</div>
+      </div>
+      <div class="math-direct-solve-box">${escHtml(data.full_solution || '')}</div>
+      <div class="math-action-row">
+        <button class="math-btn math-btn-ghost" onclick="mathTutorRenderInitial(); state.mathSolveMode=false;">↩ Back</button>
+        <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Try a Problem</button>
+      </div>
+    `;
+    mathRenderKatex(resultEl);
+  } catch (err) {
+    resultEl.innerHTML = `<div class="math-feedback incorrect">⚠️ ${escHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Solve →';
+  }
+}
+
+async function mathTutorStart() {
+  const body  = document.getElementById('math-tutor-body');
+  const badge = document.getElementById('math-tutor-mode-badge');
+  badge.textContent = 'Tutor Mode';
+
+  body.innerHTML = `<div class="math-loader"><div class="loading-ring" style="width:22px;height:22px;"></div> Generating problem…</div>`;
+
+  try {
+    const res = await fetch(apiPath('/math_tutor'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, message: '', action: 'start' }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to generate problem.');
+
+    state.mathTutorState = {
+      problem: data.problem,
+      stepPrompt: data.step_prompt,
+      stepIndex: data.step_index,
+      totalSteps: data.total_steps,
+    };
+
+    mathTutorRenderProblem(data);
+
+  } catch (err) {
+    body.innerHTML = `
+      <div class="math-feedback incorrect">⚠️ ${escHtml(err.message)}</div>
+      <div class="math-action-row">
+        <button class="math-btn math-btn-ghost" onclick="mathTutorStart()">Retry</button>
+      </div>`;
+  }
+}
+
+function mathTutorRenderProblem(data) {
+  const body = document.getElementById('math-tutor-body');
+  const progressPct = data.total_steps > 0
+    ? Math.round((data.step_index / data.total_steps) * 100) : 0;
+
+  body.innerHTML = `
+    <div class="math-problem-box">
+      <div class="math-problem-label">📝 Problem</div>
+      <div id="math-problem-text">${escHtml(data.problem)}</div>
+    </div>
+    <div class="math-progress">
+      <div class="math-progress-bar">
+        <div class="math-progress-fill" style="width:${progressPct}%"></div>
+      </div>
+      <div class="math-progress-text" id="math-step-counter">Step ${data.step_index + 1} / ${data.total_steps}</div>
+    </div>
+    <div class="math-step-prompt" id="math-step-prompt-box">
+      <div class="math-step-label">👉 Your Turn</div>
+      <div id="math-step-prompt-text">${escHtml(data.step_prompt)}</div>
+    </div>
+    <div id="math-feedback-area"></div>
+    <div class="math-input-row">
+      <textarea class="math-input" id="math-answer-input" placeholder="Type your answer for this step… (LaTeX ok, e.g. x = -3)" rows="1"></textarea>
+      <button class="math-btn math-btn-primary" id="math-submit-btn" onclick="mathSubmitAnswer()">Check →</button>
+    </div>
+    <div class="math-action-row" style="margin-top:.6rem;">
+      <button class="math-btn math-btn-ghost" onclick="mathTutorStart()">🔄 New Problem</button>
+      <button class="math-btn math-btn-ghost" onclick="mathSolveToggleFromTutor()">⚡ Direct Solve</button>
+    </div>
+  `;
+  mathRenderKatex(body);
+  document.getElementById('math-answer-input')?.focus();
+
+  document.getElementById('math-answer-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); mathSubmitAnswer(); }
+  });
+}
+
+function mathSolveToggleFromTutor() {
+  state.mathTutorState = null;
+  state.mathSolveMode = true;
+  mathTutorRenderInitial();
+  // Show the direct solve area
+  const area = document.getElementById('math-solve-input-area');
+  if (area) area.style.display = 'block';
+  const badge = document.getElementById('math-tutor-mode-badge');
+  if (badge) badge.textContent = 'Direct Solve';
+}
+
+async function mathSubmitAnswer() {
+  const input = document.getElementById('math-answer-input');
+  const btn   = document.getElementById('math-submit-btn');
+  const answer = (input?.value || '').trim();
+  if (!answer) { showToast('Type your answer first.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Checking…';
+  const feedbackArea = document.getElementById('math-feedback-area');
+  feedbackArea.innerHTML = `<div class="math-loader"><div class="loading-ring" style="width:18px;height:18px;"></div> Validating…</div>`;
+
+  try {
+    const res = await fetch(apiPath('/math_tutor'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId, message: answer, action: 'answer' }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Validation failed.');
+
+    if (data.type === 'complete') {
+      mathTutorRenderComplete(data);
+    } else if (data.type === 'step_feedback') {
+      if (data.correct) {
+        // Advance to next step
+        feedbackArea.innerHTML = `<div class="math-feedback correct">✅ Correct! Moving to step ${data.step_index + 1}…</div>`;
+        if (state.mathTutorState) {
+          state.mathTutorState.stepIndex = data.step_index;
+          state.mathTutorState.stepPrompt = data.step_prompt;
+        }
+        setTimeout(() => {
+          const progressPct = data.total_steps > 0 ? Math.round((data.step_index / data.total_steps) * 100) : 0;
+          const counter = document.getElementById('math-step-counter');
+          const promptBox = document.getElementById('math-step-prompt-text');
+          const progressFill = document.querySelector('.math-progress-fill');
+          if (counter) counter.textContent = `Step ${data.step_index + 1} / ${data.total_steps}`;
+          if (promptBox) {
+            promptBox.textContent = data.step_prompt;
+            mathRenderKatex(promptBox.parentElement);
+          }
+          if (progressFill) progressFill.style.width = progressPct + '%';
+          feedbackArea.innerHTML = '';
+          input.value = '';
+          input.focus();
+        }, 900);
+      } else {
+        feedbackArea.innerHTML = `<div class="math-feedback incorrect hint">
+          💡 Hint: ${escHtml(data.hint || 'Review your work and try again.')}
+        </div>`;
+        input.value = '';
+        input.focus();
+      }
+    }
+  } catch (err) {
+    feedbackArea.innerHTML = `<div class="math-feedback incorrect">⚠️ ${escHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Check →';
+  }
+}
+
+function mathTutorRenderComplete(data) {
+  const body = document.getElementById('math-tutor-body');
+  const stepsHtml = (data.solution_steps || []).map((s, i) => `
+    <div class="math-solution-step">
+      <span class="math-solution-step-num">${i + 1}</span>
+      <span>${escHtml(s)}</span>
+    </div>`).join('');
+
+  const similarHtml = (data.similar_problems || []).length
+    ? `<div class="math-similar">
+        <div class="math-similar-label">Try Similar Problems</div>
+        ${(data.similar_problems || []).map(p => `
+          <div class="math-similar-item" onclick="mathSolveSimilar(this)">${escHtml(p)}</div>
+        `).join('')}
+      </div>` : '';
+
+  body.innerHTML = `
+    <div class="math-feedback correct" style="font-size:.95rem;font-weight:600;margin-bottom:1rem;">
+      🎉 Excellent! Problem solved correctly!
+    </div>
+    <div class="math-problem-box">
+      <div class="math-problem-label">📝 Problem</div>
+      <div>${escHtml(data.problem)}</div>
+    </div>
+    <div class="math-solution-steps">
+      <div class="math-problem-label" style="margin-bottom:.5rem;">Complete Solution</div>
+      ${stepsHtml}
+    </div>
+    <div class="math-answer-box">
+      <span class="math-answer-label">Final Answer</span>
+      <span class="math-answer-value">${escHtml(data.final_answer || '')}</span>
+    </div>
+    ${similarHtml}
+    <div class="math-action-row">
+      <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Next Problem</button>
+      <button class="math-btn math-btn-ghost" onclick="mathSolveToggleFromTutor()">⚡ Direct Solve</button>
+    </div>
+  `;
+  mathRenderKatex(body);
+}
+
+function mathSolveSimilar(el) {
+  const question = el.textContent.trim();
+  state.mathSolveMode = true;
+  state.mathTutorState = null;
+  mathTutorRenderInitial();
+  const area = document.getElementById('math-solve-input-area');
+  if (area) { area.style.display = 'block'; }
+  const badge = document.getElementById('math-tutor-mode-badge');
+  if (badge) badge.textContent = 'Direct Solve';
+  const inp = document.getElementById('math-direct-input');
+  if (inp) { inp.value = question; inp.focus(); }
+}
+
+// =====================================================================
 // NOTES
 // =====================================================================
 function toggleNotes() {
@@ -3553,6 +4080,8 @@ function restartSession() {
   state.performance = []; state.adaptiveProfile = null;
   state.xp = 0; state.streakSlides = 0;
   state.chatHistory = []; state.notesBySlide = {};
+  state.subject = ''; state.mathTutorState = null; state.mathSolveMode = false;
+  document.getElementById('math-tutor-section').style.display = 'none';
   topicInput.value = '';
   charCount.textContent = '0';
   showScreen('screen-start');

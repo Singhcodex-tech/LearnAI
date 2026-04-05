@@ -2014,6 +2014,275 @@ def chat():
 
 
 # ---------------------------------------------------------------------------
+# Math Tutor — helpers
+# ---------------------------------------------------------------------------
+
+DIRECT_SOLVE_TRIGGERS = {
+    "solve", "simplify", "calculate", "compute", "evaluate", "integrate",
+    "differentiate", "derive", "factor", "expand", "find", "prove",
+    "what is", "what's", "how much", "how many",
+}
+
+def _is_direct_solve(question: str) -> bool:
+    """Return True if the user wants a full solution right now."""
+    q = question.lower()
+    return any(kw in q for kw in DIRECT_SOLVE_TRIGGERS)
+
+
+def _math_direct_solve(question: str, difficulty: str) -> str | None:
+    system = (
+        "You are a precise math solver. "
+        "Return a clean, step-by-step solution. "
+        "Use LaTeX for all expressions (delimited by $ or $$). "
+        "Be concise but complete. Never skip steps."
+    )
+    prompt = f"Solve the following completely and accurately:\n\n{question}"
+    return _call_groq(prompt, max_tokens=1200, system=system)
+
+
+def _generate_math_problem(topic: str, difficulty: str) -> dict | None:
+    """
+    Ask the model to produce a structured math problem JSON:
+    { problem, steps[], final_answer, similar_problems[] }
+    """
+    diff_note = {
+        "Beginner": "appropriate for a beginner (arithmetic / basic algebra)",
+        "Exam":     "exam-level difficulty (multi-step, real techniques required)",
+        "Advanced": "advanced (proof-based or multi-concept)",
+    }.get(difficulty, "intermediate difficulty")
+
+    system = (
+        "You are a math tutor. Return ONLY a valid JSON object. "
+        "No markdown fences. No extra text."
+    )
+    prompt = f"""Generate a math problem on the topic: "{topic}".
+Difficulty: {diff_note}.
+
+Return ONLY this JSON shape:
+{{
+  "problem": "Full problem statement (use LaTeX for math, e.g. $x^2 + 3x - 4 = 0$)",
+  "steps": [
+    "Step 1 — label: explanation with LaTeX if needed",
+    "Step 2 — label: explanation",
+    "Step 3 — label: explanation"
+  ],
+  "final_answer": "The final answer with LaTeX",
+  "similar_problems": [
+    "Similar problem 1",
+    "Similar problem 2"
+  ]
+}}
+
+Rules:
+- steps[] must be 3–6 items, each a complete, verifiable calculation step
+- final_answer must be precise and correct
+- similar_problems must be 1–2 items
+- Use correct math — verify before writing"""
+
+    raw = _call_groq(prompt, max_tokens=900, system=system)
+    if not raw:
+        return None
+    raw = strip_markdown_fences(raw)
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError:
+        s = extract_json_object(raw)
+        if not s:
+            return None
+        try:
+            obj = json.loads(s)
+        except json.JSONDecodeError:
+            return None
+
+    if not isinstance(obj, dict):
+        return None
+    if not obj.get("problem") or not isinstance(obj.get("steps"), list):
+        return None
+    return obj
+
+
+def _validate_math_step(user_answer: str, expected_step: str, problem: str, topic: str) -> dict:
+    """
+    Return { correct: bool, hint: str|None }
+    Asks the model to judge correctness tolerantly (accept equivalent forms).
+    """
+    system = "You are a strict but fair math evaluator. Return ONLY valid JSON."
+    prompt = f"""Problem: {problem}
+Expected step: {expected_step}
+Student's answer: {user_answer}
+
+Is the student's answer mathematically equivalent to or correctly performing the expected step?
+Be tolerant of notation differences (e.g. "x=2" vs "x = 2") but strict about correctness.
+
+Return ONLY:
+{{"correct": true/false, "hint": "a short hint if incorrect, null if correct"}}"""
+
+    raw = _call_groq(prompt, max_tokens=200, system=system)
+    if not raw:
+        return {"correct": False, "hint": "Could not validate. Please try again."}
+    raw = strip_markdown_fences(raw)
+    try:
+        obj = json.loads(raw)
+        return {
+            "correct": bool(obj.get("correct", False)),
+            "hint": obj.get("hint") or None,
+        }
+    except Exception:
+        s = extract_json_object(raw)
+        if s:
+            try:
+                obj = json.loads(s)
+                return {"correct": bool(obj.get("correct", False)), "hint": obj.get("hint")}
+            except Exception:
+                pass
+        return {"correct": False, "hint": "Could not validate. Please try again."}
+
+
+# ---------------------------------------------------------------------------
+# Math Tutor — /math_tutor endpoint
+# ---------------------------------------------------------------------------
+
+@app.route("/math_tutor", methods=["POST"])
+@app.route("/math_tutor.php", methods=["POST"])
+@limiter.limit("30 per minute")
+def math_tutor():
+    """
+    Unified Math Tutor endpoint.
+
+    Body:
+      { "session_id": "...", "message": "...", "action": "start"|"answer"|"solve" }
+
+    action="start"  → generate a new problem and return first step prompt
+    action="answer" → validate user's step answer
+    action="solve"  → direct solve mode (full solution)
+
+    Session math_state shape:
+      {
+        current_problem: str,
+        steps: [],
+        current_step_index: int,
+        final_answer: str,
+        similar_problems: [],
+        completed: bool
+      }
+
+    Returns:
+      {
+        type: "problem"|"step_feedback"|"complete"|"solution"|"error",
+        problem: str,           (when type=problem)
+        step_prompt: str,       (current step question)
+        step_index: int,
+        total_steps: int,
+        correct: bool,          (on step_feedback)
+        hint: str|None,
+        solution_steps: [],     (on complete or direct solve)
+        final_answer: str,
+        similar_problems: [],
+        full_solution: str      (on type=solution)
+      }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    session_id = data.get("session_id", "")
+    message    = str(data.get("message", "")).strip()
+    action     = str(data.get("action", "start")).strip()
+
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    # Only operates in Math subject sessions
+    if session.get("subject", "").lower() != "math":
+        return jsonify({"error": "Math tutor only available for Math subject sessions"}), 400
+
+    topic      = session["topic"]
+    difficulty = session.get("depth", "Exam")
+
+    # ── DIRECT SOLVE MODE ─────────────────────────────────────
+    if action == "solve" or (action == "start" and _is_direct_solve(message) and message):
+        solution = _math_direct_solve(message or topic, difficulty)
+        if not solution:
+            return jsonify({"error": "Could not generate solution."}), 500
+        return jsonify({"type": "solution", "full_solution": solution.strip()})
+
+    # ── START / GENERATE PROBLEM ──────────────────────────────
+    if action == "start":
+        prob = _generate_math_problem(topic, difficulty)
+        if not prob:
+            return jsonify({"error": "Could not generate problem. Please try again."}), 500
+
+        session["math_state"] = {
+            "current_problem": prob["problem"],
+            "steps": prob["steps"],
+            "current_step_index": 0,
+            "final_answer": prob.get("final_answer", ""),
+            "similar_problems": prob.get("similar_problems", []),
+            "completed": False,
+        }
+        ms = session["math_state"]
+        return jsonify({
+            "type": "problem",
+            "problem": ms["current_problem"],
+            "step_prompt": f"Step 1: {ms['steps'][0]}",
+            "step_index": 0,
+            "total_steps": len(ms["steps"]),
+            "final_answer": "",
+            "similar_problems": [],
+        })
+
+    # ── VALIDATE STEP ANSWER ──────────────────────────────────
+    if action == "answer":
+        ms = session.get("math_state")
+        if not ms or ms.get("completed"):
+            return jsonify({"error": "No active problem. Use action=start."}), 400
+
+        idx      = ms["current_step_index"]
+        expected = ms["steps"][idx]
+        result   = _validate_math_step(message, expected, ms["current_problem"], topic)
+
+        if not result["correct"]:
+            return jsonify({
+                "type": "step_feedback",
+                "correct": False,
+                "hint": result["hint"],
+                "step_index": idx,
+                "total_steps": len(ms["steps"]),
+                "step_prompt": f"Step {idx + 1}: Try again — {result['hint'] or 'Review your work.'}",
+            })
+
+        # Correct — advance
+        idx += 1
+        ms["current_step_index"] = idx
+
+        if idx >= len(ms["steps"]):
+            # Completed
+            ms["completed"] = True
+            return jsonify({
+                "type": "complete",
+                "correct": True,
+                "problem": ms["current_problem"],
+                "solution_steps": ms["steps"],
+                "final_answer": ms["final_answer"],
+                "similar_problems": ms["similar_problems"],
+                "step_index": idx,
+                "total_steps": len(ms["steps"]),
+            })
+
+        return jsonify({
+            "type": "step_feedback",
+            "correct": True,
+            "hint": None,
+            "step_index": idx,
+            "total_steps": len(ms["steps"]),
+            "step_prompt": f"Step {idx + 1}: {ms['steps'][idx]}",
+        })
+
+    return jsonify({"error": f"Unknown action: {action}"}), 400
+
+
+# ---------------------------------------------------------------------------
 # NEW: End-of-session topic summary
 # ---------------------------------------------------------------------------
 
