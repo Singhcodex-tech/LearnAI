@@ -613,6 +613,8 @@
       border-bottom: 1px dashed rgba(32, 197, 176, .45);
     }
     .point-source a:hover { color: #42ddc8; border-bottom-color: #42ddc8; }
+    .point-text-body .katex-display { margin: .4rem 0; overflow-x: auto; }
+    .point-text-body .katex { font-size: 1.05em; }
 
     /* --- Understanding buttons --- */
     .understanding-section {
@@ -1065,29 +1067,60 @@
     .math-formula .katex { font-size: 1.2em; }
     .math-formula .katex-display { margin: 0; }
 
-    /* Sub-steps under each bullet */
+    /* Sub-steps under each bullet — structured math layout */
     .sub-steps {
-      margin-top: .65rem;
+      margin-top: .75rem;
       display: flex;
       flex-direction: column;
-      gap: .35rem;
-      padding-left: .5rem;
-      border-left: 2px solid var(--border2);
+      gap: .4rem;
+    }
+    .sub-steps-header {
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: .25rem;
+      display: flex; align-items: center; gap: .35rem;
+    }
+    .sub-steps-header::before {
+      content: '';
+      width: 12px; height: 2px;
+      background: var(--gold-dim);
+      border-radius: 1px;
     }
     .sub-step {
-      font-size: .83rem;
+      display: flex; gap: .75rem; align-items: flex-start;
+      font-size: .84rem;
       color: var(--text-2);
-      line-height: 1.55;
-      padding: .3rem .6rem;
-      border-radius: 6px;
-      background: rgba(255,255,255,.025);
+      line-height: 1.6;
+      padding: .5rem .75rem;
+      border-radius: 8px;
+      background: rgba(232,160,32,.04);
+      border: 1px solid rgba(232,160,32,.1);
     }
     .sub-step-num {
+      flex-shrink: 0;
+      min-width: 22px; height: 22px;
       font-family: var(--mono);
-      font-size: .7rem;
-      color: var(--gold);
+      font-size: .68rem;
+      color: #080b12;
+      background: var(--gold);
+      font-weight: 800;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: .1rem;
+    }
+    .sub-step-text { flex: 1; }
+    /* KaTeX inside sub-steps */
+    .sub-step .katex-display { margin: .3rem 0; }
+    .sub-step-label {
+      font-family: var(--mono);
+      font-size: .72rem;
       font-weight: 700;
-      margin-right: .4rem;
+      color: var(--gold-dim);
+      letter-spacing: .04em;
+      text-transform: uppercase;
     }
 
     /* Worked example block */
@@ -1147,6 +1180,18 @@
       padding: .15rem .4rem;
       margin-top: .15rem;
     }
+    .worked-step-body { flex: 1; }
+    .worked-step-label {
+      font-family: var(--mono);
+      font-size: .7rem;
+      font-weight: 700;
+      color: var(--teal-dim);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    /* KaTeX inside worked steps */
+    .worked-step .katex-display { margin: .35rem 0; }
+    .worked-answer-value { color: var(--teal); font-weight: 700; font-size: 1rem; }
     .worked-answer {
       padding: .75rem 1.1rem;
       border-top: 1px solid rgba(32,197,176,.15);
@@ -2320,6 +2365,74 @@
       color: var(--text-3); font-size: .85rem; padding: .5rem 0;
     }
 
+    /* ── Structured math solution display ── */
+    .math-problem-text {
+      font-size: .95rem; line-height: 1.7; color: var(--text);
+      overflow-x: auto;
+    }
+    .math-problem-text .katex-display { margin: .4rem 0; }
+
+    .math-solution-structured {
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .math-solution-structured-header {
+      display: flex; align-items: center; gap: .55rem;
+      padding: .65rem 1rem;
+      background: rgba(32,197,176,.06);
+      border-bottom: 1px solid var(--border);
+      font-size: .7rem; font-weight: 700;
+      letter-spacing: .13em; text-transform: uppercase;
+      color: var(--teal);
+    }
+    .math-solution-icon {
+      font-family: 'Georgia', serif;
+      font-size: 1.05rem; font-weight: 700;
+      color: var(--teal);
+    }
+    .math-solution-steps-list {
+      display: flex; flex-direction: column;
+    }
+    .math-solution-step-card {
+      display: flex; gap: .75rem; align-items: flex-start;
+      padding: .85rem 1rem;
+      border-bottom: 1px solid var(--border);
+      animation: pointReveal .3s ease both;
+    }
+    .math-solution-step-card:last-child { border-bottom: none; }
+    .math-solution-step-card:nth-child(even) { background: rgba(255,255,255,.015); }
+    .math-solution-step-badge {
+      flex-shrink: 0;
+      min-width: 26px; height: 26px;
+      background: var(--teal-dim);
+      color: var(--teal);
+      border-radius: 7px;
+      font-family: var(--mono);
+      font-size: .75rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: .05rem;
+    }
+    .math-solution-step-content { flex: 1; overflow-x: auto; }
+    .math-solution-step-label {
+      font-family: var(--mono);
+      font-size: .68rem; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--teal-dim);
+      margin-bottom: .2rem;
+    }
+    .math-solution-step-body {
+      font-size: .9rem; line-height: 1.7; color: var(--text-2);
+    }
+    .math-solution-step-body .katex-display { margin: .4rem 0; overflow-x: auto; }
+    .math-solution-step-body .katex { font-size: 1.05em; }
+    .math-step-prompt-text {
+      font-size: .9rem; line-height: 1.65;
+    }
+    .math-step-prompt-text .katex { font-size: 1em; }
+
   </style>
 </head>
 <body>
@@ -2966,13 +3079,17 @@ function loadSlide(index, overrideSlide = null) {
     let stepsHtml = '';
     if (steps.length) {
       const stepsInner = steps.map((s, si) => {
-        // Try to split "Step N — Name: detail" nicely
         const stepText = String(s);
+        // Split "Step N — Label: body" into label + body for cleaner display
+        const dashMatch = stepText.match(/^(Step\s*\d+\s*[—\-–]\s*[^:]+):\s*(.+)$/i);
+        let labelPart = '', bodyPart = stepText;
+        if (dashMatch) { labelPart = dashMatch[1].trim(); bodyPart = dashMatch[2].trim(); }
         return `<div class="sub-step">
-          <span class="sub-step-num">${si + 1}</span>${escHtml(stepText)}
+          <span class="sub-step-num">${si + 1}</span>
+          <span class="sub-step-text">${labelPart ? `<span class="sub-step-label">${escHtml(labelPart)}:</span> ${bodyPart}` : bodyPart}</span>
         </div>`;
       }).join('');
-      stepsHtml = `<div class="sub-steps">${stepsInner}</div>`;
+      stepsHtml = `<div class="sub-steps"><div class="sub-steps-header">Step-by-Step</div>${stepsInner}</div>`;
     }
 
     const sourceHtml = sourceTitle
@@ -2989,7 +3106,7 @@ function loadSlide(index, overrideSlide = null) {
         <div style="display:flex;gap:.85rem;align-items:flex-start;">
           <span class="point-bullet" style="margin-top:.55rem;flex-shrink:0;"></span>
           <div class="point-main-text">
-            <span>${escHtml(text)}</span>
+            <span class="point-text-body">${text}</span>
             ${sourceHtml}
           </div>
         </div>
@@ -3003,20 +3120,23 @@ function loadSlide(index, overrideSlide = null) {
     if (!we || !we.problem) return '';
     const stepRows = (we.steps || []).map((s, i) => {
       const txt = String(s);
-      // Split on first colon after the label for nicer display
+      // Split "Step N — Label: body" pattern
+      const dashMatch = txt.match(/^(Step\s*\d+\s*[—\-–]\s*[^:]+):\s*(.+)$/i);
+      let labelPart = '', bodyPart = txt;
+      if (dashMatch) { labelPart = dashMatch[1].trim(); bodyPart = dashMatch[2].trim(); }
       return `<div class="worked-step">
         <span class="worked-step-num">${i + 1}</span>
-        <span>${escHtml(txt)}</span>
+        <span class="worked-step-body">${labelPart ? `<span class="worked-step-label">${escHtml(labelPart)}:</span> ${bodyPart}` : bodyPart}</span>
       </div>`;
     }).join('');
     return `
       <div class="worked-example">
         <div class="worked-example-header">✏️ Worked Example</div>
-        <div class="worked-problem">${escHtml(we.problem)}</div>
+        <div class="worked-problem">${we.problem}</div>
         <div class="worked-steps">${stepRows}</div>
         ${we.answer ? `<div class="worked-answer">
           <span class="worked-answer-label">Answer</span>
-          <span>${escHtml(we.answer)}</span>
+          <span class="worked-answer-value">${we.answer}</span>
         </div>` : ''}
       </div>`;
   }
@@ -3421,7 +3541,11 @@ async function _doSendChat(question, inputEl, sendBtnEl) {
 
     if (!res.ok) throw new Error(data.error || 'Tutor unavailable.');
 
-    msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
+    const tutorBubble = document.createElement('div');
+    tutorBubble.className = 'chat-bubble tutor';
+    tutorBubble.textContent = data.answer;
+    msgs.appendChild(tutorBubble);
+    mathRenderKatex(tutorBubble);
   } catch (err) {
     const loadEl = document.getElementById(loadId);
     if (loadEl) loadEl.remove();
@@ -3471,13 +3595,18 @@ async function sendHudChatMessage() {
     if (!res.ok) throw new Error(data.error || 'Tutor unavailable.');
     answerBox.classList.remove('loading-state');
     answerText.textContent = data.answer;
+    mathRenderKatex(answerBox);
 
     // Also append to the full chat-section below for history
     const chatSection = document.getElementById('chat-section');
     chatSection.style.display = 'block';
     const msgs = document.getElementById('chat-messages');
     msgs.innerHTML += `<div class="chat-bubble user">${escHtml(question)}</div>`;
-    msgs.innerHTML += `<div class="chat-bubble tutor">${escHtml(data.answer)}</div>`;
+    const tutorBubble2 = document.createElement('div');
+    tutorBubble2.className = 'chat-bubble tutor';
+    tutorBubble2.textContent = data.answer;
+    msgs.appendChild(tutorBubble2);
+    mathRenderKatex(tutorBubble2);
     msgs.scrollTop = msgs.scrollHeight;
   } catch (err) {
     answerBox.classList.remove('loading-state');
@@ -3552,6 +3681,86 @@ function mathSolveToggle() {
   }
 }
 
+/* =====================================================================
+   MATH SOLUTION PARSER
+   Parses free-form LLM solution text into structured { label, body } steps.
+   Handles:
+     - "Step 1: ..." / "Step 1 — Label: ..."
+     - "**Step 1: ...**" (markdown bold)
+     - "1. ..." numbered lists
+     - Blank-line separated paragraphs (fallback)
+   ===================================================================== */
+function parseMathSolutionIntoSteps(text) {
+  if (!text) return [];
+  // Strip leading/trailing whitespace, normalise line endings
+  text = text.replace(/\r\n/g, '\n').trim();
+
+  // Remove markdown bold wrapper from step headers: **Step N...**
+  text = text.replace(/\*\*(Step\s*\d+[^*]*)\*\*/gi, '$1');
+
+  const steps = [];
+
+  // Pattern 1: explicit "Step N" lines (with optional " — Label" and colon)
+  const stepRegex = /^(Step\s*\d+(?:\s*[—–\-]\s*[^:\n]+)?):?\s*/im;
+  const lines = text.split('\n');
+
+  // Try to detect if solution uses explicit step headers
+  const hasExplicitSteps = lines.some(l => /^Step\s*\d+/i.test(l.trim()));
+
+  if (hasExplicitSteps) {
+    let current = null;
+    lines.forEach(line => {
+      const stepMatch = line.trim().match(/^(Step\s*\d+(?:\s*[—–\-]\s*[^:\n]+)?):?\s*(.*)/i);
+      if (stepMatch) {
+        if (current) steps.push(current);
+        current = {
+          label: stepMatch[1].trim(),
+          body: stepMatch[2].trim(),
+        };
+      } else if (current) {
+        current.body += (current.body ? '\n' : '') + line;
+      } else if (line.trim()) {
+        // Preamble before any step
+        steps.push({ label: '', body: line.trim() });
+      }
+    });
+    if (current) steps.push(current);
+    // Clean up empty bodies
+    steps.forEach(s => { s.body = s.body.trim(); });
+    return steps.filter(s => s.label || s.body);
+  }
+
+  // Pattern 2: numbered list "1. ...", "2. ..."
+  const numberedRegex = /^(\d+)\.\s+/;
+  const hasNumbered = lines.some(l => numberedRegex.test(l.trim()));
+  if (hasNumbered) {
+    let current = null;
+    lines.forEach(line => {
+      const m = line.trim().match(/^(\d+)\.\s+(.*)/);
+      if (m) {
+        if (current) steps.push(current);
+        current = { label: '', body: m[2].trim() };
+      } else if (current) {
+        current.body += (current.body ? '\n' : '') + line;
+      } else if (line.trim()) {
+        steps.push({ label: '', body: line.trim() });
+      }
+    });
+    if (current) steps.push(current);
+    steps.forEach(s => { s.body = s.body.trim(); });
+    return steps.filter(s => s.body);
+  }
+
+  // Fallback: split on blank lines → each paragraph is one step
+  const paragraphs = text.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  if (paragraphs.length > 1) {
+    return paragraphs.map(p => ({ label: '', body: p }));
+  }
+
+  // Last resort: return whole text as one block
+  return [{ label: '', body: text }];
+}
+
 async function mathDirectSolve() {
   const input = document.getElementById('math-direct-input');
   const btn   = document.getElementById('math-direct-btn');
@@ -3582,12 +3791,30 @@ async function mathDirectSolve() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Solve failed.');
 
+    // Parse the solution text into numbered steps for structured display
+    const rawSolution = data.full_solution || '';
+    const parsedSteps = parseMathSolutionIntoSteps(rawSolution);
+
+    const stepsHtml = parsedSteps.map((step, i) => `
+      <div class="math-solution-step-card">
+        <div class="math-solution-step-badge">${i + 1}</div>
+        <div class="math-solution-step-content">
+          ${step.label ? `<div class="math-solution-step-label">${escHtml(step.label)}</div>` : ''}
+          <div class="math-solution-step-body">${step.body}</div>
+        </div>
+      </div>`).join('');
+
     resultEl.innerHTML = `
       <div class="math-problem-box" style="margin-top:.75rem;">
         <div class="math-problem-label">✏️ Question</div>
-        <div>${escHtml(question)}</div>
+        <div class="math-problem-text">${question}</div>
       </div>
-      <div class="math-direct-solve-box">${escHtml(data.full_solution || '')}</div>
+      <div class="math-solution-structured">
+        <div class="math-solution-structured-header">
+          <span class="math-solution-icon">∑</span> Step-by-Step Solution
+        </div>
+        <div class="math-solution-steps-list">${stepsHtml}</div>
+      </div>
       <div class="math-action-row">
         <button class="math-btn math-btn-ghost" onclick="mathTutorRenderInitial(); state.mathSolveMode=false;">↩ Back</button>
         <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Try a Problem</button>
@@ -3643,7 +3870,7 @@ function mathTutorRenderProblem(data) {
   body.innerHTML = `
     <div class="math-problem-box">
       <div class="math-problem-label">📝 Problem</div>
-      <div id="math-problem-text">${escHtml(data.problem)}</div>
+      <div class="math-problem-text" id="math-problem-text">${data.problem || ''}</div>
     </div>
     <div class="math-progress">
       <div class="math-progress-bar">
@@ -3653,7 +3880,7 @@ function mathTutorRenderProblem(data) {
     </div>
     <div class="math-step-prompt" id="math-step-prompt-box">
       <div class="math-step-label">👉 Your Turn</div>
-      <div id="math-step-prompt-text">${escHtml(data.step_prompt)}</div>
+      <div class="math-step-prompt-text" id="math-step-prompt-text">${data.step_prompt || ''}</div>
     </div>
     <div id="math-feedback-area"></div>
     <div class="math-input-row">
@@ -3720,7 +3947,7 @@ async function mathSubmitAnswer() {
           const progressFill = document.querySelector('.math-progress-fill');
           if (counter) counter.textContent = `Step ${data.step_index + 1} / ${data.total_steps}`;
           if (promptBox) {
-            promptBox.textContent = data.step_prompt;
+            promptBox.innerHTML = data.step_prompt || '';
             mathRenderKatex(promptBox.parentElement);
           }
           if (progressFill) progressFill.style.width = progressPct + '%';
@@ -3745,11 +3972,21 @@ async function mathSubmitAnswer() {
 
 function mathTutorRenderComplete(data) {
   const body = document.getElementById('math-tutor-body');
-  const stepsHtml = (data.solution_steps || []).map((s, i) => `
-    <div class="math-solution-step">
-      <span class="math-solution-step-num">${i + 1}</span>
-      <span>${escHtml(s)}</span>
-    </div>`).join('');
+
+  const stepsHtml = (data.solution_steps || []).map((s, i) => {
+    const txt = String(s);
+    const dashMatch = txt.match(/^(Step\s*\d+\s*[—\-–]\s*[^:]+):\s*(.+)$/i);
+    let labelPart = '', bodyPart = txt;
+    if (dashMatch) { labelPart = dashMatch[1].trim(); bodyPart = dashMatch[2].trim(); }
+    return `
+    <div class="math-solution-step-card">
+      <div class="math-solution-step-badge">${i + 1}</div>
+      <div class="math-solution-step-content">
+        ${labelPart ? `<div class="math-solution-step-label">${escHtml(labelPart)}</div>` : ''}
+        <div class="math-solution-step-body">${bodyPart}</div>
+      </div>
+    </div>`;
+  }).join('');
 
   const similarHtml = (data.similar_problems || []).length
     ? `<div class="math-similar">
@@ -3765,15 +4002,17 @@ function mathTutorRenderComplete(data) {
     </div>
     <div class="math-problem-box">
       <div class="math-problem-label">📝 Problem</div>
-      <div>${escHtml(data.problem)}</div>
+      <div class="math-problem-text">${data.problem || ''}</div>
     </div>
-    <div class="math-solution-steps">
-      <div class="math-problem-label" style="margin-bottom:.5rem;">Complete Solution</div>
-      ${stepsHtml}
+    <div class="math-solution-structured">
+      <div class="math-solution-structured-header">
+        <span class="math-solution-icon">∑</span> Complete Solution
+      </div>
+      <div class="math-solution-steps-list">${stepsHtml}</div>
     </div>
     <div class="math-answer-box">
       <span class="math-answer-label">Final Answer</span>
-      <span class="math-answer-value">${escHtml(data.final_answer || '')}</span>
+      <span class="math-answer-value">${data.final_answer || ''}</span>
     </div>
     ${similarHtml}
     <div class="math-action-row">

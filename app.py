@@ -916,12 +916,19 @@ def _build_single_slide_prompt(
             "- Exactly 4 points\n"
             f"{point_length_rule}\n"
             "- Every point MUST be an object with: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
-            "- inline_latex: valid LaTeX with single backslashes (\\\\frac, \\\\sqrt, \\\\int)\n"
-            "- sub_steps: exactly 4 steps\n"
+            "- text: may contain inline LaTeX using $expression$ delimiters\n"
+            "- inline_latex: a single display equation in valid LaTeX (use double backslashes: \\\\frac, \\\\sqrt, \\\\int, \\\\pm)\n"
+            "- inline_label: descriptive name for the formula (e.g. \'Quadratic Formula\', \'Chain Rule\')\n"
+            "- sub_steps: exactly 4 steps, each following the format \'Step N — <Label>: <explanation with LaTeX>\' — "
+            "every calculation must use $...$ or $$...$$ for any math\n"
+            "- worked_example.problem: state with LaTeX, e.g. \'Solve $$x^2 - 5x + 6 = 0$$\'\n"
+            "- worked_example.steps: 4–5 steps each labelled \'Step N — <Label>: <LaTeX working>\', "
+            "every intermediate result must use $$...$$\n"
+            "- worked_example.answer: final result in LaTeX e.g. \'$$x = 2$$ or $$x = 3$$\'\n"
             "- Do NOT repeat formulas or examples from other slides\n"
             "- Output ONLY the JSON object — no array wrapper, no prose\n"
         )
-        max_tok = 1400
+        max_tok = 1600
     else:
         prompt = (
             "You are an expert university professor creating one deeply detailed, lecture-quality slide.\n\n"
@@ -1141,6 +1148,19 @@ def generate_quiz_for_slide(slide: dict, learner_profile: dict | None = None, re
         elif hint == "advanced":
             difficulty_note = "Make questions challenging. Include application-based and analytical questions."
 
+    # Detect math slides by presence of inline_latex in any point
+    is_math_slide = any(
+        isinstance(p, dict) and p.get("inline_latex")
+        for p in slide.get("points", [])
+    )
+    math_note = (
+        "This is a mathematics slide. "
+        "Questions and options may contain LaTeX expressions using $...$ for inline math "
+        "and $$...$$ for display equations. "
+        "Include at least one question that requires evaluating or identifying a formula. "
+        "Options involving numbers or expressions must use LaTeX."
+    ) if is_math_slide else ""
+
     prompt = f"""
 You are a university professor writing a quiz based on this slide.
 
@@ -1149,6 +1169,7 @@ Slide Content:
 {json.dumps(slide['points'], indent=2)}
 
 {difficulty_note}
+{math_note}
 
 Generate exactly 3 multiple-choice questions that test understanding of this slide's content.
 
@@ -1157,10 +1178,10 @@ Return ONLY a valid JSON array. No extra text, no markdown.
 Format:
 [
   {{
-    "question": "Clear, specific question based on slide content?",
-    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "question": "Clear, specific question? (use $LaTeX$ for any math expressions)",
+    "options": ["Option A (use $LaTeX$ for math)", "Option B", "Option C", "Option D"],
     "correct": 0,
-    "explanation": "Concise explanation of why this answer is correct, referencing the slide."
+    "explanation": "Concise explanation referencing the slide. Use $LaTeX$ for any math."
   }}
 ]
 
@@ -1169,7 +1190,8 @@ RULES:
 - "correct" is the 0-based index of the correct option
 - Questions must be directly answerable from the slide content
 - Vary question types: recall, application, conceptual
-- Keep options concise (under 15 words each)
+- Keep options concise (under 20 words each)
+- For math slides: at least one question must test formula recall or application
 - Do NOT output anything outside JSON
 """
 
@@ -1239,8 +1261,10 @@ def reteach_slide(slide: dict, retry: bool = False) -> dict | None:
             "- Rewrite each point as a rich object with: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
             "- Use simpler language and everyday analogies\n"
             "- inline_latex: same formula but write a clearer inline_label and simpler sub_steps\n"
-            "- sub_steps: 3-5 steps, each explaining WHY the step is done, with smaller numbers\n"
-            "- worked_example: a NEW simpler numeric problem, 4-6 steps, more arithmetic detail\n"
+            "- sub_steps: 3-5 steps, each following \'Step N — <Label>: <explanation with LaTeX>\' format; "
+            "every number or expression must use $...$ or $$...$$ LaTeX delimiters\n"
+            "- worked_example: a NEW simpler numeric problem, 4-6 steps with more arithmetic detail; "
+            "every step must follow \'Step N — <Label>: <LaTeX working>\' and use $$...$$ for calculations\n"
             "- Keep 4 to 6 points\n\n"
             "Return ONLY a valid JSON object. No extra text.\n\n"
             "Format:\n"
@@ -1391,6 +1415,7 @@ def generate_topic_summary(topic: str, slides: list, performance: list) -> str |
     """
     Generate a concise end-of-session summary with key takeaways.
     Personalises the summary based on weak slides if performance data exists.
+    For math topics, includes key formulas in LaTeX.
     """
     slide_titles = [s["title"] for s in slides]
     weak_titles = [p["slide_title"] for p in performance if p["quiz_score"] < 0.6 or not p["understood"]]
@@ -1399,33 +1424,119 @@ def generate_topic_summary(topic: str, slides: list, performance: list) -> str |
     if weak_titles:
         weak_note = f"\nThe learner struggled with: {', '.join(weak_titles[:5])}. Briefly flag those areas for extra study."
 
+    math_summary_note = ""
+    if is_math_topic(topic):
+        # Collect any inline_latex from slides to give the LLM context
+        formulas = []
+        for s in slides:
+            for p in s.get("points", []):
+                if isinstance(p, dict) and p.get("inline_latex"):
+                    lbl = p.get("inline_label", "")
+                    lat = p["inline_latex"]
+                    formulas.append(f"{lbl}: $${lat}$$" if lbl else f"$${lat}$$")
+        if formulas:
+            math_summary_note = (
+                "\nKey formulas covered (include these in your summary using LaTeX $...$ notation):\n"
+                + "\n".join(formulas[:8])
+            )
+        math_summary_note += (
+            "\nUse LaTeX for ALL mathematical expressions in your summary: "
+            "inline with $expression$ and display equations with $$expression$$."
+        )
+
     prompt = f"""
 You are an expert tutor. A student just finished a learning session on "{topic}".
 
 The session covered these slides:
 {json.dumps(slide_titles, indent=2)}
 {weak_note}
+{math_summary_note}
 
 Write a clear, motivating end-of-session summary for the student. Include:
 1. A 2-3 sentence overview of what was learned
-2. 5-7 key takeaways as concise bullet points
+2. 5-7 key takeaways as concise bullet points (include key formulas in LaTeX for math topics)
 3. A short "What to explore next" section with 2-3 related topics
 4. An encouraging closing line
 
 Keep the tone friendly and academic. Plain text — no JSON, no markdown headers.
 """
 
-    return _call_groq(prompt, max_tokens=800)
+    return _call_groq(prompt, max_tokens=900)
 
 
 # ---------------------------------------------------------------------------
 # NEW: AI Tutor chat (contextual Q&A on current slide)
 # ---------------------------------------------------------------------------
 
+# Extended keyword set for question-level math detection (broader than
+# is_math_topic which targets topic names; this targets student questions).
+_MATH_QUESTION_KEYWORDS = MATH_KEYWORDS | {
+    "solve", "calculate", "compute", "prove", "simplify", "differentiate",
+    "integrate", "find", "evaluate", "expand", "factor", "factorise",
+    "determinant", "eigenvalue", "eigenvector", "sum", "product",
+    "formula", "expression", "simplify", "roots", "zeros",
+}
+
+
+def is_mathematical_question(question: str) -> bool:
+    """Return True if the student's question is asking for a mathematical solution."""
+    lower = question.lower()
+    return any(kw in lower for kw in _MATH_QUESTION_KEYWORDS)
+
+
+def generate_math_solution(question: str, slide_points: list) -> str | None:
+    """
+    Return a structured, step-by-step mathematical solution.
+    Every step is labelled 'Step N — <action>:' with full LaTeX.
+    Answer is on a final 'Step N — Answer:' line.
+    """
+    context = ""
+    if slide_points:
+        context_lines = [
+            (p["text"] if isinstance(p, dict) else str(p))
+            for p in slide_points[:3]
+        ]
+        context = "Relevant slide context:\n" + "\n".join(context_lines) + "\n\n"
+
+    system = (
+        "You are a precise mathematics tutor. "
+        "Solve the problem completely, showing every intermediate calculation. "
+        "Format your entire response as clearly numbered steps — no bullet points, "
+        "no dashes, no markdown headers or symbols. "
+        "Each step must be on its own line labelled exactly "
+        "\'Step N — <action label>: <explanation>\' where N is the step number. "
+        "Use LaTeX for ALL mathematical expressions: "
+        "inline with $expression$ and display equations on their own line with $$expression$$. "
+        "Every number, variable, formula, and equation must be wrapped in LaTeX. "
+        "Explain what you are doing and why at each step. "
+        "End with a line labelled \'Step N — Answer: $$result$$\' containing the final result "
+        "with units where applicable. "
+        "Never use bullet points, dashes, or plain text for mathematical expressions."
+    )
+
+    prompt = (
+        f"{context}"
+        f"Solve the following problem completely, showing every step:\n\n"
+        f"{question}\n\n"
+        "Use this exact format for every step:\n"
+        "Step 1 — <action label>: <explanation with LaTeX e.g. Substituting $a=2$ into $$x = \\frac{-b}{2a}$$>\n"
+        "Step 2 — <action label>: ...\n"
+        "...\n"
+        "Step N — Answer: $$<final result>$$"
+    )
+
+    raw = _call_groq(prompt, max_tokens=1200, system=system)
+    if raw:
+        raw = strip_markdown_fences(raw)
+    return raw
+
+
 def answer_student_question(question: str, slide: dict, topic: str, profile: dict) -> str | None:
-    """
-    Answer a free-form student question in the context of the current slide.
-    """
+    # Mathematical questions bypass the slide-context prompt entirely and go
+    # straight to a dedicated solver that returns structured step-by-step output.
+    if is_mathematical_question(question):
+        return generate_math_solution(question, slide.get("points", []))
+
     difficulty = profile.get("difficulty_hint", "normal")
     tone_note = {
         "simplify": "Use simple, jargon-free language with everyday analogies.",
@@ -1433,10 +1544,23 @@ def answer_student_question(question: str, slide: dict, topic: str, profile: dic
         "normal": "Use clear, academic language suitable for an undergraduate student.",
     }.get(difficulty, "")
 
+    # Detect if the current slide is math-heavy so tutor uses LaTeX
+    slide_is_math = any(
+        isinstance(p, dict) and p.get("inline_latex")
+        for p in slide.get("points", [])
+    ) or is_math_topic(topic)
+    latex_note = (
+        "Use LaTeX for ALL mathematical expressions in your answer: "
+        "inline with $expression$ and display equations with $$expression$$. "
+        "Never write equations or formulas in plain text."
+    ) if slide_is_math else ""
+
     system = (
         f"You are a friendly, knowledgeable university tutor teaching '{topic}'. "
-        f"{tone_note} Answer only questions related to the course material. "
-        "If the question is off-topic, gently redirect the student."
+        f"{tone_note} {latex_note} "
+        "Answer only questions related to the course material. "
+        "If the question is off-topic, gently redirect the student. "
+        "Keep your answer focused and under 200 words."
     )
 
     prompt = f"""Current slide the student is on:
@@ -1445,11 +1569,9 @@ Content:
 {json.dumps(slide['points'], indent=2)}
 
 Student's question: {question}
-
-Give a helpful, concise answer (3-6 sentences). If relevant, reference specific points from the slide.
 """
 
-    return _call_groq(prompt, max_tokens=500, system=system)
+    return _call_groq(prompt, max_tokens=600, system=system)
 
 
 # ---------------------------------------------------------------------------
@@ -2030,14 +2152,37 @@ def _is_direct_solve(question: str) -> bool:
 
 
 def _math_direct_solve(question: str, difficulty: str) -> str | None:
+    diff_instruction = {
+        "Beginner":  "Use simple arithmetic and algebra. Show every micro-step.",
+        "Exam":      "Use standard exam techniques. Show all working clearly.",
+        "Advanced":  "Use rigorous notation. Include any edge-cases or domain restrictions.",
+    }.get(difficulty, "Show all intermediate steps clearly.")
+
     system = (
-        "You are a precise math solver. "
-        "Return a clean, step-by-step solution. "
-        "Use LaTeX for all expressions (delimited by $ or $$). "
-        "Be concise but complete. Never skip steps."
+        "You are a precise mathematics tutor. "
+        "Solve every problem with complete, numbered steps — no bullet points, no dashes. "
+        "Label each step exactly as \'Step N — <action>: <working>\' on its own line. "
+        "Use LaTeX delimiters for ALL mathematical expressions: "
+        "inline expressions use $expression$ and "
+        "display (own-line) equations use $$expression$$. "
+        "Every equation, formula, variable, and number must be in LaTeX. "
+        "End with a line labelled exactly \'Step N — Answer: $$result$$\'. "
+        f"{diff_instruction} "
+        "Never use bullet points, dashes, or markdown headers."
     )
-    prompt = f"Solve the following completely and accurately:\n\n{question}"
-    return _call_groq(prompt, max_tokens=1200, system=system)
+    prompt = (
+        f"Solve the following completely and accurately, showing every step:\n\n"
+        f"{question}\n\n"
+        "Use this exact format for every step:\n"
+        "Step 1 — <action label>: <explanation with LaTeX>\n"
+        "Step 2 — <action label>: ...\n"
+        "...\n"
+        "Step N — Answer: $$<final result>$$"
+    )
+    raw = _call_groq(prompt, max_tokens=1800, system=system)
+    if raw:
+        raw = strip_markdown_fences(raw)
+    return raw
 
 
 def _generate_math_problem(topic: str, difficulty: str) -> dict | None:
@@ -2051,6 +2196,8 @@ def _generate_math_problem(topic: str, difficulty: str) -> dict | None:
         "Advanced": "advanced (proof-based or multi-concept)",
     }.get(difficulty, "intermediate difficulty")
 
+    step_count = {"Beginner": "3–4", "Exam": "4–6", "Advanced": "5–7"}.get(difficulty, "4–5")
+
     system = (
         "You are a math tutor. Return ONLY a valid JSON object. "
         "No markdown fences. No extra text."
@@ -2060,26 +2207,30 @@ Difficulty: {diff_note}.
 
 Return ONLY this JSON shape:
 {{
-  "problem": "Full problem statement (use LaTeX for math, e.g. $x^2 + 3x - 4 = 0$)",
+  "problem": "Full problem statement. Use LaTeX for ALL math: inline $expression$ or display $$expression$$. Every number, variable, and formula must be in LaTeX.",
   "steps": [
-    "Step 1 — label: explanation with LaTeX if needed",
-    "Step 2 — label: explanation",
-    "Step 3 — label: explanation"
+    "Step 1 — Setup: identify given values $a = ...$, $b = ...$",
+    "Step 2 — Apply: substitute into $$formula$$",
+    "Step 3 — Compute: $$intermediate = result$$",
+    "Step N — Answer: $$final = value$$"
   ],
-  "final_answer": "The final answer with LaTeX",
+  "final_answer": "$$answer$$ with units where applicable",
   "similar_problems": [
-    "Similar problem 1",
+    "Similar problem 1 (use LaTeX for any math)",
     "Similar problem 2"
   ]
 }}
 
 Rules:
-- steps[] must be 3–6 items, each a complete, verifiable calculation step
-- final_answer must be precise and correct
-- similar_problems must be 1–2 items
-- Use correct math — verify before writing"""
+- steps[] must be {step_count} items, each a complete verifiable calculation step
+- Every step must follow the format "Step N — <Label>: <working with LaTeX>"
+- Every mathematical expression in steps, problem, and final_answer MUST use LaTeX ($...$ or $$...$$)
+- final_answer must be precise, correct, and in LaTeX
+- similar_problems must be 1–2 items at the same difficulty
+- Use correct math — verify every calculation before writing
+- Do NOT use plain text for any equation, variable, or number"""
 
-    raw = _call_groq(prompt, max_tokens=900, system=system)
+    raw = _call_groq(prompt, max_tokens=1200, system=system)
     if not raw:
         return None
     raw = strip_markdown_fences(raw)
@@ -2105,19 +2256,25 @@ def _validate_math_step(user_answer: str, expected_step: str, problem: str, topi
     """
     Return { correct: bool, hint: str|None }
     Asks the model to judge correctness tolerantly (accept equivalent forms).
+    Hint uses LaTeX so the frontend can render it properly.
     """
-    system = "You are a strict but fair math evaluator. Return ONLY valid JSON."
+    system = "You are a strict but fair math evaluator. Return ONLY valid JSON. No prose outside JSON."
     prompt = f"""Problem: {problem}
 Expected step: {expected_step}
 Student's answer: {user_answer}
 
 Is the student's answer mathematically equivalent to or correctly performing the expected step?
-Be tolerant of notation differences (e.g. "x=2" vs "x = 2") but strict about correctness.
+Be tolerant of notation differences (e.g. "x=2" vs "$x = 2$") but strict about mathematical correctness.
 
-Return ONLY:
-{{"correct": true/false, "hint": "a short hint if incorrect, null if correct"}}"""
+If incorrect, write a hint that:
+1. Points out the specific error in one sentence
+2. Shows the correct intermediate expression using LaTeX (e.g. "Try $$x = \\frac{{-b}}{{2a}}$$")
+3. Never gives away the full answer
 
-    raw = _call_groq(prompt, max_tokens=200, system=system)
+Return ONLY valid JSON:
+{{"correct": true/false, "hint": "hint with LaTeX if incorrect, null if correct"}}"""
+
+    raw = _call_groq(prompt, max_tokens=300, system=system)
     if not raw:
         return {"correct": False, "hint": "Could not validate. Please try again."}
     raw = strip_markdown_fences(raw)
