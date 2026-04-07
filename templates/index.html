@@ -2433,6 +2433,154 @@
     }
     .math-step-prompt-text .katex { font-size: 1em; }
 
+    /* =====================================================================
+       MATH SLIDE - code-block style (no bullets, no prose)
+       ===================================================================== */
+    .math-slide-body {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      margin-top: .5rem;
+    }
+    .math-concept-block {
+      background: #0d1220;
+      border: 1px solid var(--border2);
+      border-radius: 12px;
+      overflow: hidden;
+      animation: fadeUp .35s ease both;
+    }
+    .mc-formula-row {
+      display: flex;
+      flex-direction: column;
+      gap: .2rem;
+      padding: .75rem 1.1rem .55rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(232,160,32,.05);
+    }
+    .mc-formula-label {
+      font-family: var(--mono);
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      opacity: .75;
+    }
+    .mc-formula .katex-display { margin: .3rem 0 0; overflow-x: auto; }
+    .mc-formula .katex { font-size: 1.15em; }
+    .mc-steps { display: flex; flex-direction: column; }
+    .mc-step-row {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      align-items: center;
+      gap: .6rem;
+      padding: .55rem 1.1rem;
+      border-bottom: 1px solid rgba(30,37,53,.6);
+      transition: background .15s;
+    }
+    .mc-step-row:last-child { border-bottom: none; }
+    .mc-step-row:hover { background: rgba(255,255,255,.025); }
+    .mc-step-num {
+      font-family: var(--mono);
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--teal);
+      text-align: center;
+      background: rgba(32,197,176,.1);
+      border-radius: 5px;
+      padding: .15rem 0;
+    }
+    .mc-step-expr {
+      font-family: var(--mono);
+      font-size: .9rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .mc-step-expr .katex { font-size: 1em; }
+    .mc-step-expr .katex-display { margin: .25rem 0; overflow-x: auto; }
+    .worked-example-v2 {
+      background: #09111e;
+      border: 1px solid var(--teal-dim);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: .4rem;
+    }
+    .we-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .6rem 1.1rem;
+      background: rgba(32,197,176,.07);
+      border-bottom: 1px solid var(--teal-dim);
+    }
+    .we-header-label {
+      font-family: var(--mono);
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--teal);
+    }
+    .we-problem {
+      padding: .75rem 1.1rem;
+      font-size: .95rem;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      line-height: 1.6;
+    }
+    .we-problem .katex { font-size: 1em; }
+    .we-problem .katex-display { margin: .3rem 0; overflow-x: auto; }
+    .we-steps-block { display: flex; flex-direction: column; }
+    .we-step-row {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      align-items: center;
+      gap: .6rem;
+      padding: .55rem 1.1rem;
+      border-bottom: 1px solid rgba(30,37,53,.6);
+      transition: background .15s;
+    }
+    .we-step-row:last-child { border-bottom: none; }
+    .we-step-row:hover { background: rgba(255,255,255,.025); }
+    .we-step-num {
+      font-family: var(--mono);
+      font-size: .75rem;
+      font-weight: 700;
+      color: var(--gold);
+      text-align: center;
+      background: rgba(232,160,32,.1);
+      border-radius: 5px;
+      padding: .15rem 0;
+    }
+    .we-step-expr {
+      font-family: var(--mono);
+      font-size: .9rem;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .we-step-expr .katex { font-size: 1em; }
+    .we-step-expr .katex-display { margin: .25rem 0; overflow-x: auto; }
+    .we-answer-row {
+      display: flex;
+      align-items: center;
+      gap: .7rem;
+      padding: .65rem 1.1rem;
+      background: rgba(62,200,122,.07);
+      border-top: 1px solid rgba(62,200,122,.2);
+    }
+    .we-answer-label {
+      font-family: var(--mono);
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--green);
+    }
+    .we-answer-val {
+      font-family: var(--mono);
+      font-size: .95rem;
+      color: var(--green);
+    }
+    .we-answer-val .katex { font-size: 1em; }
+
   </style>
 </head>
 <body>
@@ -3057,40 +3205,19 @@ function loadSlide(index, overrideSlide = null) {
   // Build slide card
   const card = document.getElementById('slide-card');
 
-  // Helper: render one rich point (object with text/inline_latex/sub_steps)
+  // ── Detect whether this slide has math content ──────────────────────────
+  function slideIsMath(sl) {
+    return sl.worked_example || (sl.points || []).some(p =>
+      p && typeof p === 'object' && (p.inline_latex || (p.sub_steps && p.sub_steps.length))
+    );
+  }
+
+  // ── Helper: render one rich point for NON-math slides ───────────────────
   function renderPoint(p, idx, isReteach) {
     const isObj = (typeof p === 'object' && p !== null && !Array.isArray(p));
     const text = isObj ? (p.text || '') : String(p);
     const sourceTitle = isObj ? String(p.source_title || '').trim() : '';
     const sourceUrl = isObj ? String(p.source_url || '').trim() : '';
-    const latex = isObj ? (p.inline_latex || '') : '';
-    const label = isObj ? (p.inline_label || 'Formula') : '';
-    const steps = isObj ? (p.sub_steps || []) : [];
-
-    let mathHtml = '';
-    if (latex) {
-      mathHtml = `
-        <div class="math-block">
-          <div class="math-label">📐 ${escHtml(label)}</div>
-          <div class="math-formula">$$${latex}$$</div>
-        </div>`;
-    }
-
-    let stepsHtml = '';
-    if (steps.length) {
-      const stepsInner = steps.map((s, si) => {
-        const stepText = String(s);
-        // Split "Step N — Label: body" into label + body for cleaner display
-        const dashMatch = stepText.match(/^(Step\s*\d+\s*[—\-–]\s*[^:]+):\s*(.+)$/i);
-        let labelPart = '', bodyPart = stepText;
-        if (dashMatch) { labelPart = dashMatch[1].trim(); bodyPart = dashMatch[2].trim(); }
-        return `<div class="sub-step">
-          <span class="sub-step-num">${si + 1}</span>
-          <span class="sub-step-text">${labelPart ? `<span class="sub-step-label">${escHtml(labelPart)}:</span> ${bodyPart}` : bodyPart}</span>
-        </div>`;
-      }).join('');
-      stepsHtml = `<div class="sub-steps"><div class="sub-steps-header">Step-by-Step</div>${stepsInner}</div>`;
-    }
 
     const sourceHtml = sourceTitle
       ? `<div class="point-source">Source: ${
@@ -3110,47 +3237,97 @@ function loadSlide(index, overrideSlide = null) {
             ${sourceHtml}
           </div>
         </div>
-        ${mathHtml}
-        ${stepsHtml}
       </li>`;
   }
 
-  // Helper: render worked example
+  // ── Helper: render the MATH CODE BLOCK for one concept ──────────────────
+  function renderMathConceptBlock(p, idx) {
+    const isObj = (typeof p === 'object' && p !== null);
+    const latex  = isObj ? (p.inline_latex || '') : '';
+    const label  = isObj ? (p.inline_label || '') : '';
+    const steps  = isObj ? (p.sub_steps   || []) : [];
+
+    if (!latex && !steps.length) return ''; // skip non-math points silently
+
+    const formulaHtml = latex
+      ? `<div class="mc-formula-row">
+           ${label ? `<span class="mc-formula-label">${escHtml(label)}</span>` : ''}
+           <div class="mc-formula">$$${latex}$$</div>
+         </div>`
+      : '';
+
+    const stepLines = steps.map((s, si) => {
+      const txt = String(s);
+      // Strip "Step N — Label:" prefix — keep only the math expression
+      const dashMatch = txt.match(/^Step\s*\d+\s*(?:[—\-–]\s*[^:]+)?:\s*(.+)$/i);
+      const body = dashMatch ? dashMatch[1].trim() : txt;
+      return `<div class="mc-step-row">
+        <span class="mc-step-num">${si + 1}</span>
+        <span class="mc-step-expr">${body}</span>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="math-concept-block" style="animation-delay:${idx * 0.09}s">
+        ${formulaHtml}
+        ${stepLines ? `<div class="mc-steps">${stepLines}</div>` : ''}
+      </div>`;
+  }
+
+  // ── Helper: render worked example (clean code-block style) ──────────────
   function renderWorkedExample(we) {
     if (!we || !we.problem) return '';
     const stepRows = (we.steps || []).map((s, i) => {
       const txt = String(s);
-      // Split "Step N — Label: body" pattern
-      const dashMatch = txt.match(/^(Step\s*\d+\s*[—\-–]\s*[^:]+):\s*(.+)$/i);
-      let labelPart = '', bodyPart = txt;
-      if (dashMatch) { labelPart = dashMatch[1].trim(); bodyPart = dashMatch[2].trim(); }
-      return `<div class="worked-step">
-        <span class="worked-step-num">${i + 1}</span>
-        <span class="worked-step-body">${labelPart ? `<span class="worked-step-label">${escHtml(labelPart)}:</span> ${bodyPart}` : bodyPart}</span>
+      const dashMatch = txt.match(/^Step\s*\d+\s*(?:[—\-–]\s*[^:]+)?:\s*(.+)$/i);
+      const body = dashMatch ? dashMatch[1].trim() : txt;
+      return `<div class="we-step-row">
+        <span class="we-step-num">${i + 1}</span>
+        <span class="we-step-expr">${body}</span>
       </div>`;
     }).join('');
+
     return `
-      <div class="worked-example">
-        <div class="worked-example-header">✏️ Worked Example</div>
-        <div class="worked-problem">${we.problem}</div>
-        <div class="worked-steps">${stepRows}</div>
-        ${we.answer ? `<div class="worked-answer">
-          <span class="worked-answer-label">Answer</span>
-          <span class="worked-answer-value">${we.answer}</span>
+      <div class="worked-example-v2">
+        <div class="we-header">
+          <span class="we-header-icon">✏</span>
+          <span class="we-header-label">Worked Example</span>
+        </div>
+        <div class="we-problem">${we.problem}</div>
+        <div class="we-steps-block">${stepRows}</div>
+        ${we.answer ? `<div class="we-answer-row">
+          <span class="we-answer-label">∴</span>
+          <span class="we-answer-val">${we.answer}</span>
         </div>` : ''}
       </div>`;
   }
 
-  const pointsHtml = slide.points.map((p, i) => renderPoint(p, i, isReteach)).join('');
-  const workedHtml = slide.worked_example ? renderWorkedExample(slide.worked_example) : '';
+  // ── Build card HTML ──────────────────────────────────────────────────────
+  const isMathSlide = slideIsMath(slide);
+  let mainContentHtml;
+
+  if (isMathSlide) {
+    // Math mode: no prose bullets — just formula blocks + worked example
+    const conceptBlocks = slide.points.map((p, i) => renderMathConceptBlock(p, i)).join('');
+    const workedHtml    = slide.worked_example ? renderWorkedExample(slide.worked_example) : '';
+    mainContentHtml = `
+      <div class="math-slide-body">
+        ${conceptBlocks}
+        ${workedHtml}
+      </div>`;
+  } else {
+    // Default mode: prose bullet points
+    const pointsHtml = slide.points.map((p, i) => renderPoint(p, i, isReteach)).join('');
+    const workedHtml = slide.worked_example ? renderWorkedExample(slide.worked_example) : '';
+    mainContentHtml  = `<ul class="slide-points">${pointsHtml}</ul>${workedHtml}`;
+  }
 
   card.innerHTML = `
     <div class="slide-number-tag ${isReteach ? 'reteach-tag' : ''}">
       ${isReteach ? '🔁 Re-Teaching — ' : ''}Slide ${index + 1}
     </div>
     <div class="slide-title">${escHtml(slide.title)}</div>
-    <ul class="slide-points">${pointsHtml}</ul>
-    ${workedHtml}
+    ${mainContentHtml}
     <div style="margin-top:1.25rem;">
       <button class="visual-toggle-btn" id="visual-toggle-btn" onclick="toggleVisual()">
         <span class="vt-icon">📊</span> Show Visual Diagram
