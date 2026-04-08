@@ -66,7 +66,44 @@
     .screen.active { opacity: 1; pointer-events: all; }
 
     /* ===================== START SCREEN ===================== */
-    #screen-start { flex-direction: column; }
+    #screen-start {
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      overflow: hidden;
+    }
+
+    /* Ambient glow blobs */
+    .start-glow-blob {
+      position: absolute;
+      border-radius: 50%;
+      mix-blend-mode: normal;
+      pointer-events: none;
+      filter: blur(80px);
+      animation: blobPulse 4s ease-in-out infinite;
+    }
+    .start-glow-blob:nth-child(1) {
+      width: 380px; height: 380px;
+      top: -80px; left: 15%;
+      background: rgba(232,160,32,.07);
+    }
+    .start-glow-blob:nth-child(2) {
+      width: 320px; height: 320px;
+      bottom: -60px; right: 15%;
+      background: rgba(32,197,176,.07);
+      animation-delay: .7s;
+    }
+    .start-glow-blob:nth-child(3) {
+      width: 260px; height: 260px;
+      top: 30%; right: 25%;
+      background: rgba(138,115,200,.06);
+      animation-delay: 1s;
+    }
+    @keyframes blobPulse {
+      0%, 100% { opacity: .6; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.08); }
+    }
 
     .brand-mark {
       font-family: 'DM Serif Display', serif;
@@ -84,71 +121,221 @@
       letter-spacing: .18em;
       text-transform: uppercase;
       color: var(--text-3);
-      margin-bottom: 3rem;
+      margin-bottom: 2rem;
     }
 
-    .start-card {
-      background: var(--card);
-      border: 1px solid var(--border2);
-      border-radius: 16px;
-      padding: 2.5rem;
-      width: min(480px, 90vw);
-      position: relative;
-      overflow: hidden;
+    /* ---- Animated divider under heading ---- */
+    .brand-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+      width: 0;
+      margin: 0 auto .6rem;
+      animation: dividerExpand .8s ease .4s forwards;
     }
-    .start-card::before {
-      content: '';
-      position: absolute;
-      top: -60px; right: -60px;
-      width: 200px; height: 200px;
-      background: radial-gradient(circle, rgba(232,160,32,.12) 0%, transparent 70%);
-      pointer-events: none;
+    @keyframes dividerExpand {
+      to { width: 100%; }
     }
 
-    .start-label {
-      font-size: .7rem;
-      font-weight: 700;
-      letter-spacing: .14em;
-      text-transform: uppercase;
+    .brand-helper {
+      font-size: .8rem;
       color: var(--text-3);
-      margin-bottom: .75rem;
+      margin-bottom: 2rem;
+    }
+
+    /* ---- Chat container (replaces start-card) ---- */
+    .chat-container {
+      width: min(560px, 96vw);
+      position: relative;
+      z-index: 2;
+      animation: containerFadeUp .6s ease .1s both;
+    }
+    @keyframes containerFadeUp {
+      from { opacity: 0; transform: translateY(18px) scale(.98); }
+      to   { opacity: 1; transform: translateY(0)  scale(1); }
+    }
+
+    .chat-box {
+      background: rgba(255,255,255,.022);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 20px;
+      backdrop-filter: blur(24px);
+      box-shadow: 0 24px 80px rgba(0,0,0,.45);
+      position: relative;
+      overflow: visible;
+    }
+
+    /* Command palette */
+    .cmd-palette {
+      position: absolute;
+      left: 1rem; right: 1rem;
+      bottom: calc(100% + 8px);
+      background: rgba(8,11,18,.96);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 50;
+      box-shadow: 0 12px 40px rgba(0,0,0,.6);
+      opacity: 0; transform: translateY(6px);
+      pointer-events: none;
+      transition: opacity .15s, transform .15s;
+    }
+    .cmd-palette.open {
+      opacity: 1; transform: translateY(0);
+      pointer-events: all;
+    }
+    .cmd-item {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .6rem .85rem;
+      font-size: .82rem;
+      color: rgba(255,255,255,.65);
+      cursor: pointer;
+      transition: background .12s, color .12s;
+    }
+    .cmd-item:hover, .cmd-item.active {
+      background: rgba(255,255,255,.08);
+      color: #fff;
+    }
+    .cmd-item-icon {
+      width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,.5);
+      font-size: .85rem;
+      flex-shrink: 0;
+    }
+    .cmd-item-label { font-weight: 600; }
+    .cmd-item-prefix {
+      margin-left: auto;
+      font-size: .72rem;
+      color: rgba(255,255,255,.3);
+      font-family: var(--mono);
+    }
+
+    /* Textarea area */
+    .chat-input-area {
+      padding: 1rem 1.1rem .6rem;
     }
 
     .topic-input {
       width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border2);
-      border-radius: 10px;
-      padding: .9rem 1.1rem;
-      color: var(--text);
-      font-family: 'Syne', sans-serif;
-      font-size: 1rem;
-      font-weight: 500;
+      background: transparent;
+      border: none;
       outline: none;
-      transition: border-color .2s, box-shadow .2s;
+      color: rgba(255,255,255,.88);
+      font-family: 'Syne', sans-serif;
+      font-size: .95rem;
+      font-weight: 500;
       resize: none;
-      height: 80px;
+      min-height: 60px;
+      max-height: 200px;
+      overflow: hidden;
+      line-height: 1.55;
+      transition: height .1s;
     }
-    .topic-input:focus {
-      border-color: var(--gold);
-      box-shadow: 0 0 0 3px rgba(232,160,32,.1);
+    .topic-input::placeholder { color: rgba(255,255,255,.22); }
+
+    /* Focus ring overlay on chat-box */
+    .chat-box.focused {
+      border-color: rgba(232,160,32,.3);
+      box-shadow: 0 0 0 3px rgba(232,160,32,.08), 0 24px 80px rgba(0,0,0,.45);
     }
-    .topic-input::placeholder { color: var(--text-3); }
+
+    /* Attachments row */
+    .attachments-row {
+      display: none;
+      flex-wrap: wrap;
+      gap: .45rem;
+      padding: 0 1.1rem .6rem;
+    }
+    .attachments-row.show { display: flex; }
+    .attachment-chip {
+      display: flex; align-items: center; gap: .5rem;
+      background: rgba(255,255,255,.04);
+      border-radius: 8px;
+      padding: .3rem .7rem;
+      font-size: .75rem;
+      color: rgba(255,255,255,.6);
+      animation: chipIn .2s ease;
+    }
+    @keyframes chipIn {
+      from { opacity: 0; transform: scale(.85); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .attachment-remove {
+      background: none; border: none;
+      color: rgba(255,255,255,.35);
+      cursor: pointer; font-size: .75rem;
+      line-height: 1; padding: 0;
+      transition: color .15s;
+    }
+    .attachment-remove:hover { color: rgba(255,255,255,.9); }
+
+    /* Bottom toolbar */
+    .chat-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .75rem 1.1rem;
+      border-top: 1px solid rgba(255,255,255,.05);
+      gap: .75rem;
+    }
+    .chat-toolbar-left { display: flex; align-items: center; gap: .5rem; }
+
+    .toolbar-icon-btn {
+      width: 34px; height: 34px;
+      border-radius: 9px;
+      border: none;
+      background: none;
+      color: rgba(255,255,255,.38);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .95rem;
+      transition: background .15s, color .15s;
+      position: relative;
+    }
+    .toolbar-icon-btn:hover, .toolbar-icon-btn.active {
+      background: rgba(255,255,255,.07);
+      color: rgba(255,255,255,.85);
+    }
 
     .char-count {
-      text-align: right;
-      font-size: .72rem;
-      color: var(--text-3);
-      margin-top: .4rem;
+      font-size: .7rem;
+      color: rgba(255,255,255,.25);
       font-family: var(--mono);
+      margin-left: auto;
     }
 
-    /* ===================== LEARNING CONTROLS ===================== */
+    /* Send button */
+    .send-btn {
+      display: flex; align-items: center; gap: .5rem;
+      padding: .55rem 1.1rem;
+      border-radius: 10px;
+      border: none;
+      font-family: 'Syne', sans-serif;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      cursor: pointer;
+      transition: background .15s, opacity .15s, transform .1s;
+    }
+    .send-btn:active { transform: scale(.97); }
+    .send-btn.ready {
+      background: var(--text);
+      color: var(--bg);
+      box-shadow: 0 4px 20px rgba(234,230,223,.12);
+    }
+    .send-btn.empty {
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.35);
+    }
+
+    /* Learning controls (compacted inside chat-box) */
     .lc-row {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: .5rem;
-      margin-top: .85rem;
+      padding: .5rem 1.1rem .4rem;
     }
     @media (max-width: 480px) {
       .lc-row { grid-template-columns: 1fr; }
@@ -163,17 +350,17 @@
       font-weight: 700;
       letter-spacing: .13em;
       text-transform: uppercase;
-      color: var(--text-3);
+      color: rgba(255,255,255,.3);
     }
     .lc-select {
       width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border2);
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
       border-radius: 9px;
-      padding: .6rem .8rem;
+      padding: .5rem .7rem;
       color: var(--text);
       font-family: 'Syne', sans-serif;
-      font-size: .82rem;
+      font-size: .78rem;
       font-weight: 600;
       outline: none;
       cursor: pointer;
@@ -181,13 +368,13 @@
       -webkit-appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234a5268' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right .7rem center;
-      padding-right: 2rem;
+      background-position: right .6rem center;
+      padding-right: 1.8rem;
       transition: border-color .2s, box-shadow .2s;
     }
     .lc-select:focus {
-      border-color: var(--gold);
-      box-shadow: 0 0 0 3px rgba(232,160,32,.1);
+      border-color: rgba(232,160,32,.4);
+      box-shadow: 0 0 0 2px rgba(232,160,32,.08);
     }
     .lc-select option { background: var(--card); color: var(--text); }
     .lc-select optgroup {
@@ -198,15 +385,16 @@
       text-transform: uppercase;
       background: var(--surface);
     }
-    /* "All 3 selected → optimised" hint bar */
+
+    /* Optimised hint bar */
     .lc-hint {
       display: none;
-      margin-top: .55rem;
-      padding: .4rem .75rem;
+      margin: .3rem 1.1rem .1rem;
+      padding: .35rem .7rem;
       border-radius: 8px;
       background: rgba(32,197,176,.07);
       border: 1px solid rgba(32,197,176,.2);
-      font-size: .7rem;
+      font-size: .68rem;
       font-weight: 600;
       color: var(--teal);
       letter-spacing: .03em;
@@ -214,23 +402,26 @@
       gap: .4rem;
     }
     .lc-hint.show { display: flex; }
+
+    /* Explain mode row (inside chat-box) */
     .explain-mode-wrap {
-      margin-top: .85rem;
       display: flex;
-      flex-direction: column;
+      align-items: center;
       gap: .5rem;
+      padding: .4rem 1.1rem .6rem;
     }
     .explain-mode-label {
-      font-size: .68rem;
+      font-size: .65rem;
       font-weight: 700;
-      letter-spacing: .12em;
+      letter-spacing: .1em;
       text-transform: uppercase;
-      color: var(--text-3);
+      color: rgba(255,255,255,.3);
+      flex-shrink: 0;
     }
     .explain-mode-group {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: .45rem;
+      display: flex;
+      gap: .4rem;
+      flex-wrap: wrap;
     }
     .explain-mode-option {
       position: relative;
@@ -238,12 +429,12 @@
       align-items: center;
       justify-content: center;
       gap: .35rem;
-      padding: .55rem .6rem;
-      border-radius: 9px;
-      border: 1px solid var(--border2);
-      background: var(--surface);
-      color: var(--text-2);
-      font-size: .74rem;
+      padding: .35rem .65rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.03);
+      color: rgba(255,255,255,.5);
+      font-size: .72rem;
       font-weight: 700;
       letter-spacing: .04em;
       text-transform: uppercase;
@@ -263,6 +454,119 @@
       color: var(--gold);
     }
 
+    /* Quick-action suggestion chips */
+    .suggestion-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      justify-content: center;
+      margin-top: 1.2rem;
+      animation: containerFadeUp .6s ease .3s both;
+    }
+    .suggestion-chip {
+      display: flex; align-items: center; gap: .4rem;
+      padding: .45rem .9rem;
+      background: rgba(255,255,255,.025);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 10px;
+      color: rgba(255,255,255,.55);
+      font-size: .78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s, color .15s, border-color .15s, transform .15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .suggestion-chip:hover {
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.9);
+      border-color: rgba(255,255,255,.12);
+      transform: translateY(-2px);
+    }
+    .suggestion-chip-icon { font-size: .85rem; }
+
+    /* Feature pills (below chips) */
+    .feature-pills {
+      display: flex; gap: .5rem; flex-wrap: wrap;
+      margin-top: 1.2rem; justify-content: center;
+      animation: containerFadeUp .6s ease .5s both;
+    }
+    .pill {
+      font-size: .65rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: .28rem .65rem;
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 20px;
+      color: rgba(255,255,255,.28);
+    }
+    .pill.ppt-pill {
+      border-color: rgba(32,197,176,.3);
+      color: var(--teal);
+    }
+
+    /* Typing indicator */
+    .typing-bar {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(60px);
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 99px;
+      padding: .5rem 1.1rem;
+      display: flex; align-items: center; gap: .75rem;
+      font-size: .82rem;
+      color: rgba(255,255,255,.65);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      z-index: 100;
+      transition: transform .3s ease, opacity .3s ease;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .typing-bar.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+    .typing-avatar {
+      width: 28px; height: 26px;
+      background: rgba(255,255,255,.06);
+      border-radius: 99px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; font-weight: 700;
+      color: rgba(255,255,255,.8);
+    }
+    .typing-dots { display: flex; align-items: center; gap: 3px; margin-left: 2px; }
+    .typing-dot {
+      width: 5px; height: 5px;
+      background: rgba(255,255,255,.8);
+      border-radius: 50%;
+      animation: dotPulse 1.2s ease-in-out infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: .15s; }
+    .typing-dot:nth-child(3) { animation-delay: .3s; }
+    @keyframes dotPulse {
+      0%, 100% { opacity: .3; transform: scale(.85); }
+      50%       { opacity: .9; transform: scale(1.1); }
+    }
+
+    /* Glowing cursor that follows mouse when input focused */
+    #mouse-glow {
+      position: fixed;
+      width: 600px; height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(232,160,32,.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+      transition: transform .4s cubic-bezier(.25,.46,.45,.94), opacity .3s;
+      transform: translate(-300px,-300px);
+      opacity: 0;
+    }
+    #mouse-glow.show { opacity: 1; }
+
+    /* btn-primary kept for other uses */
     .btn-primary {
       width: 100%;
       margin-top: 1.25rem;
@@ -281,21 +585,6 @@
     .btn-primary:hover { background: #f5b030; }
     .btn-primary:active { transform: scale(.98); }
     .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
-
-    .feature-pills {
-      display: flex; gap: .5rem; flex-wrap: wrap;
-      margin-top: 1.5rem; justify-content: center;
-    }
-    .pill {
-      font-size: .68rem;
-      font-weight: 600;
-      letter-spacing: .1em;
-      text-transform: uppercase;
-      padding: .3rem .75rem;
-      border: 1px solid var(--border2);
-      border-radius: 20px;
-      color: var(--text-3);
-    }
 
     /* ===================== LOADING ===================== */
     #screen-loading {
@@ -2581,104 +2870,205 @@
     }
     .we-answer-val .katex { font-size: 1em; }
 
+    .lab-bg::before {
+      overflow: hidden;
+      max-width: 100vw;
+      max-height: 100vh;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
 
 <!-- ===================== START SCREEN ===================== -->
 <div id="screen-start" class="screen active">
-  <div style="text-align:center; padding: 1rem;">
-    <div class="brand-mark">Adaptive<span>Learn</span></div>
-    <div class="brand-sub">AI-Powered Lecture Engine</div>
-    <div class="start-card">
-      <div class="start-label">What do you want to study today?</div>
-      <textarea
-        class="topic-input"
-        id="topic-input"
-        placeholder="e.g. Quantum Entanglement, French Revolution, Neural Networks…"
-        maxlength="200"
-      ></textarea>
-      <div class="char-count"><span id="char-count">0</span> / 200</div>
 
-      <!-- Learning Controls -->
-      <div class="lc-row">
-        <div class="lc-group">
-          <label class="lc-label" for="lc-subject">Subject <span style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-          <select class="lc-select" id="lc-subject">
-            <option value="">— General (any topic) —</option>
-            <optgroup label="STEM">
-              <option value="Math">Math</option>
-              <option value="Physics">Physics</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Biology">Biology</option>
-              <option value="Statistics">Statistics</option>
-              <option value="Computer Science">Computer Science</option>
-              <option value="Coding">Coding</option>
-            </optgroup>
-            <optgroup label="Humanities">
-              <option value="English">English</option>
-              <option value="History">History</option>
-              <option value="Geography">Geography</option>
-              <option value="Philosophy">Philosophy</option>
-            </optgroup>
-            <optgroup label="Applied / Professional">
-              <option value="Economics">Economics</option>
-              <option value="Business">Business</option>
-              <option value="Law">Law</option>
-              <option value="Medicine">Medicine</option>
-              <option value="Psychology">Psychology</option>
-            </optgroup>
-          </select>
-        </div>
-        <div class="lc-group">
-          <label class="lc-label" for="lc-mode">Mode <span style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-          <select class="lc-select" id="lc-mode">
-            <option value="">— Any —</option>
-            <option value="Learn">📖 Learn</option>
-            <option value="Practice">✏️ Practice</option>
-            <option value="Test">📝 Test</option>
-          </select>
-        </div>
-        <div class="lc-group">
-          <label class="lc-label" for="lc-depth">Depth <span style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
-          <select class="lc-select" id="lc-depth">
-            <option value="">— Any —</option>
-            <option value="Beginner">🟢 Beginner</option>
-            <option value="Exam">🟡 Exam</option>
-            <option value="Advanced">🔴 Advanced</option>
-          </select>
-        </div>
-      </div>
-      <!-- Optimised-mode hint (shown only when all 3 are selected) -->
-      <div class="lc-hint" id="lc-hint">
-        <span>✦</span> Prompt optimised for <span id="lc-hint-text"></span>
-      </div>
-      <div class="explain-mode-wrap">
-        <div class="explain-mode-label">Explanation style</div>
-        <div class="explain-mode-group" id="explain-mode-group">
-          <label class="explain-mode-option active" id="mode-brief-label">
-            <input type="radio" name="explain-mode" value="brief" />
-            Brief
-          </label>
-          <label class="explain-mode-option" id="mode-depth-label">
-            <input type="radio" name="explain-mode" value="in_depth" checked />
-            In-Depth
-          </label>
-        </div>
-      </div>
-      <button class="btn-primary" id="start-btn">Generate Lecture →</button>
-      <div class="feature-pills">
-        <span class="pill">📊 Adaptive Quizzes</span>
-        <span class="pill">⏱ Time Tracking</span>
-        <span class="pill">🔁 Re-Teaching</span>
-        <span class="pill">🧠 Learner Profile</span>
-        <span class="pill">🤖 AI Tutor Chat</span>
-        <span class="pill">📝 Slide Notes</span>
-        <span class="pill">⚡ XP &amp; Streaks</span>
-        <span class="pill ppt-pill">🎞️ Export PPT</span>
-        <span class="pill">📚 Cited Sources</span>
-      </div>
+  <!-- Ambient glows -->
+  <div class="start-glow-blob"></div>
+  <div class="start-glow-blob"></div>
+  <div class="start-glow-blob"></div>
+
+  <!-- Mouse glow -->
+  <div id="mouse-glow"></div>
+
+  <div style="text-align:center; position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; padding: 1.5rem;">
+
+    <!-- Brand heading -->
+    <div class="brand-mark" style="animation: containerFadeUp .5s ease both;">
+      Adaptive<span>Learn</span>
     </div>
+    <div class="brand-divider" style="max-width:280px;"></div>
+    <div class="brand-sub" style="animation: containerFadeUp .5s ease .15s both;">
+      AI-Powered Lecture Engine
+    </div>
+
+    <!-- ======= Animated Chat Box ======= -->
+    <div class="chat-container">
+      <div class="chat-box" id="chat-box">
+
+        <!-- Command palette -->
+        <div class="cmd-palette" id="cmd-palette">
+          <div class="cmd-item" data-prefix="/learn" onclick="selectCmd(this)">
+            <span class="cmd-item-icon">📖</span>
+            <span class="cmd-item-label">Learn</span>
+            <span class="cmd-item-prefix">/learn</span>
+          </div>
+          <div class="cmd-item" data-prefix="/practice" onclick="selectCmd(this)">
+            <span class="cmd-item-icon">✏️</span>
+            <span class="cmd-item-label">Practice</span>
+            <span class="cmd-item-prefix">/practice</span>
+          </div>
+          <div class="cmd-item" data-prefix="/test" onclick="selectCmd(this)">
+            <span class="cmd-item-icon">📝</span>
+            <span class="cmd-item-label">Test me</span>
+            <span class="cmd-item-prefix">/test</span>
+          </div>
+          <div class="cmd-item" data-prefix="/deep" onclick="selectCmd(this)">
+            <span class="cmd-item-icon">🔬</span>
+            <span class="cmd-item-label">Deep dive</span>
+            <span class="cmd-item-prefix">/deep</span>
+          </div>
+        </div>
+
+        <!-- Textarea -->
+        <div class="chat-input-area">
+          <textarea
+            class="topic-input"
+            id="topic-input"
+            placeholder="Ask anything — e.g. Quantum Entanglement, French Revolution, Neural Networks…"
+            maxlength="200"
+            rows="2"
+          ></textarea>
+        </div>
+
+        <!-- Attachments -->
+        <div class="attachments-row" id="attachments-row"></div>
+
+        <!-- Controls — lc-row -->
+        <div class="lc-row">
+          <div class="lc-group">
+            <label class="lc-label" for="lc-subject">Subject</label>
+            <select class="lc-select" id="lc-subject">
+              <option value="">— General —</option>
+              <optgroup label="STEM">
+                <option value="Math">Math</option>
+                <option value="Physics">Physics</option>
+                <option value="Chemistry">Chemistry</option>
+                <option value="Biology">Biology</option>
+                <option value="Statistics">Statistics</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Coding">Coding</option>
+              </optgroup>
+              <optgroup label="Humanities">
+                <option value="English">English</option>
+                <option value="History">History</option>
+                <option value="Geography">Geography</option>
+                <option value="Philosophy">Philosophy</option>
+              </optgroup>
+              <optgroup label="Applied">
+                <option value="Economics">Economics</option>
+                <option value="Business">Business</option>
+                <option value="Law">Law</option>
+                <option value="Medicine">Medicine</option>
+                <option value="Psychology">Psychology</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="lc-group">
+            <label class="lc-label" for="lc-mode">Mode</label>
+            <select class="lc-select" id="lc-mode">
+              <option value="">— Any —</option>
+              <option value="Learn">📖 Learn</option>
+              <option value="Practice">✏️ Practice</option>
+              <option value="Test">📝 Test</option>
+            </select>
+          </div>
+          <div class="lc-group">
+            <label class="lc-label" for="lc-depth">Depth</label>
+            <select class="lc-select" id="lc-depth">
+              <option value="">— Any —</option>
+              <option value="Beginner">🟢 Beginner</option>
+              <option value="Exam">🟡 Exam</option>
+              <option value="Advanced">🔴 Advanced</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Hint bar -->
+        <div class="lc-hint" id="lc-hint">
+          <span>✦</span> Prompt optimised for <span id="lc-hint-text"></span>
+        </div>
+
+        <!-- Explain mode -->
+        <div class="explain-mode-wrap">
+          <div class="explain-mode-label">Style</div>
+          <div class="explain-mode-group" id="explain-mode-group">
+            <label class="explain-mode-option active" id="mode-brief-label">
+              <input type="radio" name="explain-mode" value="brief" />Brief
+            </label>
+            <label class="explain-mode-option" id="mode-depth-label">
+              <input type="radio" name="explain-mode" value="in_depth" checked />In-Depth
+            </label>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="chat-toolbar">
+          <div class="chat-toolbar-left">
+            <button class="toolbar-icon-btn" id="attach-btn" title="Attach file" onclick="handleAttach()">📎</button>
+            <button class="toolbar-icon-btn" id="cmd-toggle-btn" title="Commands" onclick="toggleCmdPalette()">⌘</button>
+            <span class="char-count"><span id="char-count">0</span>&thinsp;/&thinsp;200</span>
+          </div>
+          <button class="send-btn empty" id="start-btn">
+            <span id="send-icon">↑</span>
+            <span>Generate Lecture</span>
+          </button>
+        </div>
+
+      </div><!-- /chat-box -->
+
+      <!-- Suggestion chips -->
+      <div class="suggestion-chips">
+        <button class="suggestion-chip" onclick="fillTopic('Quantum Entanglement')">
+          <span class="suggestion-chip-icon">⚛️</span> Quantum Entanglement
+        </button>
+        <button class="suggestion-chip" onclick="fillTopic('Machine Learning')">
+          <span class="suggestion-chip-icon">🧠</span> Machine Learning
+        </button>
+        <button class="suggestion-chip" onclick="fillTopic('French Revolution')">
+          <span class="suggestion-chip-icon">🏛️</span> French Revolution
+        </button>
+        <button class="suggestion-chip" onclick="fillTopic('Black Holes')">
+          <span class="suggestion-chip-icon">🌌</span> Black Holes
+        </button>
+      </div>
+
+    </div><!-- /chat-container -->
+
+    <!-- Feature pills -->
+    <div class="feature-pills">
+      <span class="pill">📊 Adaptive Quizzes</span>
+      <span class="pill">⏱ Time Tracking</span>
+      <span class="pill">🔁 Re-Teaching</span>
+      <span class="pill">🧠 Learner Profile</span>
+      <span class="pill">🤖 AI Tutor Chat</span>
+      <span class="pill">📝 Slide Notes</span>
+      <span class="pill">⚡ XP &amp; Streaks</span>
+      <span class="pill ppt-pill">🎞️ Export PPT</span>
+      <span class="pill">📚 Cited Sources</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- Typing indicator (shared, shown over start screen) -->
+<div class="typing-bar" id="typing-bar">
+  <div class="typing-avatar">AL</div>
+  <span>Thinking</span>
+  <div class="typing-dots">
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
+    <div class="typing-dot"></div>
   </div>
 </div>
 
@@ -2959,7 +3349,7 @@ function showToast(msg) {
 }
 
 // =====================================================================
-// START SCREEN
+// START SCREEN — Animated Chat UI
 // =====================================================================
 const topicInput = document.getElementById('topic-input');
 const charCount  = document.getElementById('char-count');
@@ -2970,6 +3360,153 @@ const modeLabels = {
 };
 const hudExplanationMode = document.getElementById('hud-explanation-mode');
 
+// --- Auto-resize textarea ---
+function autoResizeTextarea() {
+  topicInput.style.height = '60px';
+  topicInput.style.height = Math.min(topicInput.scrollHeight, 200) + 'px';
+}
+
+// --- Send button reactive state ---
+function updateSendBtn() {
+  const btn = document.getElementById('start-btn');
+  if (!btn) return;
+  const hasVal = topicInput.value.trim().length > 0;
+  btn.className = 'send-btn ' + (hasVal ? 'ready' : 'empty');
+}
+
+// --- Focused glow on chat-box ---
+topicInput.addEventListener('focus', () => {
+  document.getElementById('chat-box').classList.add('focused');
+  document.getElementById('mouse-glow').classList.add('show');
+});
+topicInput.addEventListener('blur', () => {
+  document.getElementById('chat-box').classList.remove('focused');
+  document.getElementById('mouse-glow').classList.remove('show');
+});
+
+// --- Mouse glow tracker ---
+document.addEventListener('mousemove', e => {
+  const g = document.getElementById('mouse-glow');
+  if (g) g.style.transform = `translate(${e.clientX - 300}px, ${e.clientY - 300}px)`;
+});
+
+// --- Char count + auto resize + send btn ---
+topicInput.addEventListener('input', () => {
+  charCount.textContent = topicInput.value.length;
+  autoResizeTextarea();
+  updateSendBtn();
+  handleCmdPaletteInput();
+});
+
+// --- Command palette ---
+let cmdOpen = false;
+
+function openCmdPalette() {
+  cmdOpen = true;
+  document.getElementById('cmd-palette').classList.add('open');
+  document.getElementById('cmd-toggle-btn').classList.add('active');
+}
+function closeCmdPalette() {
+  cmdOpen = false;
+  document.getElementById('cmd-palette').classList.remove('open');
+  document.getElementById('cmd-toggle-btn').classList.remove('active');
+}
+function toggleCmdPalette() {
+  cmdOpen ? closeCmdPalette() : openCmdPalette();
+}
+function handleCmdPaletteInput() {
+  const v = topicInput.value;
+  if (v.startsWith('/') && !v.includes(' ')) {
+    openCmdPalette();
+    // highlight matching
+    document.querySelectorAll('.cmd-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.prefix.startsWith(v));
+    });
+  } else {
+    closeCmdPalette();
+  }
+}
+function selectCmd(el) {
+  const prefix = el.dataset.prefix;
+  const label = el.querySelector('.cmd-item-label').textContent;
+  // Map command to mode
+  const modeMap = { '/learn': 'Learn', '/practice': 'Practice', '/test': 'Test', '/deep': '' };
+  const modeVal = modeMap[prefix];
+  if (modeVal) {
+    const modeSelect = document.getElementById('lc-mode');
+    if (modeSelect) modeSelect.value = modeVal;
+  }
+  topicInput.value = topicInput.value.replace(/^\/\S*\s*/, '');
+  closeCmdPalette();
+  topicInput.focus();
+  updateSendBtn();
+}
+
+// close cmd palette on outside click
+document.addEventListener('mousedown', e => {
+  const palette = document.getElementById('cmd-palette');
+  const toggleBtn = document.getElementById('cmd-toggle-btn');
+  if (cmdOpen && palette && !palette.contains(e.target) && e.target !== toggleBtn) {
+    closeCmdPalette();
+  }
+});
+
+// --- Keyboard nav in cmd palette ---
+topicInput.addEventListener('keydown', e => {
+  if (cmdOpen) {
+    const items = Array.from(document.querySelectorAll('.cmd-item'));
+    const activeIdx = items.findIndex(i => i.classList.contains('active'));
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const next = (activeIdx + 1) % items.length;
+      items.forEach((i, idx) => i.classList.toggle('active', idx === next));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prev = (activeIdx - 1 + items.length) % items.length;
+      items.forEach((i, idx) => i.classList.toggle('active', idx === prev));
+    } else if (e.key === 'Tab' || (e.key === 'Enter' && cmdOpen)) {
+      e.preventDefault();
+      const active = items.find(i => i.classList.contains('active'));
+      if (active) selectCmd(active);
+    } else if (e.key === 'Escape') {
+      closeCmdPalette();
+    }
+    return;
+  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startSession(); }
+});
+
+// --- Attachments ---
+let attachments = [];
+function handleAttach() {
+  const mockName = `file-${Math.floor(Math.random()*1000)}.pdf`;
+  attachments.push(mockName);
+  renderAttachments();
+}
+function removeAttachment(idx) {
+  attachments.splice(idx, 1);
+  renderAttachments();
+}
+function renderAttachments() {
+  const row = document.getElementById('attachments-row');
+  if (!row) return;
+  if (attachments.length === 0) { row.classList.remove('show'); row.innerHTML = ''; return; }
+  row.classList.add('show');
+  row.innerHTML = attachments.map((f, i) =>
+    `<div class="attachment-chip">${f}<button class="attachment-remove" onclick="removeAttachment(${i})">✕</button></div>`
+  ).join('');
+}
+
+// --- Suggestion chip fill ---
+function fillTopic(text) {
+  topicInput.value = text;
+  charCount.textContent = text.length;
+  autoResizeTextarea();
+  updateSendBtn();
+  topicInput.focus();
+}
+
+// --- Explain mode ---
 function setExplanationMode(mode) {
   const next = (mode === 'brief') ? 'brief' : 'in_depth';
   state.explanationMode = next;
@@ -2986,9 +3523,6 @@ function getExplanationMode() {
   return selected ? selected.value : 'in_depth';
 }
 
-topicInput.addEventListener('input', () => {
-  charCount.textContent = topicInput.value.length;
-});
 modeOptions.forEach(opt => {
   opt.addEventListener('change', () => setExplanationMode(opt.value));
 });
@@ -2996,6 +3530,7 @@ if (hudExplanationMode) {
   hudExplanationMode.addEventListener('change', () => setExplanationMode(hudExplanationMode.value));
 }
 setExplanationMode('in_depth');
+updateSendBtn();
 
 // =====================================================================
 // LEARNING CONTROLS — hint bar (show when all 3 dropdowns are set)
@@ -3024,10 +3559,6 @@ setExplanationMode('in_depth');
 
 document.getElementById('start-btn').addEventListener('click', startSession);
 
-topicInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startSession(); }
-});
-
 
 async function startSession() {
   const topic = topicInput.value.trim();
@@ -3041,7 +3572,16 @@ async function startSession() {
 
   state.topic = topic;
   state.explanationMode = explanationMode;
+
+  // Show typing indicator on start screen briefly
+  const typingBar = document.getElementById('typing-bar');
+  if (typingBar) typingBar.classList.add('show');
+
   setLoading('Generating your lecture…', 'Crafting 10–12 slides on: ' + topic);
+
+  // Short delay so user sees the typing animation, then transition
+  await new Promise(r => setTimeout(r, 600));
+  if (typingBar) typingBar.classList.remove('show');
   showScreen('screen-loading');
 
   try {
