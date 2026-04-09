@@ -38,8 +38,8 @@ if not GROQ_API_KEY:
 
 # OpenAI-compatible endpoint on ModelsLab
 GROQ_URL = "https://modelslab.com/api/v7/llm/chat/completions"
-MODEL_NAME    = "qwenqwen-qwen3.6-plus"   # primary — best quality Qwen3.6
-FALLBACK_MODEL = "qwenqwen-qwen3-8b"      # fallback — smaller/faster Qwen3 8B
+MODEL_NAME     = "Qwen-Qwen2.5-72B-Instruct"   # primary — Qwen2.5 72B Instruct (ModelsLab)
+FALLBACK_MODEL = "Qwen-Qwen2.5-7B"             # fallback — smaller/faster Qwen2.5 7B
 MAX_TOPIC_LENGTH = 200
 LAST_GROQ_CALL_AT = 0.0
 
@@ -157,8 +157,8 @@ def _call_groq(
 ) -> str | None:
     """
     Generic ModelsLab (Qwen) call with automatic fallback to a smaller model.
-    - Tries MODEL_NAME (qwenqwen-qwen3.6-plus) first.
-    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL (qwenqwen-qwen3-8b).
+    - Tries MODEL_NAME (Qwen-Qwen2.5-72B-Instruct) first.
+    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL (Qwen-Qwen2.5-7B).
     Returns raw text or None on error.
     Uses the OpenAI-compatible endpoint so response shape is identical.
     """
@@ -555,7 +555,7 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
 def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
     """
     Fix #4: Rescue generation using the same 1-slide-per-call + role approach as
-    generate_slides(), but forced onto the fallback model (qwenqwen-qwen3-8b).
+    generate_slides(), but forced onto the fallback model (Qwen-Qwen2.5-7B).
     Iterates all 12 _DECK_ROLES so the rescue can always fill a complete deck,
     unlike the old version that was capped at 5 slides / 3 points.
     """
