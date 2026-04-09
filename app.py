@@ -27,7 +27,7 @@ limiter = Limiter(
 )
 
 # ---------------------------------------------------------------------------
-# Groq API configuration
+# ModelsLab (Qwen) API configuration
 # ---------------------------------------------------------------------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
@@ -36,9 +36,10 @@ if not GROQ_API_KEY:
         "Export it before starting the server."
     )
 
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "llama-3.3-70b-versatile"       # primary model — best quality
-FALLBACK_MODEL = "llama-3.1-8b-instant"      # fallback if primary fails / rate-limited
+# OpenAI-compatible endpoint on ModelsLab
+GROQ_URL = "https://modelslab.com/api/v7/llm/chat/completions"
+MODEL_NAME    = "qwenqwen-qwen3.6-plus"   # primary — best quality Qwen3.6
+FALLBACK_MODEL = "qwenqwen-qwen3-8b"      # fallback — smaller/faster Qwen3 8B
 MAX_TOPIC_LENGTH = 200
 LAST_GROQ_CALL_AT = 0.0
 
@@ -155,10 +156,11 @@ def _call_groq(
     use_fallback: bool = False,
 ) -> str | None:
     """
-    Generic Groq call with automatic fallback to a smaller model.
-    - Tries MODEL_NAME (llama-3.3-70b-versatile) first.
-    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
+    Generic ModelsLab (Qwen) call with automatic fallback to a smaller model.
+    - Tries MODEL_NAME (qwenqwen-qwen3.6-plus) first.
+    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL (qwenqwen-qwen3-8b).
     Returns raw text or None on error.
+    Uses the OpenAI-compatible endpoint so response shape is identical.
     """
     global LAST_GROQ_CALL_AT
     model = FALLBACK_MODEL if use_fallback else MODEL_NAME
@@ -184,46 +186,47 @@ def _call_groq(
             json={
                 "model": model,
                 "messages": messages,
-                "temperature": 0.2,
+                "temperature": 0.3,   # Qwen3 benefits from slightly higher temperature than 0.2
                 "max_tokens": max_tokens,
+                "top_p": 0.9,
             },
-            timeout=45,   # increased from 30 — 70B is slower
+            timeout=60,   # ModelsLab can be slower; give extra headroom
         )
         LAST_GROQ_CALL_AT = time.time()
 
         # Rate-limit or server error → retry with fallback
         if response.status_code in (429, 503) and not use_fallback:
-            print(f"Groq {response.status_code} on {model} — retrying with fallback model.")
+            print(f"ModelsLab {response.status_code} on {model} — retrying with fallback model.")
             time.sleep(1.2)
             return _call_groq(prompt, max_tokens, system, use_fallback=True)
         if response.status_code in (429, 503) and use_fallback:
-            print(f"Groq {response.status_code} on fallback model — backing off once.")
+            print(f"ModelsLab {response.status_code} on fallback model — backing off once.")
             time.sleep(2.0)
             return None
 
         if response.status_code == 401:
-            print("ERROR: Groq API key is invalid or missing (401 Unauthorized). "
+            print("ERROR: ModelsLab API key is invalid or missing (401 Unauthorized). "
                   "Check your GROQ_API_KEY environment variable.")
             return None
 
         if response.status_code != 200:
-            print(f"Groq API error {response.status_code}: {response.text[:500]}")
+            print(f"ModelsLab API error {response.status_code}: {response.text[:500]}")
             return None
 
         content = response.json()["choices"][0]["message"]["content"]
         if not content or not content.strip():
-            print(f"WARNING: Groq returned an empty response for model {model}.")
+            print(f"WARNING: ModelsLab/Qwen returned an empty response for model {model}.")
             return None
         return content
 
     except requests.exceptions.Timeout:
         if not use_fallback:
-            print(f"Groq timeout on {model} — retrying with fallback model.")
+            print(f"ModelsLab timeout on {model} — retrying with fallback model.")
             return _call_groq(prompt, max_tokens, system, use_fallback=True)
-        print("ERROR: Groq fallback model also timed out.")
+        print("ERROR: ModelsLab fallback model also timed out.")
         return None
     except Exception as e:
-        print(f"ERROR calling Groq: {e}")
+        print(f"ERROR calling ModelsLab: {e}")
         return None
 
 
@@ -552,7 +555,7 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
 def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
     """
     Fix #4: Rescue generation using the same 1-slide-per-call + role approach as
-    generate_slides(), but forced onto the fallback model (llama-3.1-8b-instant).
+    generate_slides(), but forced onto the fallback model (qwenqwen-qwen3-8b).
     Iterates all 12 _DECK_ROLES so the rescue can always fill a complete deck,
     unlike the old version that was capped at 5 slides / 3 points.
     """
@@ -1199,7 +1202,7 @@ RULES:
 - Do NOT output anything outside JSON
 """
 
-    raw_text = _call_groq(prompt, max_tokens=1800)  # increased for 70B verbosity
+    raw_text = _call_groq(prompt, max_tokens=1800)  # generous limit for Qwen3.6 Plus
     if not raw_text:
         return []
 
