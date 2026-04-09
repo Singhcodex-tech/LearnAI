@@ -27,7 +27,7 @@ limiter = Limiter(
 )
 
 # ---------------------------------------------------------------------------
-# ModelsLab (Qwen) API configuration
+# Groq API configuration
 # ---------------------------------------------------------------------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
@@ -36,10 +36,9 @@ if not GROQ_API_KEY:
         "Export it before starting the server."
     )
 
-# OpenAI-compatible endpoint on ModelsLab
-GROQ_URL = "https://modelslab.com/api/v7/llm/chat/completions"
-MODEL_NAME     = "Qwen-Qwen2.5-72B-Instruct"   # primary — Qwen2.5 72B Instruct (ModelsLab)
-FALLBACK_MODEL = "Qwen-Qwen2.5-7B"             # fallback — smaller/faster Qwen2.5 7B
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL_NAME = "llama-3.3-70b-versatile"       # primary model — best quality
+FALLBACK_MODEL = "llama-3.1-8b-instant"      # fallback if primary fails / rate-limited
 MAX_TOPIC_LENGTH = 200
 LAST_GROQ_CALL_AT = 0.0
 
@@ -151,16 +150,15 @@ def compute_learner_profile(performance: list, xp: int = 0, streak: int = 0) -> 
 
 def _call_groq(
     prompt: str,
-    max_tokens: int = 2400,
+    max_tokens: int = 2000,
     system: str | None = None,
     use_fallback: bool = False,
 ) -> str | None:
     """
-    Generic ModelsLab (Qwen) call with automatic fallback to a smaller model.
-    - Tries MODEL_NAME (Qwen-Qwen2.5-72B-Instruct) first.
-    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL (Qwen-Qwen2.5-7B).
+    Generic Groq call with automatic fallback to a smaller model.
+    - Tries MODEL_NAME (llama-3.3-70b-versatile) first.
+    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
     Returns raw text or None on error.
-    Uses the OpenAI-compatible endpoint so response shape is identical.
     """
     global LAST_GROQ_CALL_AT
     model = FALLBACK_MODEL if use_fallback else MODEL_NAME
@@ -186,47 +184,46 @@ def _call_groq(
             json={
                 "model": model,
                 "messages": messages,
-                "temperature": 0.7,   # recommended for Qwen2.5-Instruct for best instruction-following
+                "temperature": 0.2,
                 "max_tokens": max_tokens,
-                "top_p": 0.9,
             },
-            timeout=60,   # ModelsLab can be slower; give extra headroom
+            timeout=45,   # increased from 30 — 70B is slower
         )
         LAST_GROQ_CALL_AT = time.time()
 
         # Rate-limit or server error → retry with fallback
         if response.status_code in (429, 503) and not use_fallback:
-            print(f"ModelsLab {response.status_code} on {model} — retrying with fallback model.")
+            print(f"Groq {response.status_code} on {model} — retrying with fallback model.")
             time.sleep(1.2)
             return _call_groq(prompt, max_tokens, system, use_fallback=True)
         if response.status_code in (429, 503) and use_fallback:
-            print(f"ModelsLab {response.status_code} on fallback model — backing off once.")
+            print(f"Groq {response.status_code} on fallback model — backing off once.")
             time.sleep(2.0)
             return None
 
         if response.status_code == 401:
-            print("ERROR: ModelsLab API key is invalid or missing (401 Unauthorized). "
+            print("ERROR: Groq API key is invalid or missing (401 Unauthorized). "
                   "Check your GROQ_API_KEY environment variable.")
             return None
 
         if response.status_code != 200:
-            print(f"ModelsLab API error {response.status_code}: {response.text[:500]}")
+            print(f"Groq API error {response.status_code}: {response.text[:500]}")
             return None
 
         content = response.json()["choices"][0]["message"]["content"]
         if not content or not content.strip():
-            print(f"WARNING: ModelsLab/Qwen returned an empty response for model {model}.")
+            print(f"WARNING: Groq returned an empty response for model {model}.")
             return None
         return content
 
     except requests.exceptions.Timeout:
         if not use_fallback:
-            print(f"ModelsLab timeout on {model} — retrying with fallback model.")
+            print(f"Groq timeout on {model} — retrying with fallback model.")
             return _call_groq(prompt, max_tokens, system, use_fallback=True)
-        print("ERROR: ModelsLab fallback model also timed out.")
+        print("ERROR: Groq fallback model also timed out.")
         return None
     except Exception as e:
-        print(f"ERROR calling ModelsLab: {e}")
+        print(f"ERROR calling Groq: {e}")
         return None
 
 
@@ -393,18 +390,10 @@ Malformed input:
 
 def strip_markdown_fences(text: str) -> str:
     """
-    Clean raw model output before JSON parsing. Handles:
-    1. <think>...</think> reasoning blocks Qwen models sometimes emit
-       before the actual JSON response.
-    2. ```json ... ``` or ``` ... ``` markdown code fences.
+    Remove ```json ... ``` or ``` ... ``` code fences that the 70B model
+    sometimes adds despite being told not to.
     """
-    if not text:
-        return text
-    # Strip <think>...</think> reasoning traces (Qwen models)
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    # Strip opening ```json or ``` fence
     text = re.sub(r'^```(?:json)?\s*', '', text.strip(), flags=re.IGNORECASE)
-    # Strip closing ``` fence
     text = re.sub(r'\s*```$', '', text.strip())
     return text.strip()
 
@@ -563,7 +552,7 @@ def _normalize_point_word_lengths(slides: list, explanation_mode: str) -> list:
 def generate_slides_rescue(topic: str, explanation_mode: str = "in_depth") -> list:
     """
     Fix #4: Rescue generation using the same 1-slide-per-call + role approach as
-    generate_slides(), but forced onto the fallback model (Qwen-Qwen2.5-7B).
+    generate_slides(), but forced onto the fallback model (llama-3.1-8b-instant).
     Iterates all 12 _DECK_ROLES so the rescue can always fill a complete deck,
     unlike the old version that was capped at 5 slides / 3 points.
     """
@@ -943,7 +932,7 @@ def _build_single_slide_prompt(
             "- Do NOT repeat formulas or examples from other slides\n"
             "- Output ONLY the JSON object — no array wrapper, no prose\n"
         )
-        max_tok = 2400   # Qwen2.5-72B is verbose; needs headroom to avoid truncated JSON
+        max_tok = 1600
     else:
         prompt = (
             "You are an expert university professor creating one deeply detailed, lecture-quality slide.\n\n"
@@ -973,7 +962,7 @@ def _build_single_slide_prompt(
             "- Do NOT repeat information from other slides\n"
             "- Output ONLY the JSON object — no array wrapper, no prose\n"
         )
-        max_tok = 1800   # Qwen2.5-72B needs more room for detailed JSON points
+        max_tok = 1200
 
     return prompt, max_tok
 
@@ -1210,7 +1199,7 @@ RULES:
 - Do NOT output anything outside JSON
 """
 
-    raw_text = _call_groq(prompt, max_tokens=1800)  # generous limit for Qwen3.6 Plus
+    raw_text = _call_groq(prompt, max_tokens=1800)  # increased for 70B verbosity
     if not raw_text:
         return []
 
