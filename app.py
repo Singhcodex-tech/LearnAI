@@ -151,7 +151,7 @@ def compute_learner_profile(performance: list, xp: int = 0, streak: int = 0) -> 
 
 def _call_groq(
     prompt: str,
-    max_tokens: int = 2000,
+    max_tokens: int = 2400,
     system: str | None = None,
     use_fallback: bool = False,
 ) -> str | None:
@@ -186,7 +186,7 @@ def _call_groq(
             json={
                 "model": model,
                 "messages": messages,
-                "temperature": 0.3,   # Qwen3 benefits from slightly higher temperature than 0.2
+                "temperature": 0.7,   # recommended for Qwen2.5-Instruct for best instruction-following
                 "max_tokens": max_tokens,
                 "top_p": 0.9,
             },
@@ -393,10 +393,18 @@ Malformed input:
 
 def strip_markdown_fences(text: str) -> str:
     """
-    Remove ```json ... ``` or ``` ... ``` code fences that the 70B model
-    sometimes adds despite being told not to.
+    Clean raw model output before JSON parsing. Handles:
+    1. <think>...</think> reasoning blocks Qwen models sometimes emit
+       before the actual JSON response.
+    2. ```json ... ``` or ``` ... ``` markdown code fences.
     """
+    if not text:
+        return text
+    # Strip <think>...</think> reasoning traces (Qwen models)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Strip opening ```json or ``` fence
     text = re.sub(r'^```(?:json)?\s*', '', text.strip(), flags=re.IGNORECASE)
+    # Strip closing ``` fence
     text = re.sub(r'\s*```$', '', text.strip())
     return text.strip()
 
@@ -935,7 +943,7 @@ def _build_single_slide_prompt(
             "- Do NOT repeat formulas or examples from other slides\n"
             "- Output ONLY the JSON object — no array wrapper, no prose\n"
         )
-        max_tok = 1600
+        max_tok = 2400   # Qwen2.5-72B is verbose; needs headroom to avoid truncated JSON
     else:
         prompt = (
             "You are an expert university professor creating one deeply detailed, lecture-quality slide.\n\n"
@@ -965,7 +973,7 @@ def _build_single_slide_prompt(
             "- Do NOT repeat information from other slides\n"
             "- Output ONLY the JSON object — no array wrapper, no prose\n"
         )
-        max_tok = 1200
+        max_tok = 1800   # Qwen2.5-72B needs more room for detailed JSON points
 
     return prompt, max_tok
 
