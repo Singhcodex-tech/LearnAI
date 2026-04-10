@@ -123,6 +123,7 @@ setExplanationMode('in_depth');
 })();
 
 document.getElementById('start-btn').addEventListener('click', startSession);
+topicInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startSession(); }
 });
 
