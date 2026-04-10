@@ -27,20 +27,20 @@ limiter = Limiter(
 )
 
 # ---------------------------------------------------------------------------
-# ModelsLab API configuration (Qwen2.5-72B)
+# Groq API configuration
 # ---------------------------------------------------------------------------
-MODELSLAB_API_KEY = os.environ.get("MODELSLAB_API_KEY")
-if not MODELSLAB_API_KEY:
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
     raise ValueError(
-        "MODELSLAB_API_KEY environment variable is not set. "
+        "GROQ_API_KEY environment variable is not set. "
         "Export it before starting the server."
     )
 
-MODELSLAB_URL = "https://modelslab.com/api/v6/llm/chat"
-MODEL_NAME = "Qwen/Qwen2.5-72B"              # primary model
-FALLBACK_MODEL = "Qwen/Qwen2.5-72B"          # same model used as fallback
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL_NAME = "llama-3.3-70b-versatile"       # primary model — best quality
+FALLBACK_MODEL = "llama-3.1-8b-instant"      # fallback if primary fails / rate-limited
 MAX_TOPIC_LENGTH = 200
-LAST_API_CALL_AT = 0.0
+LAST_GROQ_CALL_AT = 0.0
 
 # ---------------------------------------------------------------------------
 # XP / Gamification constants
@@ -155,27 +155,13 @@ def _call_groq(
     use_fallback: bool = False,
 ) -> str | None:
     """
-    Calls ModelsLab Qwen2.5-72B API.
-    Alias kept as _call_groq so all existing call-sites work unchanged.
+    Generic Groq call with automatic fallback to a smaller model.
+    - Tries MODEL_NAME (llama-3.3-70b-versatile) first.
+    - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
     Returns raw text or None on error.
     """
-    return _call_modelslab(prompt, max_tokens, system, use_fallback)
-
-
-def _call_modelslab(
-    prompt: str,
-    max_tokens: int = 2000,
-    system: str | None = None,
-    use_fallback: bool = False,
-) -> str | None:
-    """
-    Generic ModelsLab Qwen2.5-72B call with retry on rate-limit / timeout.
-    Returns raw text or None on error.
-    """
-    global LAST_API_CALL_AT
-    model = MODEL_NAME  # Qwen/Qwen2.5-72B — same model for primary and fallback
-
-    # Build messages list
+    global LAST_GROQ_CALL_AT
+    model = FALLBACK_MODEL if use_fallback else MODEL_NAME
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -184,15 +170,15 @@ def _call_modelslab(
     try:
         # Throttle outbound LLM calls to reduce 429 bursts across endpoints.
         now = time.time()
-        elapsed = now - LAST_API_CALL_AT
+        elapsed = now - LAST_GROQ_CALL_AT
         min_gap = 0.9
         if elapsed < min_gap:
             time.sleep(min_gap - elapsed)
 
         response = requests.post(
-            MODELSLAB_URL,
+            GROQ_URL,
             headers={
-                "Authorization": f"Bearer {MODELSLAB_API_KEY}",
+                "Authorization": f"Bearer {GROQ_API_KEY}",
                 "Content-Type": "application/json",
             },
             json={
@@ -200,54 +186,44 @@ def _call_modelslab(
                 "messages": messages,
                 "temperature": 0.2,
                 "max_tokens": max_tokens,
-                "stream": False,
             },
-            timeout=60,   # 72B model may be slower
+            timeout=45,   # increased from 30 — 70B is slower
         )
-        LAST_API_CALL_AT = time.time()
+        LAST_GROQ_CALL_AT = time.time()
 
-        # Rate-limit or server error → retry once
+        # Rate-limit or server error → retry with fallback
         if response.status_code in (429, 503) and not use_fallback:
-            print(f"ModelsLab {response.status_code} on {model} — retrying after backoff.")
-            time.sleep(1.5)
-            return _call_modelslab(prompt, max_tokens, system, use_fallback=True)
+            print(f"Groq {response.status_code} on {model} — retrying with fallback model.")
+            time.sleep(1.2)
+            return _call_groq(prompt, max_tokens, system, use_fallback=True)
         if response.status_code in (429, 503) and use_fallback:
-            print(f"ModelsLab {response.status_code} on retry — backing off.")
-            time.sleep(2.5)
+            print(f"Groq {response.status_code} on fallback model — backing off once.")
+            time.sleep(2.0)
             return None
 
         if response.status_code == 401:
-            print("ERROR: ModelsLab API key is invalid or missing (401 Unauthorized). "
-                  "Check your MODELSLAB_API_KEY environment variable.")
+            print("ERROR: Groq API key is invalid or missing (401 Unauthorized). "
+                  "Check your GROQ_API_KEY environment variable.")
             return None
 
         if response.status_code != 200:
-            print(f"ModelsLab API error {response.status_code}: {response.text[:500]}")
+            print(f"Groq API error {response.status_code}: {response.text[:500]}")
             return None
 
-        resp_json = response.json()
-
-        # ModelsLab returns OpenAI-compatible structure
-        content = None
-        try:
-            content = resp_json["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError):
-            # Fallback: some ModelsLab endpoints wrap differently
-            content = resp_json.get("output") or resp_json.get("text") or resp_json.get("result")
-
-        if not content or not str(content).strip():
-            print(f"WARNING: ModelsLab returned an empty response for model {model}.")
+        content = response.json()["choices"][0]["message"]["content"]
+        if not content or not content.strip():
+            print(f"WARNING: Groq returned an empty response for model {model}.")
             return None
-        return str(content)
+        return content
 
     except requests.exceptions.Timeout:
         if not use_fallback:
-            print(f"ModelsLab timeout on {model} — retrying.")
-            return _call_modelslab(prompt, max_tokens, system, use_fallback=True)
-        print("ERROR: ModelsLab model also timed out on retry.")
+            print(f"Groq timeout on {model} — retrying with fallback model.")
+            return _call_groq(prompt, max_tokens, system, use_fallback=True)
+        print("ERROR: Groq fallback model also timed out.")
         return None
     except Exception as e:
-        print(f"ERROR calling ModelsLab: {e}")
+        print(f"ERROR calling Groq: {e}")
         return None
 
 
