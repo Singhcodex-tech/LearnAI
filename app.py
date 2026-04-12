@@ -1488,10 +1488,11 @@ def is_mathematical_question(question: str) -> bool:
     return any(kw in lower for kw in _MATH_QUESTION_KEYWORDS)
 
 
-def generate_math_solution(question: str, slide_points: list) -> dict | None:
+def generate_math_solution(question: str, slide_points: list) -> str | None:
     """
-    Return a structured, step-by-step mathematical solution plus a plain-English explanation.
-    Returns dict: { "steps": str, "explanation": str }
+    Return a structured, step-by-step mathematical solution.
+    Every step is labelled 'Step N — <action>:' with full LaTeX.
+    Answer is on a final 'Step N — Answer:' line.
     """
     context = ""
     if slide_points:
@@ -1531,42 +1532,92 @@ def generate_math_solution(question: str, slide_points: list) -> dict | None:
     raw = _call_groq(prompt, max_tokens=1200, system=system)
     if raw:
         raw = strip_markdown_fences(raw)
-    else:
-        return None
+    return raw
 
-    # Now generate plain-English explanation
-    explain_system = (
-        "You are a friendly math teacher. "
-        "Given a step-by-step mathematical solution, write a concise plain-English explanation "
-        "of the overall approach and key ideas used. "
-        "Do NOT repeat the steps. Do NOT use LaTeX or symbols. "
-        "Write 3-5 sentences in simple, clear language that a student could easily understand. "
-        "Focus on WHY the method works, not HOW each step was computed."
-    )
-    explain_prompt = (
-        f"Problem: {question}\n\n"
-        f"Solution steps:\n{raw}\n\n"
-        "Now write a plain-English explanation of the overall approach and key ideas used to solve this problem."
-    )
-    explanation = _call_groq(explain_prompt, max_tokens=400, system=explain_system)
-    if explanation:
-        explanation = strip_markdown_fences(explanation)
 
-    return {"steps": raw, "explanation": explanation or ""}
+def _topic_is_math_question(topic: str) -> bool:
+    """
+    Return True when the user's topic input looks like a concrete math problem
+    to solve rather than a concept to study (e.g. "solve x^2+5x+6=0" vs "quadratic equations").
+    Combines action-verb detection with numeric / operator pattern matching.
+    """
+    import re as _re
+    lower = topic.lower().strip()
+    # Action verbs that signal a problem to solve
+    action_verbs = {
+        "solve", "calculate", "compute", "simplify", "differentiate",
+        "integrate", "find", "evaluate", "expand", "factor", "factorise",
+        "prove", "derive", "verify", "determine", "show that",
+    }
+    has_verb = any(lower.startswith(v) or f" {v} " in lower for v in action_verbs)
+    # Numeric / operator patterns: digits with operators, equals sign, fractions, etc.
+    has_math_pattern = bool(_re.search(
+        r'(\d[\d\s]*[+\-*/^=<>])|'   # number followed by operator
+        r'([a-z]\^?\d)|'              # variable like x^2, x2
+        r'(=\s*\d)|'                  # = some number
+        r'[∫∑∏√±÷×]|'               # math symbols
+        r'\\frac|\\sqrt|\\int|\\sum', # LaTeX fragments
+        topic
+    ))
+    return has_verb or has_math_pattern
+
+
+def _math_solution_to_slide(question: str, solution_text: str) -> dict:
+    """
+    Convert raw step-by-step solution text (from generate_math_solution) into
+    a single slide dict compatible with the frontend renderer.
+
+    The solution text uses the format:
+        Step 1 — <action>: <explanation with LaTeX>
+        ...
+        Step N — Answer: $$result$$
+
+    We store all steps as sub_steps inside a single point so the existing
+    math-slide renderer displays them with LaTeX rendering — no bullet points.
+    """
+    lines = [l.strip() for l in solution_text.strip().splitlines() if l.strip()]
+
+    steps = []
+    answer_line = ""
+    for line in lines:
+        if line.lower().startswith("step") and "answer" in line.lower():
+            answer_line = line
+            steps.append(line)
+        elif line.lower().startswith("step"):
+            steps.append(line)
+
+    # Build the slide as a single rich point with all steps as sub_steps
+    point = {
+        "text": f"Step-by-step solution for: {question}",
+        "source_title": "",
+        "source_url": "",
+        "inline_latex": "",
+        "inline_label": "Solution",
+        "sub_steps": steps if steps else lines,
+    }
+
+    slide: dict = {
+        "title": f"Solution: {question[:80]}",
+        "points": [point],
+        "is_solution_slide": True,
+    }
+
+    # Extract answer for worked_example.answer display
+    if answer_line:
+        slide["worked_example"] = {
+            "problem": question,
+            "steps": steps[:-1] if len(steps) > 1 else steps,
+            "answer": answer_line.split(":", 1)[-1].strip() if ":" in answer_line else answer_line,
+        }
+
+    return slide
 
 
 def answer_student_question(question: str, slide: dict, topic: str, profile: dict) -> str | None:
     # Mathematical questions bypass the slide-context prompt entirely and go
     # straight to a dedicated solver that returns structured step-by-step output.
     if is_mathematical_question(question):
-        result = generate_math_solution(question, slide.get("points", []))
-        if result is None:
-            return None
-        # Return combined string for the chat endpoint (steps + explanation)
-        parts = [result["steps"]]
-        if result.get("explanation"):
-            parts.append("\n\n---EXPLANATION---\n" + result["explanation"])
-        return "\n".join(parts)
+        return generate_math_solution(question, slide.get("points", []))
 
     difficulty = profile.get("difficulty_hint", "normal")
     tone_note = {
@@ -1872,6 +1923,41 @@ def generate():
     depth   = str(data.get("depth",   "")).strip()
     learning_context = build_learning_context(subject, mode, depth)
 
+    # ── Math-question fast-path ──────────────────────────────────────────────
+    # If the topic looks like a concrete math problem (e.g. "solve x^2+5x+6=0"),
+    # skip 12-slide theory generation entirely and return ONE solution slide.
+    if _topic_is_math_question(topic):
+        print(f"[/generate] Math question detected — generating single solution slide for: {topic!r}")
+        solution_text = generate_math_solution(topic, [])
+        if solution_text:
+            slides = [_math_solution_to_slide(topic, solution_text)]
+            session_id = str(uuid.uuid4())
+            sessions[session_id] = {
+                "topic": topic,
+                "slides": slides,
+                "performance": [],
+                "created_at": time.time(),
+                "quiz_cache": {},
+                "visual_cache": {},
+                "sources_cache": {},
+                "notes": {},
+                "explanation_mode": explanation_mode,
+                "subject": subject,
+                "mode": mode,
+                "depth": depth,
+                "xp": 0,
+                "streak_slides": 0,
+                "is_solution_session": True,
+            }
+            return jsonify({
+                "session_id": session_id,
+                "slides": slides,
+                "explanation_mode": explanation_mode,
+                "is_solution_session": True,
+            })
+        # Fall through to normal generation if solution fails
+        print(f"[/generate] Math solution generation failed — falling back to normal slide generation.")
+
     slides = []
     for attempt in range(3):
         slides = generate_slides(topic, explanation_mode=explanation_mode,
@@ -1915,9 +2001,10 @@ def generate():
         "depth": depth,
         "xp": 0,
         "streak_slides": 0,
+        "is_solution_session": False,
     }
 
-    return jsonify({"session_id": session_id, "slides": slides, "explanation_mode": explanation_mode})
+    return jsonify({"session_id": session_id, "slides": slides, "explanation_mode": explanation_mode, "is_solution_session": False})
 
 
 @app.route("/quiz", methods=["POST"])
@@ -2163,14 +2250,7 @@ def chat():
     if not answer:
         return jsonify({"error": "Tutor is unavailable. Please try again."}), 500
 
-    answer = answer.strip()
-    explanation = ""
-    if "---EXPLANATION---" in answer:
-        parts = answer.split("---EXPLANATION---", 1)
-        answer = parts[0].strip()
-        explanation = parts[1].strip()
-
-    return jsonify({"answer": answer, "explanation": explanation})
+    return jsonify({"answer": answer.strip()})
 
 
 # ---------------------------------------------------------------------------
@@ -2405,20 +2485,7 @@ def math_tutor():
         solution = _math_direct_solve(message or topic, difficulty)
         if not solution:
             return jsonify({"error": "Could not generate solution."}), 500
-        # Generate plain-English explanation after step-by-step solution
-        explain_system = (
-            "You are a friendly math teacher. Given a step-by-step solution, write a concise "
-            "3-5 sentence plain-English explanation of the overall approach and key ideas used. "
-            "Do NOT repeat the steps. Do NOT use LaTeX or symbols. Use simple language."
-        )
-        explain_prompt = (
-            f"Problem: {message or topic}\n\nSolution steps:\n{solution[:2000]}\n\n"
-            "Summarise the overall approach and key ideas in plain English (3-5 sentences)."
-        )
-        explanation = _call_groq(explain_prompt, max_tokens=350, system=explain_system) or ""
-        if explanation:
-            explanation = strip_markdown_fences(explanation)
-        return jsonify({"type": "solution", "full_solution": solution.strip(), "explanation": explanation})
+        return jsonify({"type": "solution", "full_solution": solution.strip()})
 
     # ── START / GENERATE PROBLEM ──────────────────────────────
     if action == "start":
@@ -3069,177 +3136,6 @@ def generate_ppt():
             ".presentationml.presentation"
         ),
     )
-
-
-# ---------------------------------------------------------------------------
-# NEW: File / Image analysis endpoint
-# ---------------------------------------------------------------------------
-
-@app.route("/analyse", methods=["POST"])
-@app.route("/analyse.php", methods=["POST"])
-@limiter.limit("10 per minute")
-def analyse():
-    """
-    Analyse an uploaded image or text file using the LLM.
-    Accepts multipart/form-data with:
-      - file: the uploaded file (image: png/jpg/webp/gif, or text: pdf/txt/csv)
-      - question: optional user question about the file (default: "Analyse this")
-      - session_id: optional, used to add math context
-
-    For images: sends base64-encoded image to Groq vision model.
-    For text files: extracts text and sends as prompt context.
-
-    Returns: { "analysis": "...", "explanation": "..." }
-    """
-    import base64
-    import mimetypes
-
-    question = request.form.get("question", "").strip() or "Analyse this in detail."
-    session_id = request.form.get("session_id", "").strip()
-
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
-    uploaded = request.files["file"]
-    filename = uploaded.filename or ""
-    mime_type = uploaded.mimetype or mimetypes.guess_type(filename)[0] or "application/octet-stream"
-    raw_bytes = uploaded.read()
-
-    if not raw_bytes:
-        return jsonify({"error": "Uploaded file is empty"}), 400
-
-    MAX_SIZE = 10 * 1024 * 1024  # 10 MB
-    if len(raw_bytes) > MAX_SIZE:
-        return jsonify({"error": "File too large (max 10 MB)"}), 400
-
-    IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"}
-    TEXT_TYPES  = {"text/plain", "text/csv", "application/csv",
-                   "application/pdf", "text/markdown"}
-
-    is_image = mime_type in IMAGE_TYPES or any(
-        filename.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".webp", ".gif")
-    )
-    is_text = mime_type in TEXT_TYPES or any(
-        filename.lower().endswith(ext) for ext in (".txt", ".csv", ".md")
-    )
-
-    # ── IMAGE analysis ────────────────────────────────────────────────────
-    if is_image:
-        b64 = base64.b64encode(raw_bytes).decode("utf-8")
-        # Groq supports vision via llama-4-scout (or meta-llama/llama-4-scout-17b-16e-instruct)
-        VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{b64}"
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "You are an expert tutor analysing an image uploaded by a student. "
-                            f"Student's question: {question}\n\n"
-                            "If the image contains mathematics: show every step of the solution "
-                            "clearly labelled 'Step N — <action>: <working>' with LaTeX for all math. "
-                            "If it contains a graph or diagram: describe it in detail and explain what it shows. "
-                            "If it contains text: read and explain it. "
-                            "Be thorough and educational."
-                        )
-                    }
-                ]
-            }
-        ]
-        try:
-            resp = requests.post(
-                GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": VISION_MODEL,
-                    "messages": messages,
-                    "max_tokens": 1800,
-                    "temperature": 0.2,
-                },
-                timeout=60,
-            )
-            if resp.status_code == 404:
-                # Vision model not available, fall back to text description
-                return jsonify({"error": "Vision model unavailable on this Groq plan. Please use a text file."}), 503
-            if resp.status_code != 200:
-                print(f"Groq vision error {resp.status_code}: {resp.text[:300]}")
-                return jsonify({"error": f"Vision model error: {resp.status_code}"}), 500
-            analysis = resp.json()["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            print(f"Vision analysis error: {e}")
-            return jsonify({"error": "Vision analysis failed. Please try again."}), 500
-
-    # ── TEXT / PDF analysis ───────────────────────────────────────────────
-    elif is_text or filename.lower().endswith(".pdf"):
-        if filename.lower().endswith(".pdf"):
-            # Try basic text extraction from PDF bytes
-            try:
-                import re as _re
-                text_content = raw_bytes.decode("latin-1", errors="replace")
-                # Extract readable text chunks (very basic, no pdfminer dependency)
-                chunks = _re.findall(r'[\x20-\x7E\n\r\t]{20,}', text_content)
-                text_content = "\n".join(chunks[:200])[:8000]
-            except Exception:
-                text_content = raw_bytes.decode("utf-8", errors="replace")[:8000]
-        else:
-            text_content = raw_bytes.decode("utf-8", errors="replace")[:8000]
-
-        if not text_content.strip():
-            return jsonify({"error": "Could not extract readable text from file"}), 400
-
-        system = (
-            "You are an expert tutor analysing a document uploaded by a student. "
-            "If the document contains mathematics, show every solution step labelled "
-            "'Step N — <action>: <working>' with LaTeX for all expressions. "
-            "Be thorough, accurate, and educational."
-        )
-        prompt = (
-            f"Student's question: {question}\n\n"
-            f"Document content:\n{text_content}\n\n"
-            "Provide a detailed analysis or solution based on the student's question."
-        )
-        analysis = _call_groq(prompt, max_tokens=1800, system=system)
-        if not analysis:
-            return jsonify({"error": "Analysis failed. Please try again."}), 500
-        analysis = strip_markdown_fences(analysis)
-
-    else:
-        return jsonify({
-            "error": f"Unsupported file type '{mime_type}'. "
-                     "Upload an image (PNG/JPG/WEBP) or text file (TXT/CSV/PDF)."
-        }), 400
-
-    # Generate plain-English explanation after analysis
-    explain_system = (
-        "You are a friendly tutor. Given an AI analysis of a student's uploaded file, "
-        "write a concise 3-4 sentence plain-English summary of the key findings or conclusions. "
-        "Do not use LaTeX or mathematical symbols. Use simple language."
-    )
-    explain_prompt = (
-        f"Original question: {question}\n\n"
-        f"Analysis:\n{analysis[:3000]}\n\n"
-        "Summarise the key findings in 3-4 plain sentences."
-    )
-    explanation = _call_groq(explain_prompt, max_tokens=300, system=explain_system)
-    if explanation:
-        explanation = strip_markdown_fences(explanation)
-
-    return jsonify({
-        "analysis": analysis,
-        "explanation": explanation or "",
-        "filename": filename,
-        "file_type": "image" if is_image else "text",
-    })
 
 
 # ---------------------------------------------------------------------------
