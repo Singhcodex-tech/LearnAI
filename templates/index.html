@@ -1066,8 +1066,8 @@
       padding: .8rem 1rem;
       border-radius: 10px;
       border: 1px solid var(--border2);
-      background: var(--surface);
-      color: var(--text-2);
+      background: #ffffff;
+      color: #0f172a;
       font-family: 'Syne', sans-serif;
       font-size: .85rem;
       font-weight: 500;
@@ -1077,7 +1077,7 @@
     }
     .quiz-option:hover:not([disabled]) {
       border-color: var(--border2);
-      background: rgba(15,23,42,.04);
+      background: #f8fafc;
     }
     .quiz-option.selected { border-color: var(--gold); background: rgba(232,160,32,.08); color: var(--text); }
     .quiz-option.correct  { border-color: var(--green); background: rgba(62,200,122,.1); color: var(--green); }
@@ -1088,10 +1088,11 @@
       margin-top: .85rem;
       padding: .75rem 1rem;
       border-radius: 8px;
-      background: rgba(32,197,176,.07);
+      background: #ffffff;
+      border: 1px solid rgba(32,197,176,.25);
       border-left: 3px solid var(--teal);
       font-size: .82rem;
-      color: var(--text-2);
+      color: #0f172a;
       line-height: 1.5;
       animation: fadeSlideIn .3s ease;
     }
@@ -1374,8 +1375,8 @@
     /* ===================== MATH BLOCKS ===================== */
     .math-block {
       margin-top: .75rem;
-      background: rgba(232,160,32,.05);
-      border: 1px solid rgba(232,160,32,.18);
+      background: #ffffff;
+      border: 1px solid rgba(232,160,32,.25);
       border-radius: 10px;
       padding: .9rem 1.1rem;
       display: flex;
@@ -1425,12 +1426,12 @@
     .sub-step {
       display: flex; gap: .75rem; align-items: flex-start;
       font-size: .84rem;
-      color: var(--text-2);
+      color: #0f172a;
       line-height: 1.6;
       padding: .5rem .75rem;
       border-radius: 8px;
-      background: rgba(232,160,32,.04);
-      border: 1px solid rgba(232,160,32,.1);
+      background: #ffffff;
+      border: 1px solid rgba(232,160,32,.25);
     }
     .sub-step-num {
       flex-shrink: 0;
@@ -1459,8 +1460,8 @@
     /* Worked example block */
     .worked-example {
       margin-top: 1.5rem;
-      background: rgba(32,197,176,.05);
-      border: 1px solid rgba(32,197,176,.2);
+      background: #ffffff;
+      border: 1px solid rgba(32,197,176,.25);
       border-radius: 12px;
       overflow: hidden;
     }
@@ -1481,25 +1482,27 @@
       padding: .8rem 1.1rem;
       font-size: .92rem;
       font-weight: 600;
-      color: var(--text);
+      color: #0f172a;
       border-bottom: 1px solid rgba(32,197,176,.1);
-      background: rgba(32,197,176,.03);
+      background: #ffffff;
     }
     .worked-steps {
       padding: .8rem 1.1rem;
       display: flex;
       flex-direction: column;
       gap: .45rem;
+      background: #f8fafc;
     }
     .worked-step {
       display: flex;
       gap: .75rem;
       font-size: .88rem;
-      color: var(--text-2);
+      color: #0f172a;
       line-height: 1.6;
       padding: .4rem .65rem;
       border-radius: 7px;
-      background: rgba(15,23,42,.02);
+      background: #ffffff;
+      border: 1px solid rgba(32,197,176,.12);
       align-items: flex-start;
     }
     .worked-step-num {
@@ -1527,14 +1530,14 @@
     .worked-answer-value { color: var(--teal); font-weight: 700; font-size: 1rem; }
     .worked-answer {
       padding: .75rem 1.1rem;
-      border-top: 1px solid rgba(32,197,176,.15);
+      border-top: 1px solid rgba(32,197,176,.2);
       display: flex;
       align-items: center;
       gap: .65rem;
       font-size: .9rem;
       font-weight: 700;
       color: var(--teal);
-      background: rgba(32,197,176,.06);
+      background: #ffffff;
     }
     .worked-answer-label {
       font-size: .65rem;
@@ -1797,9 +1800,9 @@
       align-self: flex-end;
     }
     .chat-bubble.tutor {
-      background: var(--surface);
+      background: #ffffff;
       border: 1px solid var(--border2);
-      color: var(--text-2);
+      color: #0f172a;
       align-self: flex-start;
       border-left: 3px solid var(--gold);
     }
@@ -2145,14 +2148,14 @@
     /* ---- HUD inline AI answer box ---- */
     .hud-chat-answer {
       display: none;
-      background: rgba(255,255,255,.95);
+      background: #ffffff;
       border: 1px solid var(--border2);
       border-left: 3px solid var(--gold);
       border-radius: 10px;
       padding: .65rem 1rem;
       font-size: .82rem;
       line-height: 1.6;
-      color: var(--text-2);
+      color: #0f172a;
       animation: fadeSlideIn .3s ease;
       position: relative;
       word-break: break-word;
