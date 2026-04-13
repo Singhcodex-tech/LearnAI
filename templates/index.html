@@ -3142,6 +3142,7 @@
       <span class="pill">⚡ XP &amp; Streaks</span>
       <span class="pill ppt-pill">🎞️ Export PPT</span>
       <span class="pill">📚 Cited Sources</span>
+      <span class="pill assign-pill" onclick="openAssignmentModal()" style="cursor:pointer;">⚖️ Law Assignment</span>
     </div>
 
   </div>
@@ -6439,6 +6440,409 @@ function showPptSuccessToast(msg) {
 
 <!-- PPT success toast -->
 <div id="ppt-success-toast">✓ PPT downloaded successfully!</div>
+
+<!-- =====================================================================
+     LAW ASSIGNMENT GENERATOR — Isolated Feature UI
+     No interference with existing platform code.
+     ===================================================================== -->
+<style>
+/* ── Assignment modal overlay ── */
+#assign-modal {
+  display:none; position:fixed; inset:0; z-index:9000;
+  background:rgba(15,23,42,.55); backdrop-filter:blur(6px);
+  align-items:center; justify-content:center; padding:1rem;
+}
+#assign-modal.show { display:flex; }
+
+.assign-card {
+  background:#fff; border-radius:20px; width:min(540px,96vw);
+  max-height:90vh; overflow-y:auto;
+  box-shadow:0 24px 60px rgba(15,23,42,.18);
+  animation:assignIn .28s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes assignIn {
+  from { opacity:0; transform:scale(.92) translateY(20px); }
+  to   { opacity:1; transform:scale(1)   translateY(0); }
+}
+
+.assign-header {
+  padding:1.4rem 1.5rem 1rem;
+  border-bottom:1px solid #e2e8f0;
+  display:flex; align-items:center; gap:.8rem;
+}
+.assign-header-icon { font-size:1.8rem; }
+.assign-header-title {
+  font-family:'DM Serif Display',serif; font-size:1.35rem;
+  color:#0f172a; line-height:1.2;
+}
+.assign-header-sub { font-size:.75rem; color:#64748b; margin-top:2px; }
+.assign-close {
+  margin-left:auto; background:none; border:none;
+  font-size:1.3rem; cursor:pointer; color:#64748b;
+  width:32px; height:32px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .15s;
+}
+.assign-close:hover { background:#f1f5f9; color:#0f172a; }
+
+.assign-body { padding:1.2rem 1.5rem 1.5rem; }
+
+.assign-field { margin-bottom:1rem; }
+.assign-label {
+  display:block; font-size:.75rem; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase;
+  color:#64748b; margin-bottom:.4rem;
+}
+.assign-input {
+  width:100%; padding:.65rem .9rem;
+  border:1.5px solid #e2e8f0; border-radius:10px;
+  font-family:'Syne',sans-serif; font-size:.88rem; color:#0f172a;
+  background:#f8fafc; outline:none; transition:border .15s, background .15s;
+}
+.assign-input:focus { border-color:#0d9488; background:#fff; }
+.assign-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+
+.assign-toggle-row {
+  display:flex; align-items:center; gap:.6rem;
+  margin-bottom:1rem;
+}
+.assign-toggle {
+  width:38px; height:20px; position:relative; cursor:pointer;
+}
+.assign-toggle input { opacity:0; width:0; height:0; }
+.assign-toggle-slider {
+  position:absolute; inset:0; background:#cbd5e1;
+  border-radius:20px; transition:background .2s;
+}
+.assign-toggle input:checked + .assign-toggle-slider { background:#0d9488; }
+.assign-toggle-slider::before {
+  content:''; position:absolute; width:14px; height:14px;
+  left:3px; top:3px; background:#fff; border-radius:50%;
+  transition:transform .2s;
+}
+.assign-toggle input:checked + .assign-toggle-slider::before { transform:translateX(18px); }
+.assign-toggle-label { font-size:.82rem; color:#334155; }
+
+.assign-actions { display:flex; gap:.75rem; margin-top:1.25rem; }
+.assign-btn-cancel {
+  flex:1; padding:.7rem; border:1.5px solid #e2e8f0; border-radius:10px;
+  background:#fff; color:#64748b; font-family:'Syne',sans-serif;
+  font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;
+}
+.assign-btn-cancel:hover { background:#f1f5f9; border-color:#cbd5e1; }
+.assign-btn-generate {
+  flex:2; padding:.7rem; border:none; border-radius:10px;
+  background:linear-gradient(135deg,#0d9488,#0f766e);
+  color:#fff; font-family:'Syne',sans-serif;
+  font-size:.85rem; font-weight:700; cursor:pointer; transition:all .15s;
+  box-shadow:0 4px 12px rgba(13,148,136,.3);
+}
+.assign-btn-generate:hover:not(:disabled) { filter:brightness(1.08); transform:translateY(-1px); }
+.assign-btn-generate:disabled { opacity:.55; cursor:not-allowed; transform:none; }
+
+/* Progress / status */
+.assign-progress { margin-top:1.1rem; display:none; }
+.assign-progress.show { display:block; }
+.assign-prog-bar-bg {
+  height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; margin-bottom:.5rem;
+}
+.assign-prog-bar-fill {
+  height:100%; width:0%; border-radius:3px;
+  background:linear-gradient(90deg,#0d9488,#14b8a6);
+  transition:width .4s ease;
+}
+.assign-prog-text { font-size:.75rem; color:#64748b; }
+
+/* Download buttons */
+.assign-dl-row {
+  display:flex; gap:.65rem; margin-top:1.1rem; display:none;
+}
+.assign-dl-row.show { display:flex; }
+.assign-dl-btn {
+  flex:1; padding:.65rem; border-radius:10px; border:1.5px solid;
+  font-family:'Syne',sans-serif; font-size:.82rem; font-weight:700;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  gap:.4rem; transition:all .15s;
+}
+.assign-dl-btn.docx {
+  border-color:#0d9488; color:#0d9488; background:#f0fdfb;
+}
+.assign-dl-btn.docx:hover { background:#0d9488; color:#fff; }
+.assign-dl-btn.pdf {
+  border-color:#b45309; color:#b45309; background:#fffbeb;
+}
+.assign-dl-btn.pdf:hover { background:#b45309; color:#fff; }
+.assign-dl-btn:disabled { opacity:.45; cursor:not-allowed; }
+
+/* Assign pill hover */
+.assign-pill { transition:background .15s, color .15s; }
+.assign-pill:hover { background:rgba(13,148,136,.15)!important; color:#0d9488!important; }
+</style>
+
+<!-- Assignment Modal -->
+<div id="assign-modal">
+  <div class="assign-card">
+    <div class="assign-header">
+      <span class="assign-header-icon">⚖️</span>
+      <div>
+        <div class="assign-header-title">Law Assignment Generator</div>
+        <div class="assign-header-sub">AI-generated, downloadable DOCX &amp; PDF</div>
+      </div>
+      <button class="assign-close" onclick="closeAssignmentModal()">✕</button>
+    </div>
+
+    <div class="assign-body">
+      <!-- Topic -->
+      <div class="assign-field">
+        <label class="assign-label" for="assign-topic">Assignment Topic *</label>
+        <input class="assign-input" id="assign-topic" type="text" maxlength="300"
+          placeholder="e.g. Right to Privacy under Indian Constitution" />
+      </div>
+
+      <!-- Name + Roll -->
+      <div class="assign-row">
+        <div class="assign-field">
+          <label class="assign-label" for="assign-name">Student Name *</label>
+          <input class="assign-input" id="assign-name" type="text" placeholder="Full Name" />
+        </div>
+        <div class="assign-field">
+          <label class="assign-label" for="assign-roll">Roll No *</label>
+          <input class="assign-input" id="assign-roll" type="text" placeholder="e.g. LAW2024-047" />
+        </div>
+      </div>
+
+      <!-- Course -->
+      <div class="assign-field">
+        <label class="assign-label" for="assign-course">Course *</label>
+        <input class="assign-input" id="assign-course" type="text"
+          placeholder="e.g. B.A. LL.B. (Hons.) — Semester V" />
+      </div>
+
+      <!-- College -->
+      <div class="assign-field">
+        <label class="assign-label" for="assign-college">College / Institution *</label>
+        <input class="assign-input" id="assign-college" type="text"
+          placeholder="e.g. National Law School of India University" />
+      </div>
+
+      <!-- Acknowledgment toggle -->
+      <div class="assign-toggle-row">
+        <label class="assign-toggle">
+          <input type="checkbox" id="assign-ack" checked />
+          <span class="assign-toggle-slider"></span>
+        </label>
+        <span class="assign-toggle-label">Include Acknowledgment page</span>
+      </div>
+
+      <!-- Actions -->
+      <div class="assign-actions">
+        <button class="assign-btn-cancel" id="assign-cancel-btn" onclick="closeAssignmentModal()">Cancel</button>
+        <button class="assign-btn-generate" id="assign-gen-btn" onclick="generateAssignment()">
+          ⚖️ Generate Assignment
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div class="assign-progress" id="assign-progress">
+        <div class="assign-prog-bar-bg">
+          <div class="assign-prog-bar-fill" id="assign-prog-fill"></div>
+        </div>
+        <div class="assign-prog-text" id="assign-prog-text">Generating…</div>
+      </div>
+
+      <!-- Download buttons (shown after generation) -->
+      <div class="assign-dl-row" id="assign-dl-row">
+        <button class="assign-dl-btn docx" id="assign-dl-docx" onclick="downloadAssignment('docx')">
+          📄 Download DOCX
+        </button>
+        <button class="assign-dl-btn pdf" id="assign-dl-pdf" onclick="downloadAssignment('pdf')">
+          📑 Download PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Assignment feature state (fully isolated) ────────────────────────────────
+const _assign = {
+  id:   null,
+  busy: false,
+};
+
+function openAssignmentModal() {
+  // Pre-fill topic from current learning session if active
+  const topicEl = document.getElementById('topic-input');
+  if (topicEl && topicEl.value.trim()) {
+    document.getElementById('assign-topic').value = topicEl.value.trim();
+  }
+  _assignReset(false);
+  document.getElementById('assign-modal').classList.add('show');
+}
+
+function closeAssignmentModal() {
+  if (_assign.busy) return;
+  document.getElementById('assign-modal').classList.remove('show');
+}
+
+document.getElementById('assign-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAssignmentModal();
+});
+
+function _assignReset(keepTopic) {
+  _assign.id   = null;
+  _assign.busy = false;
+  document.getElementById('assign-gen-btn').disabled   = false;
+  document.getElementById('assign-gen-btn').textContent = '⚖️ Generate Assignment';
+  document.getElementById('assign-cancel-btn').disabled = false;
+  document.getElementById('assign-progress').classList.remove('show');
+  document.getElementById('assign-dl-row').classList.remove('show');
+  document.getElementById('assign-prog-fill').style.width = '0%';
+  if (!keepTopic) {
+    ['assign-topic','assign-name','assign-roll','assign-course','assign-college'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('assign-ack').checked = true;
+  }
+}
+
+async function generateAssignment() {
+  if (_assign.busy) return;
+
+  const get = id => document.getElementById(id).value.trim();
+  const topic      = get('assign-topic');
+  const studentName = get('assign-name');
+  const rollNo     = get('assign-roll');
+  const course     = get('assign-course');
+  const college    = get('assign-college');
+
+  if (!topic || !studentName || !rollNo || !course || !college) {
+    _assignToast('✗ Please fill all required fields');
+    return;
+  }
+
+  _assign.busy = true;
+  document.getElementById('assign-gen-btn').disabled   = true;
+  document.getElementById('assign-cancel-btn').disabled = true;
+  document.getElementById('assign-gen-btn').textContent = 'Generating…';
+  document.getElementById('assign-dl-row').classList.remove('show');
+
+  const prog     = document.getElementById('assign-progress');
+  const progFill = document.getElementById('assign-prog-fill');
+  const progText = document.getElementById('assign-prog-text');
+  prog.classList.add('show');
+
+  // Animate progress while waiting for LLM
+  const steps = [
+    [12,  'Writing declaration…'],
+    [25,  'Drafting acknowledgment…'],
+    [42,  'Composing introduction…'],
+    [65,  'Writing legal analysis…'],
+    [82,  'Drafting conclusion…'],
+    [92,  'Compiling bibliography…'],
+  ];
+  let si = 0;
+  const ticker = setInterval(() => {
+    if (si < steps.length) {
+      progFill.style.width = steps[si][0] + '%';
+      progText.textContent = steps[si][1];
+      si++;
+    }
+  }, 1800);
+
+  try {
+    const res = await fetch('/api/assignment/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic,
+        student_name:           studentName,
+        roll_no:                rollNo,
+        course,
+        college,
+        include_acknowledgment: document.getElementById('assign-ack').checked,
+      }),
+    });
+
+    clearInterval(ticker);
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      progFill.style.width      = '40%';
+      progFill.style.background = 'var(--red)';
+      progText.textContent      = '✗ ' + (data.error || 'Generation failed');
+      document.getElementById('assign-gen-btn').disabled   = false;
+      document.getElementById('assign-gen-btn').textContent = '⚖️ Retry';
+      document.getElementById('assign-cancel-btn').disabled = false;
+      _assign.busy = false;
+      return;
+    }
+
+    progFill.style.width = '100%';
+    progText.textContent = `✓ ${data.sections.length} sections generated`;
+    _assign.id = data.assignment_id;
+
+    // Show download buttons
+    document.getElementById('assign-dl-row').classList.add('show');
+    document.getElementById('assign-cancel-btn').disabled = false;
+    document.getElementById('assign-gen-btn').textContent = '⚖️ Regenerate';
+    document.getElementById('assign-gen-btn').disabled    = false;
+    _assign.busy = false;
+
+  } catch (err) {
+    clearInterval(ticker);
+    progFill.style.background = 'var(--red)';
+    progText.textContent      = '✗ Network error — check server';
+    document.getElementById('assign-gen-btn').disabled   = false;
+    document.getElementById('assign-gen-btn').textContent = '⚖️ Retry';
+    document.getElementById('assign-cancel-btn').disabled = false;
+    _assign.busy = false;
+  }
+}
+
+async function downloadAssignment(fmt) {
+  if (!_assign.id) return;
+  const btn = document.getElementById(`assign-dl-${fmt}`);
+  btn.disabled = true;
+  const orig   = btn.textContent;
+  btn.textContent = 'Preparing…';
+
+  try {
+    const res = await fetch(`/api/assignment/${_assign.id}/${fmt}`);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      _assignToast('✗ ' + (d.error || 'Download failed'));
+      return;
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const topic = document.getElementById('assign-topic').value.trim()
+                    .replace(/[^a-zA-Z0-9 _-]/g,'').replace(/\s+/g,'_').slice(0,40);
+    a.href     = url;
+    a.download = `${topic}_Assignment.${fmt}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    _assignToast(`✓ ${fmt.toUpperCase()} downloaded!`);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = orig;
+  }
+}
+
+function _assignToast(msg) {
+  // Reuse host platform's showToast if available, else fallback
+  if (typeof showToast === 'function') { showToast(msg); return; }
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);' +
+    'background:#0f172a;color:#fff;padding:.5rem 1.2rem;border-radius:8px;font-size:.82rem;z-index:99999;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+</script>
 
 </body>
 </html>

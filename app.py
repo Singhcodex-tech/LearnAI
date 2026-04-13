@@ -21,6 +21,12 @@ app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
 CORS(app, origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","))
 
+# ── Law Assignment Generator (isolated feature) ──────────────────────────────
+from features.assignment.blueprint import assignment_bp   # noqa: E402
+app.register_blueprint(assignment_bp)
+# To disable: comment the two lines above. Zero side-effects on platform.
+# ─────────────────────────────────────────────────────────────────────────────
+
 limiter = Limiter(
     get_remote_address,
     app=app,

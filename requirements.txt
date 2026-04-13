@@ -5,3 +5,5 @@ flask-limiter
 python-pptx
 gunicorn
 PyMuPDF
+python-docx
+reportlab
