@@ -3,10 +3,12 @@ import json
 import re
 import time
 import uuid
+import base64
 from io import BytesIO
 
 import requests
 from flask import Flask, jsonify, render_template, request, send_file
+from werkzeug.utils import secure_filename
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -1886,6 +1888,186 @@ def home():
 def health():
     """Simple health check for deployment monitoring."""
     return jsonify({"status": "ok", "model": MODEL_NAME, "sessions": len(sessions)})
+
+
+# ---------------------------------------------------------------------------
+# File Upload — PDF & Image → extract topic text, then feed into /generate
+# ---------------------------------------------------------------------------
+#
+# Llama-3.3-70b (Groq) is TEXT-ONLY — it cannot accept binary files.
+# Solution:
+#   • PDF  → extract text with PyMuPDF (fitz)  → send extracted text to Llama
+#   • Image → send base64 to llava-v1.5-7b-4096-preview (free vision model on Groq)
+#             → get text description → send description to Llama as topic
+#
+# Install deps once:  pip install PyMuPDF
+#
+
+LLAVA_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"  # free vision model on Groq
+UPLOAD_MAX_MB = 10
+ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "webp", "gif"}
+
+
+def _allowed_file(filename: str) -> bool:
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _extract_pdf_text(file_bytes: bytes, max_chars: int = 6000) -> str:
+    """Extract plain text from PDF bytes using PyMuPDF (fitz)."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        raise RuntimeError(
+            "PyMuPDF is not installed. Run: pip install PyMuPDF"
+        )
+    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    text_parts = []
+    for page in doc:
+        text_parts.append(page.get_text())
+    doc.close()
+    full_text = "\n".join(text_parts).strip()
+    return full_text[:max_chars]
+
+
+def _describe_image_with_llava(image_bytes: bytes, media_type: str) -> str | None:
+    """
+    Send image to llava-v1.5-7b (free vision model on Groq) and get a description.
+    Returns plain-text description or None on error.
+    """
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {
+        "model": LLAVA_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{media_type};base64,{b64}"
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Describe this image in detail. Extract all visible text, "
+                            "labels, diagrams, equations, and key concepts. "
+                            "Focus on educational content that could be used as a learning topic."
+                        ),
+                    },
+                ],
+            }
+        ],
+        "max_tokens": 800,
+        "temperature": 0.2,
+    }
+    try:
+        resp = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=45,
+        )
+        if resp.status_code != 200:
+            print(f"LLaVA error {resp.status_code}: {resp.text[:300]}")
+            return None
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"LLaVA call failed: {e}")
+        return None
+
+
+@app.route("/upload_file", methods=["POST"])
+@app.route("/upload_file.php", methods=["POST"])
+@limiter.limit("5 per minute")
+def upload_file():
+    """
+    Accept a PDF or image upload. Extract its content and return a suggested topic
+    string plus a content preview — the frontend then calls /generate with that topic.
+
+    Form fields:
+      file  — the uploaded file (multipart/form-data)
+
+    Returns:
+      {
+        "topic":   "Suggested topic / title for the session",
+        "preview": "First ~500 chars of extracted content",
+        "type":    "pdf" | "image"
+      }
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file part in request"}), 400
+
+    f = request.files["file"]
+    if not f or not f.filename:
+        return jsonify({"error": "No file selected"}), 400
+    if not _allowed_file(f.filename):
+        return jsonify({
+            "error": f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+        }), 400
+
+    file_bytes = f.read()
+    if len(file_bytes) > UPLOAD_MAX_MB * 1024 * 1024:
+        return jsonify({"error": f"File too large. Max {UPLOAD_MAX_MB} MB."}), 413
+
+    ext = f.filename.rsplit(".", 1)[1].lower()
+    filename_safe = secure_filename(f.filename)
+
+    # ── PDF branch ────────────────────────────────────────────────────────────
+    if ext == "pdf":
+        try:
+            extracted = _extract_pdf_text(file_bytes)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+
+        if not extracted:
+            return jsonify({"error": "Could not extract text from PDF. It may be a scanned image-only PDF."}), 422
+
+        # Ask Llama to infer a concise topic title from the extracted text
+        title_prompt = (
+            f"Read the following text extracted from a PDF and reply with ONLY a short, "
+            f"specific topic title (5–10 words) that best describes what this document is about. "
+            f"No quotes, no explanation — just the topic title.\n\n{extracted[:2000]}"
+        )
+        topic = _call_groq(title_prompt, max_tokens=60) or filename_safe
+        topic = topic.strip().strip('"').strip("'")
+
+        return jsonify({
+            "topic":   topic[:MAX_TOPIC_LENGTH],
+            "preview": extracted[:500],
+            "type":    "pdf",
+            "full_text": extracted,   # frontend can pass this back as context if needed
+        })
+
+    # ── Image branch ─────────────────────────────────────────────────────────
+    else:
+        mime_map = {
+            "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp", "gif": "image/gif",
+        }
+        media_type = mime_map.get(ext, "image/jpeg")
+
+        description = _describe_image_with_llava(file_bytes, media_type)
+        if not description:
+            return jsonify({"error": "Could not analyse image. Try a clearer image or PDF."}), 422
+
+        # Ask Llama to distil description into a topic title
+        title_prompt = (
+            f"Based on the following image description, reply with ONLY a short, "
+            f"specific topic title (5–10 words) suitable for a learning session. "
+            f"No quotes, no explanation.\n\n{description[:1500]}"
+        )
+        topic = _call_groq(title_prompt, max_tokens=60) or filename_safe
+        topic = topic.strip().strip('"').strip("'")
+
+        return jsonify({
+            "topic":   topic[:MAX_TOPIC_LENGTH],
+            "preview": description[:500],
+            "type":    "image",
+        })
 
 
 @app.route("/generate", methods=["POST"])

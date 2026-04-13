@@ -292,11 +292,12 @@
     .attachments-row.show { display: flex; }
     .attachment-chip {
       display: flex; align-items: center; gap: .5rem;
-      background: rgba(15,23,42,.05);
+      background: rgba(13,148,136,.09);
+      border: 1px solid rgba(13,148,136,.22);
       border-radius: 8px;
       padding: .3rem .7rem;
       font-size: .75rem;
-      color: var(--text-2);
+      color: var(--teal);
       animation: chipIn .2s ease;
     }
     @keyframes chipIn {
@@ -305,12 +306,14 @@
     }
     .attachment-remove {
       background: none; border: none;
-      color: var(--text-3);
+      color: var(--teal);
       cursor: pointer; font-size: .75rem;
       line-height: 1; padding: 0;
       transition: color .15s;
+      opacity: .6;
     }
-    .attachment-remove:hover { color: var(--text); }
+    .attachment-remove:hover { color: var(--text); opacity: 1; }
+    #attach-btn:disabled { opacity: .5; cursor: not-allowed; }
 
     /* Bottom toolbar */
     .chat-toolbar {
@@ -3561,14 +3564,110 @@ topicInput.addEventListener('keydown', e => {
 
 // --- Attachments ---
 let attachments = [];
+// ---- Upload state ----
+let _uploadedFileData = null; // stores { topic, preview, type, full_text? }
+
 function handleAttach() {
-  const mockName = `file-${Math.floor(Math.random()*1000)}.pdf`;
-  attachments.push(mockName);
-  renderAttachments();
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.png,.jpg,.jpeg,.webp,.gif';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Show uploading state
+    const attachBtn = document.getElementById('attach-btn');
+    const origText = attachBtn.textContent;
+    attachBtn.textContent = '⏳';
+    attachBtn.disabled = true;
+    showToast('📎 Analysing file…');
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+      const res = await fetch(apiPath('/upload_file'), { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showToast('✗ ' + (data.error || 'Upload failed'));
+        return;
+      }
+
+      // Store file data for potential use in generate call
+      _uploadedFileData = data;
+
+      // Fill topic input with extracted topic
+      topicInput.value = data.topic;
+      charCount.textContent = data.topic.length;
+      autoResizeTextarea();
+      updateSendBtn();
+
+      // Show preview chip in attachments row
+      attachments = [file.name];
+      renderAttachments();
+
+      // Show success toast with preview
+      const typeLabel = data.type === 'pdf' ? '📄 PDF' : '🖼️ Image';
+      showToast(`${typeLabel} analysed — topic set: "${data.topic}"`);
+
+      // Show preview panel
+      _showUploadPreview(data);
+
+    } catch (err) {
+      console.error('Upload error:', err);
+      showToast('✗ Upload failed. Check server connection.');
+    } finally {
+      attachBtn.textContent = origText;
+      attachBtn.disabled = false;
+    }
+  };
+  input.click();
+}
+
+function _showUploadPreview(data) {
+  // Remove existing preview if any
+  const existing = document.getElementById('upload-preview-panel');
+  if (existing) existing.remove();
+
+  const typeIcon = data.type === 'pdf' ? '📄' : '🖼️';
+  const panel = document.createElement('div');
+  panel.id = 'upload-preview-panel';
+  panel.style.cssText = `
+    margin: 8px 12px 0;
+    background: rgba(13,148,136,.07);
+    border: 1px solid rgba(13,148,136,.25);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: .78rem;
+    color: var(--text-2);
+    position: relative;
+  `;
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+      <span>${typeIcon}</span>
+      <strong style="color:var(--teal);font-size:.8rem;">Extracted content preview</strong>
+      <button onclick="document.getElementById('upload-preview-panel').remove()"
+        style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-3);font-size:.9rem;padding:0;">✕</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:.72rem;color:var(--text-3);
+      max-height:72px;overflow:hidden;text-overflow:ellipsis;line-clamp:3;
+      white-space:pre-wrap;word-break:break-word;">${(data.preview || '').slice(0, 300)}…</div>
+  `;
+
+  // Insert before the attachments row
+  const attachRow = document.getElementById('attachments-row');
+  attachRow.parentNode.insertBefore(panel, attachRow);
 }
 function removeAttachment(idx) {
   attachments.splice(idx, 1);
   renderAttachments();
+  // Clear upload state and preview panel when attachment is removed
+  if (attachments.length === 0) {
+    _uploadedFileData = null;
+    const panel = document.getElementById('upload-preview-panel');
+    if (panel) panel.remove();
+  }
 }
 function renderAttachments() {
   const row = document.getElementById('attachments-row');
