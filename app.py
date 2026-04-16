@@ -3371,6 +3371,25 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
         "where appropriate. Use [CASE: brief description] placeholders for uncertain citations. "
         "Never use markdown symbols like ** or ##. Write in flowing paragraphs."
     )
+
+    # Build author/book instruction if provided
+    ref_authors = meta.get("reference_authors", [])
+    if ref_authors:
+        author_lines = []
+        for e in ref_authors:
+            line = e["author"]
+            if e.get("book"):
+                book_title = e["book"]
+                line += f", \"{book_title}\"" 
+            author_lines.append(line)
+        author_instruction = (
+            "IMPORTANT: Draw content, arguments, and analysis primarily from the following "
+            "authors and their works (cite them specifically in the text where relevant): "
+            + "; ".join(author_lines) + ". "
+        )
+    else:
+        author_instruction = ""
+
     if section == "declaration":
         return (
             f"Write a formal academic honesty declaration for a law assignment. "
@@ -3393,7 +3412,7 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
         )
     elif section == "introduction":
         return (
-            f"Write a comprehensive Introduction (minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"{author_instruction}Write a comprehensive Introduction (minimum 500 words) for a law assignment on: \"{topic}\". "
             f"Structure with these elements: "
             f"(1) Opening hook and definition of key terms, "
             f"(2) Constitutional or statutory basis and legal framework, "
@@ -3406,7 +3425,7 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
         )
     elif section == "body":
         return (
-            f"Write a detailed Legal Analysis body (minimum 800 words) for a law assignment on: \"{topic}\". "
+            f"{author_instruction}Write a detailed Legal Analysis body (minimum 800 words) for a law assignment on: \"{topic}\". "
             f"Structure with 4 numbered sub-sections: "
             f"2.1 Constitutional and Statutory Framework — cite relevant Articles, statutes, provisions; "
             f"2.2 Judicial Interpretation and Evolution — trace case law development, use [CASE: description] placeholders; "
@@ -3430,7 +3449,7 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
         )
     elif section == "bibliography":
         return (
-            f"Write a Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "
+            f"{author_instruction}Write a Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "f"If reference authors were specified above, ensure they appear as primary entries in the Books/Textbooks section. "
             f"Provide at least 10 entries organised in these categories: "
             f"A. Cases (minimum 3 entries — use [CASE: description] if uncertain of exact citation), "
             f"B. Statutes and Constitutional Provisions (minimum 2 entries), "
@@ -3875,6 +3894,17 @@ def assign_generate():
     if len(topic) > 300:
         return jsonify({"error": "Topic too long (max 300 chars)"}), 400
 
+    # Optional reference authors: [{ "author": "...", "book": "..." }, ...]
+    raw_authors = data.get("reference_authors", [])
+    reference_authors = []
+    if isinstance(raw_authors, list):
+        for entry in raw_authors:
+            if isinstance(entry, dict):
+                author = str(entry.get("author", "")).strip()
+                book   = str(entry.get("book", "")).strip()
+                if author:
+                    reference_authors.append({"author": author, "book": book})
+
     meta = {
         "topic":                topic,
         "student_name":         str(data["student_name"]).strip(),
@@ -3882,6 +3912,7 @@ def assign_generate():
         "course":               str(data["course"]).strip(),
         "college":              str(data["college"]).strip(),
         "include_acknowledgment": bool(data.get("include_acknowledgment", True)),
+        "reference_authors":    reference_authors,
     }
 
     try:

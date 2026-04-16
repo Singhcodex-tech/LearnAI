@@ -6523,6 +6523,41 @@ function showPptSuccessToast(msg) {
 .assign-toggle input:checked + .assign-toggle-slider::before { transform:translateX(18px); }
 .assign-toggle-label { font-size:.82rem; color:#334155; }
 
+.assign-authors-section {
+  margin-top:.9rem;
+  border:1.5px solid #e2e8f0;
+  border-radius:10px;
+  padding:.65rem .85rem;
+  background:#f8fafc;
+}
+.assign-authors-header {
+  display:flex; align-items:center; justify-content:space-between; cursor:pointer;
+}
+.assign-authors-header:hover .assign-label { color:var(--teal); }
+.assign-author-entry {
+  display:flex; gap:.5rem; align-items:center; margin-bottom:.45rem;
+}
+.assign-author-entry input {
+  flex:1; padding:.42rem .65rem; border:1.5px solid #e2e8f0; border-radius:8px;
+  font-family:'Syne',sans-serif; font-size:.8rem; color:#0f172a;
+  background:#fff; outline:none; transition:border-color .15s;
+}
+.assign-author-entry input:focus { border-color:#0d9488; }
+.assign-author-entry input::placeholder { color:#94a3b8; }
+.assign-author-remove-btn {
+  width:26px; height:26px; border:none; border-radius:6px;
+  background:#fee2e2; color:#dc2626; font-size:1rem; line-height:1;
+  cursor:pointer; flex-shrink:0; transition:background .15s;
+}
+.assign-author-remove-btn:hover { background:#fecaca; }
+.assign-add-author-btn {
+  margin-top:.3rem; padding:.38rem .75rem; border:1.5px dashed #cbd5e1;
+  border-radius:8px; background:transparent; color:#64748b;
+  font-family:'Syne',sans-serif; font-size:.78rem; font-weight:600;
+  cursor:pointer; transition:all .15s;
+}
+.assign-add-author-btn:hover { border-color:#0d9488; color:#0d9488; background:#f0fdfa; }
+
 .assign-actions { display:flex; gap:.75rem; margin-top:1.25rem; }
 .assign-btn-cancel {
   flex:1; padding:.7rem; border:1.5px solid #e2e8f0; border-radius:10px;
@@ -6634,6 +6669,21 @@ function showPptSuccessToast(msg) {
         <span class="assign-toggle-label">Include Acknowledgment page</span>
       </div>
 
+      <!-- Reference Authors (optional) -->
+      <div class="assign-authors-section">
+        <div class="assign-authors-header" onclick="toggleAuthorsSection()">
+          <span class="assign-label" style="margin:0;cursor:pointer;">📚 Reference Authors <span style="font-size:.75rem;color:var(--text-3);font-weight:400;">(optional)</span></span>
+          <span id="assign-authors-toggle-icon" style="font-size:.8rem;color:var(--text-3);transition:transform .2s;">▼</span>
+        </div>
+        <div id="assign-authors-body" style="display:none;margin-top:.6rem;">
+          <p style="font-size:.75rem;color:var(--text-3);margin-bottom:.6rem;">
+            Content will be drawn from these authors &amp; books. Leave empty to let AI choose sources freely.
+          </p>
+          <div id="assign-authors-list"></div>
+          <button type="button" class="assign-add-author-btn" onclick="addAuthorEntry()">+ Add Author</button>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="assign-actions">
         <button class="assign-btn-cancel" id="assign-cancel-btn" onclick="closeAssignmentModal()">Cancel</button>
@@ -6703,6 +6753,8 @@ function _assignReset(keepTopic) {
       document.getElementById(id).value = '';
     });
     document.getElementById('assign-ack').checked = true;
+    document.getElementById('assign-authors-list').innerHTML = '';
+    _authorCount = 0;
   }
 }
 
@@ -6761,6 +6813,7 @@ async function generateAssignment() {
         course,
         college,
         include_acknowledgment: document.getElementById('assign-ack').checked,
+        reference_authors:      _getAuthorEntries(),
       }),
     });
 
@@ -6830,6 +6883,49 @@ async function downloadAssignment(fmt) {
     btn.disabled    = false;
     btn.textContent = orig;
   }
+}
+
+// ── Reference Authors helpers ────────────────────────────────────────────────
+let _authorCount = 0;
+
+function toggleAuthorsSection() {
+  const body = document.getElementById('assign-authors-body');
+  const icon = document.getElementById('assign-authors-toggle-icon');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  icon.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function addAuthorEntry(author = '', book = '') {
+  const list = document.getElementById('assign-authors-list');
+  const id = ++_authorCount;
+  const div = document.createElement('div');
+  div.className = 'assign-author-entry';
+  div.id = `author-entry-${id}`;
+  div.innerHTML = `
+    <input type="text" placeholder="Author name" class="assign-author-name" value="${author.replace(/"/g,'&quot;')}" />
+    <input type="text" placeholder="Book / Work title (optional)" class="assign-author-book" value="${book.replace(/"/g,'&quot;')}" />
+    <button type="button" class="assign-author-remove-btn" onclick="removeAuthorEntry(${id})" title="Remove">×</button>
+  `;
+  list.appendChild(div);
+  // Auto-open section when first author added
+  document.getElementById('assign-authors-body').style.display = 'block';
+  document.getElementById('assign-authors-toggle-icon').style.transform = 'rotate(180deg)';
+}
+
+function removeAuthorEntry(id) {
+  const el = document.getElementById(`author-entry-${id}`);
+  if (el) el.remove();
+}
+
+function _getAuthorEntries() {
+  const entries = [];
+  document.querySelectorAll('.assign-author-entry').forEach(div => {
+    const author = div.querySelector('.assign-author-name').value.trim();
+    const book   = div.querySelector('.assign-author-book').value.trim();
+    if (author) entries.push({ author, book });
+  });
+  return entries;
 }
 
 function _assignToast(msg) {
