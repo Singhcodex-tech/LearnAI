@@ -21,10 +21,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
 CORS(app, origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","))
 
-# ── Law Assignment Generator (isolated feature) ──────────────────────────────
-from features.assignment.blueprint import assignment_bp   # noqa: E402
-app.register_blueprint(assignment_bp)
-# To disable: comment the two lines above. Zero side-effects on platform.
+# ── Law Assignment Generator (inlined) ───────────────────────────────────────
+# All blueprint code inlined below after limiter setup — see _ASSIGNMENT section
 # ─────────────────────────────────────────────────────────────────────────────
 
 limiter = Limiter(
@@ -3324,6 +3322,629 @@ def generate_ppt():
             ".presentationml.presentation"
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# _ASSIGNMENT — Law Assignment Generator (inlined from blueprint)
+# ---------------------------------------------------------------------------
+# Token budgets: each section ~800-1200 tokens to guarantee ≥1 full page of
+# content per section. 6 sections × ~2.5 pages ≈ 15 pages total.
+# Every section is a SEPARATE _call_groq call so output never corrupts midway.
+# ---------------------------------------------------------------------------
+
+import io as _io
+from datetime import datetime as _dt
+
+_ASSIGN_STORE: dict = {}      # { id: { meta, sections, created_at } }
+_ASSIGN_TTL   = 7200          # 2 hours
+
+# Token budget per section — tuned for ≥1 full A4 page each (~600-800 words)
+_ASSIGN_TOKEN = {
+    "declaration":    350,    # ~0.5 page formal declaration
+    "acknowledgment": 400,    # ~0.6 page acknowledgment
+    "introduction":   900,    # ~1.5 pages introduction
+    "body":          2000,    # ~3-4 pages legal analysis (largest section)
+    "conclusion":     700,    # ~1 page conclusion
+    "bibliography":   600,    # ~1 page references
+}
+
+
+def _assign_prune():
+    now = time.time()
+    stale = [k for k, v in _ASSIGN_STORE.items() if now - v["created_at"] > _ASSIGN_TTL]
+    for k in stale:
+        del _ASSIGN_STORE[k]
+
+
+def _assign_find_cached(topic: str):
+    for v in _ASSIGN_STORE.values():
+        if v["meta"]["topic"].lower().strip() == topic.lower().strip():
+            return v
+    return None
+
+
+def _assign_prompt(section: str, topic: str, meta: dict) -> str:
+    """Build a detailed prompt per section. Each gets its own API call."""
+    system_note = (
+        "You are a senior legal academic writer. Write in formal, precise academic English. "
+        "Use correct legal terminology. Structure content clearly with numbered sub-sections "
+        "where appropriate. Use [CASE: brief description] placeholders for uncertain citations. "
+        "Never use markdown symbols like ** or ##. Write in flowing paragraphs."
+    )
+    if section == "declaration":
+        return (
+            f"Write a formal academic honesty declaration for a law assignment. "
+            f"Student: {meta['student_name']}, Roll No: {meta['roll_no']}, "
+            f"Course: {meta['course']}, College: {meta['college']}. "
+            f"The declaration must be detailed and at least 200 words. Include: "
+            f"(1) Statement of original authorship, (2) Confirmation no plagiarism, "
+            f"(3) Sources properly acknowledged, (4) No unauthorized assistance, "
+            f"(5) Understanding of academic consequences. Formal, first-person tone."
+        )
+    elif section == "acknowledgment":
+        return (
+            f"Write a detailed acknowledgment (minimum 200 words) for a law assignment by "
+            f"{meta['student_name']} of {meta['college']} on the topic: \"{topic}\". "
+            f"Acknowledge: (1) Faculty supervisor/guide with gratitude for specific guidance, "
+            f"(2) College library and research resources, "
+            f"(3) Fellow students and classmates, "
+            f"(4) Family support, "
+            f"(5) Any other relevant persons. Warm, formal academic tone."
+        )
+    elif section == "introduction":
+        return (
+            f"Write a comprehensive Introduction (minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"Structure with these elements: "
+            f"(1) Opening hook and definition of key terms, "
+            f"(2) Constitutional or statutory basis and legal framework, "
+            f"(3) Historical background and evolution of the topic, "
+            f"(4) Scope and limitations of the present study, "
+            f"(5) Significance and relevance in contemporary legal context, "
+            f"(6) Research objectives and methodology, "
+            f"(7) Clear thesis statement summarising the assignment's argument. "
+            f"Use [CASE: description] for relevant landmark cases. Formal academic tone."
+        )
+    elif section == "body":
+        return (
+            f"Write a detailed Legal Analysis body (minimum 800 words) for a law assignment on: \"{topic}\". "
+            f"Structure with 4 numbered sub-sections: "
+            f"2.1 Constitutional and Statutory Framework — cite relevant Articles, statutes, provisions; "
+            f"2.2 Judicial Interpretation and Evolution — trace case law development, use [CASE: description] placeholders; "
+            f"2.3 Critical Analysis — evaluate strengths and weaknesses of current legal position, "
+            f"compare with international standards where relevant; "
+            f"2.4 Contemporary Issues and Challenges — discuss current debates, recent developments, "
+            f"policy gaps and reform needs. "
+            f"Each sub-section minimum 200 words. Use formal legal academic prose throughout."
+        )
+    elif section == "conclusion":
+        return (
+            f"Write a comprehensive Conclusion (minimum 400 words) for a law assignment on: \"{topic}\". "
+            f"Include: "
+            f"(1) Summary of key findings from each section of the assignment, "
+            f"(2) Restatement and vindication of the thesis, "
+            f"(3) Legal implications and significance of findings, "
+            f"(4) Policy recommendations and suggestions for reform (at least 3 specific recommendations), "
+            f"(5) Areas requiring further research, "
+            f"(6) Closing statement on the broader importance of the topic. "
+            f"No new arguments. Synthesise and conclude. Formal academic tone."
+        )
+    elif section == "bibliography":
+        return (
+            f"Write a Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "
+            f"Provide at least 10 entries organised in these categories: "
+            f"A. Cases (minimum 3 entries — use [CASE: description] if uncertain of exact citation), "
+            f"B. Statutes and Constitutional Provisions (minimum 2 entries), "
+            f"C. Books and Textbooks (minimum 2 entries with edition, publisher, year), "
+            f"D. Journal Articles (minimum 2 entries with volume, journal name, year, page), "
+            f"E. Online Sources and Reports (minimum 1 entry with URL and access date). "
+            f"Number all entries. Use [CITATION NEEDED] for uncertain details. "
+            f"Format strictly in Bluebook style."
+        )
+    return f"Write a detailed section on {section} for a law assignment about: \"{topic}\"."
+
+
+def _assign_gen_section(section: str, topic: str, meta: dict) -> str:
+    """Each section = one dedicated _call_groq call. No batching = no corruption."""
+    system = (
+        "You are a senior legal academic writer at a reputed Indian law school. "
+        "Write in formal, precise academic English. Use correct legal terminology. "
+        "Structure content clearly. Never use markdown symbols like ** or ##. "
+        "Write in full sentences and flowing paragraphs. Minimum length per your instructions."
+    )
+    result = _call_groq(
+        _assign_prompt(section, topic, meta),
+        max_tokens=_ASSIGN_TOKEN.get(section, 800),
+        system=system,
+    )
+    return (result or "").strip()
+
+
+def _assign_assemble(meta: dict) -> dict:
+    _assign_prune()
+    cached = _assign_find_cached(meta["topic"])
+    if cached:
+        return cached
+
+    sections: dict = {}
+    order = ["declaration"]
+    if meta.get("include_acknowledgment", True):
+        order.append("acknowledgment")
+    order += ["introduction", "body", "conclusion", "bibliography"]
+
+    # SEPARATE API call per section — prevents mid-response corruption
+    for sec in order:
+        sections[sec] = _assign_gen_section(sec, meta["topic"], meta)
+
+    record = {
+        "id":         str(uuid.uuid4()),
+        "meta":       meta,
+        "sections":   sections,
+        "created_at": time.time(),
+    }
+    _ASSIGN_STORE[record["id"]] = record
+    return record
+
+
+# ── DOCX builder ─────────────────────────────────────────────────────────────
+
+def _assign_build_docx(record: dict) -> bytes:
+    try:
+        from docx import Document
+        from docx.shared import Pt, Inches, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+    except ImportError:
+        raise RuntimeError("python-docx not installed. Run: pip install python-docx")
+
+    meta     = record["meta"]
+    sections = record["sections"]
+    doc      = Document()
+
+    for section in doc.sections:
+        section.top_margin    = Inches(1.0)
+        section.bottom_margin = Inches(1.0)
+        section.left_margin   = Inches(1.25)
+        section.right_margin  = Inches(1.0)
+
+    RED = RGBColor(0xCC, 0x00, 0x00)
+
+    def set_font(run, size=12, bold=False, italic=False, color=None, underline=False):
+        run.font.name    = "Times New Roman"
+        run.font.size    = Pt(size)
+        run.bold         = bold
+        run.italic       = italic
+        run.underline    = underline
+        if color:
+            run.font.color.rgb = color
+
+    def add_heading(text, level=1):
+        """Bold + underlined + red heading for every section title."""
+        p   = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(18 if level == 1 else 12)
+        p.paragraph_format.space_after  = Pt(8)
+        run = p.add_run(text)
+        set_font(run, size=14 if level == 1 else 12,
+                 bold=True, underline=True, color=RED)
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        return p
+
+    def add_subheading(text):
+        """Sub-section headings (2.1, 2.2 …) — bold + underlined + red, smaller."""
+        p   = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(10)
+        p.paragraph_format.space_after  = Pt(5)
+        run = p.add_run(text)
+        set_font(run, size=12, bold=True, underline=True, color=RED)
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        return p
+
+    def add_body(text):
+        if not text:
+            return
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            is_subhead = bool(re.match(r'^(\d+\.\d+|[IVX]+\.)\s', line))
+            if is_subhead:
+                add_subheading(line)
+            else:
+                p   = doc.add_paragraph()
+                p.paragraph_format.space_after = Pt(6)
+                run = p.add_run(line)
+                set_font(run, size=12)
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    def add_divider():
+        p   = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(2)
+        p.paragraph_format.space_after  = Pt(4)
+        pPr    = p._p.get_or_add_pPr()
+        pBdr   = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"),   "single")
+        bottom.set(qn("w:sz"),    "6")
+        bottom.set(qn("w:space"), "1")
+        bottom.set(qn("w:color"), "CC0000")   # red divider
+        pBdr.append(bottom)
+        pPr.append(pBdr)
+
+    def page_break():
+        doc.add_page_break()
+
+    # ── COVER PAGE ──────────────────────────────────────────────────────────
+    for _ in range(4):
+        doc.add_paragraph()
+    p   = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(meta["college"].upper())
+    set_font(run, 16, bold=True, color=RGBColor(0x1A, 0x3A, 0x5C))
+
+    p   = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(meta["course"])
+    set_font(run, 13)
+
+    doc.add_paragraph()
+    add_divider()
+    doc.add_paragraph()
+
+    p   = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("LAW ASSIGNMENT")
+    set_font(run, 20, bold=True, color=RGBColor(0x1A, 0x3A, 0x5C))
+
+    p   = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run("ON")
+    set_font(run, 12)
+
+    p   = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = p.add_run(meta["topic"].upper())
+    set_font(run, 15, bold=True, color=RGBColor(0x1A, 0x3A, 0x5C))
+
+    doc.add_paragraph()
+    add_divider()
+    for _ in range(3):
+        doc.add_paragraph()
+
+    for label, value in [
+        ("Submitted by", meta["student_name"]),
+        ("Roll No",      meta["roll_no"]),
+        ("Date",         _dt.now().strftime("%d %B %Y")),
+    ]:
+        p   = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r1  = p.add_run(f"{label}: ")
+        set_font(r1, 12)
+        r2  = p.add_run(value)
+        set_font(r2, 12, bold=True)
+
+    page_break()
+
+    # ── TABLE OF CONTENTS ────────────────────────────────────────────────────
+    add_heading("TABLE OF CONTENTS")
+    add_divider()
+    toc_entries = [
+        ("Declaration",      "2"),
+        ("Acknowledgment",   "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction", "4"),
+        ("2.  Legal Analysis", "6"),
+        ("3.  Conclusion",   "11"),
+        ("4.  Bibliography", "13"),
+    ]
+    for entry in toc_entries:
+        if not entry:
+            continue
+        p   = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        r1  = p.add_run(entry[0])
+        set_font(r1, 12)
+        r2  = p.add_run(f"{'.' * max(1, 55 - len(entry[0]))} {entry[1]}")
+        set_font(r2, 12)
+    page_break()
+
+    # ── DECLARATION ──────────────────────────────────────────────────────────
+    add_heading("DECLARATION")
+    add_divider()
+    add_body(sections.get("declaration", ""))
+    doc.add_paragraph()
+    p   = doc.add_paragraph()
+    run = p.add_run(f"Signature: ________________        Date: {_dt.now().strftime('%d %B %Y')}")
+    set_font(run, 11)
+    page_break()
+
+    # ── ACKNOWLEDGMENT ───────────────────────────────────────────────────────
+    if sections.get("acknowledgment"):
+        add_heading("ACKNOWLEDGMENT")
+        add_divider()
+        add_body(sections["acknowledgment"])
+        page_break()
+
+    # ── INTRODUCTION ─────────────────────────────────────────────────────────
+    add_heading("1.  INTRODUCTION")
+    add_divider()
+    add_body(sections.get("introduction", ""))
+    page_break()
+
+    # ── BODY ─────────────────────────────────────────────────────────────────
+    add_heading("2.  LEGAL ANALYSIS")
+    add_divider()
+    add_body(sections.get("body", ""))
+    page_break()
+
+    # ── CONCLUSION ───────────────────────────────────────────────────────────
+    add_heading("3.  CONCLUSION")
+    add_divider()
+    add_body(sections.get("conclusion", ""))
+    page_break()
+
+    # ── BIBLIOGRAPHY ─────────────────────────────────────────────────────────
+    add_heading("4.  BIBLIOGRAPHY")
+    p   = doc.add_paragraph()
+    run = p.add_run("(Bluebook Citation Format)")
+    set_font(run, 10, color=RGBColor(0x64, 0x64, 0x64))
+    add_divider()
+    add_body(sections.get("bibliography", ""))
+
+    buf = _io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+# ── PDF builder ───────────────────────────────────────────────────────────────
+
+def _assign_build_pdf(record: dict) -> bytes:
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, PageBreak, HRFlowable
+        )
+        from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+    except ImportError:
+        raise RuntimeError("reportlab not installed. Run: pip install reportlab")
+
+    meta     = record["meta"]
+    sections = record["sections"]
+    buf      = _io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=1.25*inch, rightMargin=inch,
+        topMargin=inch, bottomMargin=inch,
+    )
+
+    NAVY = colors.HexColor("#1A3A5C")
+    RED  = colors.HexColor("#CC0000")
+    GREY = colors.HexColor("#64748B")
+    BLK  = colors.black
+
+    S = {
+        "cover_college": ParagraphStyle("cc", fontName="Helvetica-Bold", fontSize=15,
+                                         textColor=NAVY, alignment=TA_CENTER, spaceAfter=8),
+        "cover_course":  ParagraphStyle("cs", fontName="Helvetica", fontSize=12,
+                                         textColor=BLK, alignment=TA_CENTER, spaceAfter=20),
+        "cover_title":   ParagraphStyle("ct", fontName="Helvetica-Bold", fontSize=18,
+                                         textColor=NAVY, alignment=TA_CENTER, spaceAfter=10),
+        "cover_sub":     ParagraphStyle("csb", fontName="Helvetica", fontSize=11,
+                                         textColor=BLK, alignment=TA_CENTER, spaceAfter=6),
+        "cover_name":    ParagraphStyle("cn", fontName="Helvetica-Bold", fontSize=12,
+                                         textColor=BLK, alignment=TA_CENTER, spaceAfter=6),
+        # Bold + underline + RED for all section headings
+        "h1":  ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=14,
+                               textColor=RED, spaceBefore=18, spaceAfter=8,
+                               underlineProportion=0.3),
+        # Sub-headings (2.1, 2.2 …) also bold + underlined + red
+        "h2":  ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12,
+                               textColor=RED, spaceBefore=12, spaceAfter=6,
+                               underlineProportion=0.3),
+        "body": ParagraphStyle("body", fontName="Times-Roman", fontSize=11,
+                                textColor=BLK, alignment=TA_JUSTIFY,
+                                spaceBefore=0, spaceAfter=6, leading=16),
+        "toc":  ParagraphStyle("toc", fontName="Helvetica", fontSize=11,
+                                textColor=BLK, spaceAfter=4),
+        "sig":  ParagraphStyle("sig", fontName="Helvetica", fontSize=10,
+                                textColor=GREY, spaceAfter=4),
+        "biblio": ParagraphStyle("bib", fontName="Times-Roman", fontSize=10,
+                                  textColor=BLK, spaceAfter=5, leading=14),
+    }
+
+    def hr():
+        return HRFlowable(width="100%", thickness=1.5, color=RED,
+                          spaceAfter=8, spaceBefore=4)
+
+    def h1(text):
+        # underline via <u> tag in reportlab
+        return Paragraph(f'<u>{text}</u>', S["h1"])
+
+    def h2(text):
+        return Paragraph(f'<u>{text}</u>', S["h2"])
+
+    story = []
+
+    # ── Cover ─────────────────────────────────────────────────────────────────
+    story += [Spacer(1, 1.2*inch)]
+    story.append(Paragraph(meta["college"].upper(), S["cover_college"]))
+    story.append(Paragraph(meta["course"], S["cover_course"]))
+    story.append(hr())
+    story += [Spacer(1, 0.2*inch)]
+    story.append(Paragraph("LAW ASSIGNMENT", S["cover_title"]))
+    story.append(Paragraph("ON", S["cover_sub"]))
+    story.append(Paragraph(f'<b>{meta["topic"].upper()}</b>', S["cover_title"]))
+    story += [Spacer(1, 0.3*inch)]
+    story.append(hr())
+    story += [Spacer(1, 0.8*inch)]
+    story.append(Paragraph("Submitted by", S["cover_sub"]))
+    story.append(Paragraph(meta["student_name"], S["cover_name"]))
+    story.append(Paragraph(f'Roll No: {meta["roll_no"]}', S["cover_sub"]))
+    story.append(Paragraph(_dt.now().strftime("%d %B %Y"), S["cover_sub"]))
+    story.append(PageBreak())
+
+    # ── TOC ───────────────────────────────────────────────────────────────────
+    story.append(h1("TABLE OF CONTENTS"))
+    story.append(hr())
+    toc_items = [
+        ("Declaration", "2"),
+        ("Acknowledgment", "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction", "4"),
+        ("2.  Legal Analysis", "6"),
+        ("3.  Conclusion", "11"),
+        ("4.  Bibliography", "13"),
+    ]
+    for item in toc_items:
+        if item:
+            dots = "." * max(1, 60 - len(item[0]))
+            story.append(Paragraph(
+                f'{item[0]} <font color="#64748B">{dots}</font> {item[1]}', S["toc"]
+            ))
+    story.append(PageBreak())
+
+    def add_section(heading_text, text, bib=False):
+        story.append(h1(heading_text))
+        story.append(hr())
+        if not text:
+            return
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line:
+                story.append(Spacer(1, 4))
+                continue
+            is_sub = bool(re.match(r'^(\d+\.\d+|[IVX]+\.)\s', line))
+            safe   = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            if is_sub:
+                story.append(h2(safe))
+            else:
+                sty = S["biblio"] if bib else S["body"]
+                story.append(Paragraph(safe, sty))
+
+    # ── Declaration ──────────────────────────────────────────────────────────
+    add_section("DECLARATION", sections.get("declaration", ""))
+    story.append(Spacer(1, 0.2*inch))
+    story.append(Paragraph(
+        f'Signature: ________________&nbsp;&nbsp;&nbsp;&nbsp;'
+        f'Date: {_dt.now().strftime("%d %B %Y")}',
+        S["sig"]
+    ))
+    story.append(PageBreak())
+
+    # ── Acknowledgment ───────────────────────────────────────────────────────
+    if sections.get("acknowledgment"):
+        add_section("ACKNOWLEDGMENT", sections["acknowledgment"])
+        story.append(PageBreak())
+
+    # ── Body sections ────────────────────────────────────────────────────────
+    add_section("1.  INTRODUCTION",   sections.get("introduction", ""))
+    story.append(PageBreak())
+    add_section("2.  LEGAL ANALYSIS", sections.get("body", ""))
+    story.append(PageBreak())
+    add_section("3.  CONCLUSION",     sections.get("conclusion", ""))
+    story.append(PageBreak())
+
+    story.append(h1("4.  BIBLIOGRAPHY"))
+    story.append(Paragraph("(Bluebook Citation Format)", S["sig"]))
+    story.append(hr())
+    for line in (sections.get("bibliography") or "").split("\n"):
+        line = line.strip()
+        if line:
+            safe = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            story.append(Paragraph(safe, S["biblio"]))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf.read()
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route("/api/assignment/generate", methods=["POST"])
+@limiter.limit("5 per minute")
+def assign_generate():
+    data     = request.get_json(silent=True) or {}
+    required = ["topic", "student_name", "roll_no", "course", "college"]
+    missing  = [f for f in required if not str(data.get(f, "")).strip()]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    topic = str(data["topic"]).strip()
+    if len(topic) > 300:
+        return jsonify({"error": "Topic too long (max 300 chars)"}), 400
+
+    meta = {
+        "topic":                topic,
+        "student_name":         str(data["student_name"]).strip(),
+        "roll_no":              str(data["roll_no"]).strip(),
+        "course":               str(data["course"]).strip(),
+        "college":              str(data["college"]).strip(),
+        "include_acknowledgment": bool(data.get("include_acknowledgment", True)),
+    }
+
+    try:
+        record = _assign_assemble(meta)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "success":       True,
+        "assignment_id": record["id"],
+        "sections":      list(record["sections"].keys()),
+        "cached":        record.get("created_at", 0) < time.time() - 2,
+    })
+
+
+@app.route("/api/assignment/<aid>/docx", methods=["GET"])
+def assign_download_docx(aid):
+    record = _ASSIGN_STORE.get(aid)
+    if not record:
+        return jsonify({"error": "Assignment not found or expired"}), 404
+    try:
+        buf = _assign_build_docx(record)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    safe = re.sub(r'[^a-zA-Z0-9_-]', '_', record["meta"]["topic"][:40]).strip('_')
+    return send_file(
+        _io.BytesIO(buf),
+        as_attachment=True,
+        download_name=f"{safe}_Assignment.docx",
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+
+@app.route("/api/assignment/<aid>/pdf", methods=["GET"])
+def assign_download_pdf(aid):
+    record = _ASSIGN_STORE.get(aid)
+    if not record:
+        return jsonify({"error": "Assignment not found or expired"}), 404
+    try:
+        buf = _assign_build_pdf(record)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+    safe = re.sub(r'[^a-zA-Z0-9_-]', '_', record["meta"]["topic"][:40]).strip('_')
+    return send_file(
+        _io.BytesIO(buf),
+        as_attachment=True,
+        download_name=f"{safe}_Assignment.pdf",
+        mimetype="application/pdf",
+    )
+
+
+@app.route("/api/assignment/<aid>/status", methods=["GET"])
+def assign_status(aid):
+    record = _ASSIGN_STORE.get(aid)
+    if not record:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({
+        "id":         record["id"],
+        "topic":      record["meta"]["topic"],
+        "student":    record["meta"]["student_name"],
+        "sections":   list(record["sections"].keys()),
+        "created_at": record["created_at"],
+    })
 
 
 # ---------------------------------------------------------------------------
