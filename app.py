@@ -3719,13 +3719,14 @@ def _assign_build_docx(record: dict) -> bytes:
 def _assign_build_pdf(record: dict) -> bytes:
     try:
         from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
         from reportlab.lib import colors
+        from reportlab.lib.units import inch
         from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, PageBreak, HRFlowable
+            SimpleDocTemplate, Paragraph, Spacer, PageBreak, HRFlowable, Table, TableStyle
         )
+        from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+        import re as _re
     except ImportError:
         raise RuntimeError("reportlab not installed. Run: pip install reportlab")
 
@@ -3733,53 +3734,72 @@ def _assign_build_pdf(record: dict) -> bytes:
     sections = record["sections"]
     buf      = _io.BytesIO()
 
+    # CUSB palette
+    CRIMSON = colors.HexColor("#CC0000")
+    NAVY    = colors.HexColor("#1A3A5C")
+    GOLD    = colors.HexColor("#C5922A")
+    GREY    = colors.HexColor("#64748B")
+    BLK     = colors.black
+
+    # Double red border on every page
+    def _draw_page_border(canvas_obj, doc_obj):
+        w, h = A4
+        canvas_obj.saveState()
+        canvas_obj.setStrokeColor(CRIMSON)
+        canvas_obj.setLineWidth(2.2)
+        canvas_obj.rect(0.42*inch, 0.42*inch, w - 0.84*inch, h - 0.84*inch)
+        canvas_obj.setLineWidth(0.7)
+        canvas_obj.rect(0.52*inch, 0.52*inch, w - 1.04*inch, h - 1.04*inch)
+        canvas_obj.restoreState()
+
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=1.25*inch, rightMargin=inch,
-        topMargin=inch, bottomMargin=inch,
+        topMargin=1.05*inch, bottomMargin=0.8*inch,
+        leftMargin=0.9*inch, rightMargin=0.9*inch,
+        onFirstPage=_draw_page_border,
+        onLaterPages=_draw_page_border,
     )
 
-    NAVY = colors.HexColor("#1A3A5C")
-    RED  = colors.HexColor("#CC0000")
-    GREY = colors.HexColor("#64748B")
-    BLK  = colors.black
-
     S = {
-        "cover_college": ParagraphStyle("cc", fontName="Helvetica-Bold", fontSize=15,
-                                         textColor=NAVY, alignment=TA_CENTER, spaceAfter=8),
-        "cover_course":  ParagraphStyle("cs", fontName="Helvetica", fontSize=12,
-                                         textColor=BLK, alignment=TA_CENTER, spaceAfter=20),
-        "cover_title":   ParagraphStyle("ct", fontName="Helvetica-Bold", fontSize=18,
-                                         textColor=NAVY, alignment=TA_CENTER, spaceAfter=10),
-        "cover_sub":     ParagraphStyle("csb", fontName="Helvetica", fontSize=11,
-                                         textColor=BLK, alignment=TA_CENTER, spaceAfter=6),
-        "cover_name":    ParagraphStyle("cn", fontName="Helvetica-Bold", fontSize=12,
-                                         textColor=BLK, alignment=TA_CENTER, spaceAfter=6),
-        # Bold + underline + RED for all section headings
-        "h1":  ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=14,
-                               textColor=RED, spaceBefore=18, spaceAfter=8,
-                               underlineProportion=0.3),
-        # Sub-headings (2.1, 2.2 …) also bold + underlined + red
-        "h2":  ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12,
-                               textColor=RED, spaceBefore=12, spaceAfter=6,
-                               underlineProportion=0.3),
+        "cover_univ":   ParagraphStyle("cover_univ",   fontName="Helvetica-Bold",
+                                        fontSize=18, textColor=CRIMSON,
+                                        alignment=TA_CENTER, spaceAfter=4, leading=22),
+        "cover_school": ParagraphStyle("cover_school", fontName="Helvetica-Bold",
+                                        fontSize=12, textColor=CRIMSON,
+                                        alignment=TA_CENTER, spaceAfter=6),
+        "cover_sub_hd": ParagraphStyle("cover_sub_hd", fontName="Helvetica",
+                                        fontSize=11, textColor=NAVY,
+                                        alignment=TA_CENTER, spaceAfter=4),
+        "cover_label":  ParagraphStyle("cover_label",  fontName="Helvetica",
+                                        fontSize=10, textColor=NAVY,
+                                        alignment=TA_CENTER, spaceAfter=3),
+        "cover_topic":  ParagraphStyle("cover_topic",  fontName="Helvetica-Bold",
+                                        fontSize=16, textColor=NAVY,
+                                        alignment=TA_CENTER, spaceAfter=6, leading=22),
+        "h1": ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=13,
+                              textColor=CRIMSON, spaceBefore=18, spaceAfter=8),
+        "h2": ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=11,
+                              textColor=CRIMSON, spaceBefore=12, spaceAfter=6),
         "body": ParagraphStyle("body", fontName="Times-Roman", fontSize=11,
                                 textColor=BLK, alignment=TA_JUSTIFY,
-                                spaceBefore=0, spaceAfter=6, leading=16),
-        "toc":  ParagraphStyle("toc", fontName="Helvetica", fontSize=11,
-                                textColor=BLK, spaceAfter=4),
-        "sig":  ParagraphStyle("sig", fontName="Helvetica", fontSize=10,
+                                spaceAfter=7, leading=16),
+        "toc":  ParagraphStyle("toc",  fontName="Times-Roman", fontSize=11,
+                                textColor=BLK, spaceAfter=5),
+        "sig":  ParagraphStyle("sig",  fontName="Helvetica", fontSize=10,
                                 textColor=GREY, spaceAfter=4),
         "biblio": ParagraphStyle("bib", fontName="Times-Roman", fontSize=10,
                                   textColor=BLK, spaceAfter=5, leading=14),
     }
 
     def hr():
-        return HRFlowable(width="100%", thickness=1.5, color=RED,
-                          spaceAfter=8, spaceBefore=4)
+        return HRFlowable(width="100%", thickness=1.8, color=CRIMSON,
+                          spaceAfter=10, spaceBefore=6)
+
+    def thin_hr():
+        return HRFlowable(width="100%", thickness=0.6, color=GOLD,
+                          spaceAfter=6, spaceBefore=4)
 
     def h1(text):
-        # underline via <u> tag in reportlab
         return Paragraph(f'<u>{text}</u>', S["h1"])
 
     def h2(text):
@@ -3787,40 +3807,68 @@ def _assign_build_pdf(record: dict) -> bytes:
 
     story = []
 
-    # ── Cover ─────────────────────────────────────────────────────────────────
-    story += [Spacer(1, 1.2*inch)]
-    story.append(Paragraph(meta["college"].upper(), S["cover_college"]))
-    story.append(Paragraph(meta["course"], S["cover_course"]))
+    # Cover page — CUSB style
+    story += [Spacer(1, 0.5*inch)]
+    story.append(Paragraph(meta["college"].upper(), S["cover_univ"]))
     story.append(hr())
+    story.append(Paragraph(meta["course"], S["cover_school"]))
+    story.append(thin_hr())
     story += [Spacer(1, 0.2*inch)]
-    story.append(Paragraph("LAW ASSIGNMENT", S["cover_title"]))
-    story.append(Paragraph("ON", S["cover_sub"]))
-    story.append(Paragraph(f'<b>{meta["topic"].upper()}</b>', S["cover_title"]))
-    story += [Spacer(1, 0.3*inch)]
+    story.append(Paragraph("Subject: Legal Method", S["cover_sub_hd"]))
+    story += [Spacer(1, 0.08*inch)]
+    story.append(Paragraph("Assignment Topic", S["cover_label"]))
+    story += [Spacer(1, 0.06*inch)]
+    story.append(Paragraph(meta["topic"].upper(), S["cover_topic"]))
+    story += [Spacer(1, 0.25*inch)]
     story.append(hr())
-    story += [Spacer(1, 0.8*inch)]
-    story.append(Paragraph("Submitted by", S["cover_sub"]))
-    story.append(Paragraph(meta["student_name"], S["cover_name"]))
-    story.append(Paragraph(f'Roll No: {meta["roll_no"]}', S["cover_sub"]))
-    story.append(Paragraph(_dt.now().strftime("%d %B %Y"), S["cover_sub"]))
+    story += [Spacer(1, 0.4*inch)]
+
+    # Submitted to / Submitted by — 2-column table
+    sub_lbl = ParagraphStyle("sl", fontName="Helvetica-Bold", fontSize=10,
+                              textColor=CRIMSON, spaceAfter=4)
+    sub_val = ParagraphStyle("sv", fontName="Times-Roman", fontSize=10,
+                              textColor=BLK, spaceAfter=3, leading=14)
+    col_to = [Paragraph("<b>SUBMITTED TO:</b>", sub_lbl),
+              Paragraph("Course Faculty", sub_val),
+              Paragraph("Department of Law and Governance", sub_val),
+              Paragraph(meta["college"], sub_val)]
+    col_by = [Paragraph("<b>SUBMITTED BY:</b>", sub_lbl),
+              Paragraph(meta["student_name"], sub_val),
+              Paragraph(meta["course"], sub_val),
+              Paragraph(f'Roll No: {meta["roll_no"]}', sub_val),
+              Paragraph("Department of Law and Governance", sub_val)]
+    max_r = max(len(col_to), len(col_by))
+    while len(col_to) < max_r: col_to.append(Paragraph("", sub_val))
+    while len(col_by) < max_r: col_by.append(Paragraph("", sub_val))
+    cover_tbl = Table([[col_to[i], col_by[i]] for i in range(max_r)],
+                      colWidths=["48%", "48%"])
+    cover_tbl.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("LEFTPADDING",  (0,0), (-1,-1), 6),
+        ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING",   (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 2),
+        ("LINEAFTER", (0,0), (0,-1), 1, CRIMSON),
+    ]))
+    story.append(cover_tbl)
     story.append(PageBreak())
 
-    # ── TOC ───────────────────────────────────────────────────────────────────
+    # TOC
     story.append(h1("TABLE OF CONTENTS"))
     story.append(hr())
     toc_items = [
-        ("Declaration", "2"),
-        ("Acknowledgment", "3") if sections.get("acknowledgment") else None,
-        ("1.  Introduction", "4"),
+        ("Declaration",        "2"),
+        ("Acknowledgment",     "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction",   "4"),
         ("2.  Legal Analysis", "6"),
-        ("3.  Conclusion", "11"),
-        ("4.  Bibliography", "13"),
+        ("3.  Conclusion",     "11"),
+        ("4.  Bibliography",   "13"),
     ]
     for item in toc_items:
         if item:
-            dots = "." * max(1, 60 - len(item[0]))
+            dots = "." * max(1, 58 - len(item[0]))
             story.append(Paragraph(
-                f'{item[0]} <font color="#64748B">{dots}</font> {item[1]}', S["toc"]
+                f'{item[0]} <font color="#A89E8E">{dots}</font> {item[1]}', S["toc"]
             ))
     story.append(PageBreak())
 
@@ -3834,30 +3882,26 @@ def _assign_build_pdf(record: dict) -> bytes:
             if not line:
                 story.append(Spacer(1, 4))
                 continue
-            is_sub = bool(re.match(r'^(\d+\.\d+|[IVX]+\.)\s', line))
-            safe   = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            is_sub = bool(_re.match(r'^(\d+\.\d+|[IVX]+\.)\s', line))
+            safe   = line.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
             if is_sub:
                 story.append(h2(safe))
             else:
                 sty = S["biblio"] if bib else S["body"]
                 story.append(Paragraph(safe, sty))
 
-    # ── Declaration ──────────────────────────────────────────────────────────
     add_section("DECLARATION", sections.get("declaration", ""))
     story.append(Spacer(1, 0.2*inch))
     story.append(Paragraph(
         f'Signature: ________________&nbsp;&nbsp;&nbsp;&nbsp;'
-        f'Date: {_dt.now().strftime("%d %B %Y")}',
-        S["sig"]
+        f'Date: {_dt.now().strftime("%d %B %Y")}', S["sig"]
     ))
     story.append(PageBreak())
 
-    # ── Acknowledgment ───────────────────────────────────────────────────────
     if sections.get("acknowledgment"):
         add_section("ACKNOWLEDGMENT", sections["acknowledgment"])
         story.append(PageBreak())
 
-    # ── Body sections ────────────────────────────────────────────────────────
     add_section("1.  INTRODUCTION",   sections.get("introduction", ""))
     story.append(PageBreak())
     add_section("2.  LEGAL ANALYSIS", sections.get("body", ""))
@@ -3871,7 +3915,7 @@ def _assign_build_pdf(record: dict) -> bytes:
     for line in (sections.get("bibliography") or "").split("\n"):
         line = line.strip()
         if line:
-            safe = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            safe = line.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
             story.append(Paragraph(safe, S["biblio"]))
 
     doc.build(story)

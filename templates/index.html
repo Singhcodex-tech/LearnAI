@@ -6446,221 +6446,310 @@ function showPptSuccessToast(msg) {
      No interference with existing platform code.
      ===================================================================== -->
 <style>
-/* ── Assignment modal overlay ── */
+/* ── Assignment modal overlay — CUSB Crimson & Navy Theme ── */
+
+/* CUSB palette */
+:root {
+  --cusb-red:    #CC0000;
+  --cusb-red-dk: #A00000;
+  --cusb-navy:   #1A3A5C;
+  --cusb-gold:   #C5922A;
+  --cusb-parch:  #FDFAF5;
+  --cusb-border: #CC0000;
+}
+
 #assign-modal {
   display:none; position:fixed; inset:0; z-index:9000;
-  background:rgba(15,23,42,.55); backdrop-filter:blur(6px);
+  background:rgba(10,18,36,.65); backdrop-filter:blur(8px);
   align-items:center; justify-content:center; padding:1rem;
 }
 #assign-modal.show { display:flex; }
 
+/* Outer double-border frame — mirrors the PDF's red frame */
 .assign-card {
-  background:#fff; border-radius:20px; width:min(540px,96vw);
-  max-height:90vh; overflow-y:auto;
-  box-shadow:0 24px 60px rgba(15,23,42,.18);
-  animation:assignIn .28s cubic-bezier(.34,1.56,.64,1) both;
+  background:var(--cusb-parch);
+  width:min(560px,96vw);
+  max-height:92vh; overflow-y:auto;
+  /* Double border effect */
+  border: 3px solid var(--cusb-red);
+  outline: 1px solid var(--cusb-red);
+  outline-offset: -7px;
+  border-radius: 4px;
+  box-shadow:0 28px 70px rgba(10,18,36,.28), 0 4px 16px rgba(204,0,0,.15);
+  animation:assignIn .3s cubic-bezier(.34,1.4,.64,1) both;
+  font-family:'Syne',sans-serif;
 }
 @keyframes assignIn {
-  from { opacity:0; transform:scale(.92) translateY(20px); }
+  from { opacity:0; transform:scale(.93) translateY(22px); }
   to   { opacity:1; transform:scale(1)   translateY(0); }
 }
 
+/* ── HEADER — styled like CUSB cover page banner ── */
 .assign-header {
-  padding:1.4rem 1.5rem 1rem;
-  border-bottom:1px solid #e2e8f0;
-  display:flex; align-items:center; gap:.8rem;
+  background: linear-gradient(135deg, var(--cusb-navy) 0%, #1e4a78 100%);
+  padding: 1.4rem 1.5rem 1.1rem;
+  display: flex; align-items: center; gap: .9rem;
+  position: relative;
+  /* Red accent line at bottom */
+  border-bottom: 3px solid var(--cusb-red);
 }
-.assign-header-icon { font-size:1.8rem; }
+/* Subtle texture lines on header */
+.assign-header::after {
+  content:'';
+  position:absolute; inset:0;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 18px,
+    rgba(255,255,255,.015) 18px, rgba(255,255,255,.015) 19px
+  );
+  pointer-events:none;
+}
+
+.assign-header-icon {
+  font-size:2rem;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 10px;
+  width: 48px; height: 48px;
+  display: flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
 .assign-header-title {
-  font-family:'DM Serif Display',serif; font-size:1.35rem;
-  color:#0f172a; line-height:1.2;
+  font-family:'DM Serif Display',serif;
+  font-size:1.25rem;
+  color:#fff;
+  line-height:1.2;
+  letter-spacing:.01em;
 }
-.assign-header-sub { font-size:.75rem; color:#64748b; margin-top:2px; }
+.assign-header-sub {
+  font-size:.72rem;
+  color:rgba(255,255,255,.65);
+  margin-top:3px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
 .assign-close {
-  margin-left:auto; background:none; border:none;
-  font-size:1.3rem; cursor:pointer; color:#64748b;
+  margin-left:auto; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
+  font-size:1.1rem; cursor:pointer; color:rgba(255,255,255,.8);
   width:32px; height:32px; border-radius:8px;
   display:flex; align-items:center; justify-content:center;
-  transition:background .15s;
+  transition:all .15s; flex-shrink:0;
 }
-.assign-close:hover { background:#f1f5f9; color:#0f172a; }
+.assign-close:hover { background:rgba(204,0,0,.6); color:#fff; border-color:transparent; }
 
-.assign-body { padding:1.2rem 1.5rem 1.5rem; }
+/* ── Crimson decorative divider under header ── */
+.assign-section-rule {
+  height:2px;
+  background: linear-gradient(90deg, var(--cusb-red), rgba(204,0,0,.2), transparent);
+  margin: 0 1.5rem .2rem;
+}
 
-.assign-field { margin-bottom:1rem; }
+.assign-body { padding:1.2rem 1.5rem 1.5rem; background:var(--cusb-parch); }
+
+.assign-field { margin-bottom:.9rem; }
 .assign-label {
-  display:block; font-size:.75rem; font-weight:700;
-  letter-spacing:.06em; text-transform:uppercase;
-  color:#64748b; margin-bottom:.4rem;
+  display:block; font-size:.7rem; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:var(--cusb-navy); margin-bottom:.38rem;
 }
 .assign-input {
-  width:100%; padding:.65rem .9rem;
-  border:1.5px solid #e2e8f0; border-radius:10px;
-  font-family:'Syne',sans-serif; font-size:.88rem; color:#0f172a;
-  background:#f8fafc; outline:none; transition:border .15s, background .15s;
+  width:100%; padding:.62rem .9rem;
+  border:1.5px solid #d4c9b8; border-radius:4px;
+  font-family:'Syne',sans-serif; font-size:.87rem; color:#1a1a1a;
+  background:#fff; outline:none; transition:border .15s, box-shadow .15s;
 }
-.assign-input:focus { border-color:#0d9488; background:#fff; }
+.assign-input:focus {
+  border-color:var(--cusb-red);
+  box-shadow:0 0 0 3px rgba(204,0,0,.1);
+  background:#fff;
+}
+.assign-input::placeholder { color:#a89e8e; }
 .assign-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+
+/* ── Submitted-by layout (mirrors the PDF's 2-column cover footer) ── */
+.assign-submit-cols {
+  display:grid; grid-template-columns:1fr 1fr; gap:.75rem;
+  margin-bottom:.9rem;
+  padding:.8rem;
+  border:1px solid #e8ddd0;
+  border-radius:4px;
+  background:rgba(255,255,255,.7);
+  position:relative;
+}
+.assign-submit-cols::before {
+  content:'ASSIGNMENT DETAILS';
+  position:absolute; top:-.55rem; left:.8rem;
+  background:var(--cusb-parch); padding:0 .4rem;
+  font-size:.65rem; font-weight:700; letter-spacing:.1em;
+  color:var(--cusb-red); text-transform:uppercase;
+}
 
 .assign-toggle-row {
   display:flex; align-items:center; gap:.6rem;
-  margin-bottom:1rem;
+  margin-bottom:.9rem;
+  padding:.5rem .7rem;
+  background:rgba(26,58,92,.04);
+  border-radius:4px;
+  border:1px solid rgba(26,58,92,.1);
 }
-.assign-toggle {
-  width:38px; height:20px; position:relative; cursor:pointer;
-}
+.assign-toggle { width:38px; height:20px; position:relative; cursor:pointer; }
 .assign-toggle input { opacity:0; width:0; height:0; }
 .assign-toggle-slider {
-  position:absolute; inset:0; background:#cbd5e1;
-  border-radius:20px; transition:background .2s;
+  position:absolute; inset:0; background:#c9bfb2; border-radius:20px; transition:background .2s;
 }
-.assign-toggle input:checked + .assign-toggle-slider { background:#0d9488; }
+.assign-toggle input:checked + .assign-toggle-slider { background:var(--cusb-red); }
 .assign-toggle-slider::before {
   content:''; position:absolute; width:14px; height:14px;
-  left:3px; top:3px; background:#fff; border-radius:50%;
-  transition:transform .2s;
+  left:3px; top:3px; background:#fff; border-radius:50%; transition:transform .2s;
 }
 .assign-toggle input:checked + .assign-toggle-slider::before { transform:translateX(18px); }
-.assign-toggle-label { font-size:.82rem; color:#334155; }
+.assign-toggle-label { font-size:.82rem; color:var(--cusb-navy); font-weight:500; }
 
 .assign-authors-section {
-  margin-top:.9rem;
-  border:1.5px solid #e2e8f0;
-  border-radius:10px;
+  margin-top:.85rem;
+  border:1.5px solid #d4c9b8;
+  border-radius:4px;
   padding:.65rem .85rem;
-  background:#f8fafc;
+  background:rgba(255,255,255,.7);
 }
 .assign-authors-header {
   display:flex; align-items:center; justify-content:space-between; cursor:pointer;
 }
-.assign-authors-header:hover .assign-label { color:var(--teal); }
-.assign-author-entry {
-  display:flex; gap:.5rem; align-items:center; margin-bottom:.45rem;
-}
+.assign-authors-header:hover .assign-label { color:var(--cusb-red); }
+.assign-author-entry { display:flex; gap:.5rem; align-items:center; margin-bottom:.45rem; }
 .assign-author-entry input {
-  flex:1; padding:.42rem .65rem; border:1.5px solid #e2e8f0; border-radius:8px;
-  font-family:'Syne',sans-serif; font-size:.8rem; color:#0f172a;
+  flex:1; padding:.42rem .65rem; border:1.5px solid #d4c9b8; border-radius:4px;
+  font-family:'Syne',sans-serif; font-size:.8rem; color:#1a1a1a;
   background:#fff; outline:none; transition:border-color .15s;
 }
-.assign-author-entry input:focus { border-color:#0d9488; }
-.assign-author-entry input::placeholder { color:#94a3b8; }
+.assign-author-entry input:focus { border-color:var(--cusb-red); }
+.assign-author-entry input::placeholder { color:#a89e8e; }
 .assign-author-remove-btn {
-  width:26px; height:26px; border:none; border-radius:6px;
+  width:26px; height:26px; border:none; border-radius:4px;
   background:#fee2e2; color:#dc2626; font-size:1rem; line-height:1;
   cursor:pointer; flex-shrink:0; transition:background .15s;
 }
 .assign-author-remove-btn:hover { background:#fecaca; }
 .assign-add-author-btn {
-  margin-top:.3rem; padding:.38rem .75rem; border:1.5px dashed #cbd5e1;
-  border-radius:8px; background:transparent; color:#64748b;
+  margin-top:.3rem; padding:.38rem .75rem; border:1.5px dashed #c5b8a8;
+  border-radius:4px; background:transparent; color:#7a6a58;
   font-family:'Syne',sans-serif; font-size:.78rem; font-weight:600;
   cursor:pointer; transition:all .15s;
 }
-.assign-add-author-btn:hover { border-color:#0d9488; color:#0d9488; background:#f0fdfa; }
+.assign-add-author-btn:hover { border-color:var(--cusb-red); color:var(--cusb-red); background:#fff5f5; }
 
-.assign-actions { display:flex; gap:.75rem; margin-top:1.25rem; }
+/* ── Actions ── */
+.assign-actions { display:flex; gap:.75rem; margin-top:1.2rem; }
 .assign-btn-cancel {
-  flex:1; padding:.7rem; border:1.5px solid #e2e8f0; border-radius:10px;
-  background:#fff; color:#64748b; font-family:'Syne',sans-serif;
-  font-size:.85rem; font-weight:600; cursor:pointer; transition:all .15s;
+  flex:1; padding:.7rem; border:1.5px solid #c5b8a8; border-radius:4px;
+  background:#fff; color:#5a4e44; font-family:'Syne',sans-serif;
+  font-size:.84rem; font-weight:600; cursor:pointer; transition:all .15s;
 }
-.assign-btn-cancel:hover { background:#f1f5f9; border-color:#cbd5e1; }
+.assign-btn-cancel:hover { background:#f5f0ea; border-color:#a89e8e; }
 .assign-btn-generate {
-  flex:2; padding:.7rem; border:none; border-radius:10px;
-  background:linear-gradient(135deg,#0d9488,#0f766e);
-  color:#fff; font-family:'Syne',sans-serif;
-  font-size:.85rem; font-weight:700; cursor:pointer; transition:all .15s;
-  box-shadow:0 4px 12px rgba(13,148,136,.3);
+  flex:2; padding:.7rem; border:none; border-radius:4px;
+  background:linear-gradient(135deg, var(--cusb-red) 0%, var(--cusb-red-dk) 100%);
+  color:#fff; font-family:'DM Serif Display',serif;
+  font-size:.95rem; font-weight:400; cursor:pointer; transition:all .15s;
+  box-shadow:0 4px 14px rgba(204,0,0,.35);
+  letter-spacing:.02em;
 }
-.assign-btn-generate:hover:not(:disabled) { filter:brightness(1.08); transform:translateY(-1px); }
-.assign-btn-generate:disabled { opacity:.55; cursor:not-allowed; transform:none; }
+.assign-btn-generate:hover:not(:disabled) {
+  background:linear-gradient(135deg, #D40000 0%, var(--cusb-red) 100%);
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(204,0,0,.4);
+}
+.assign-btn-generate:disabled { opacity:.5; cursor:not-allowed; transform:none; }
 
-/* Progress / status */
+/* Progress */
 .assign-progress { margin-top:1.1rem; display:none; }
 .assign-progress.show { display:block; }
 .assign-prog-bar-bg {
-  height:6px; background:#e2e8f0; border-radius:3px; overflow:hidden; margin-bottom:.5rem;
+  height:5px; background:#e8ddd0; border-radius:2px; overflow:hidden; margin-bottom:.5rem;
 }
 .assign-prog-bar-fill {
-  height:100%; width:0%; border-radius:3px;
-  background:linear-gradient(90deg,#0d9488,#14b8a6);
+  height:100%; width:0%; border-radius:2px;
+  background:linear-gradient(90deg, var(--cusb-red), #E05050);
   transition:width .4s ease;
 }
-.assign-prog-text { font-size:.75rem; color:#64748b; }
+.assign-prog-text { font-size:.74rem; color:#7a6a58; }
 
-/* Download buttons */
-.assign-dl-row {
-  display:flex; gap:.65rem; margin-top:1.1rem; display:none;
-}
+/* Download */
+.assign-dl-row { display:flex; gap:.65rem; margin-top:1.1rem; display:none; }
 .assign-dl-row.show { display:flex; }
 .assign-dl-btn {
-  flex:1; padding:.65rem; border-radius:10px; border:1.5px solid;
+  flex:1; padding:.65rem; border-radius:4px; border:1.5px solid;
   font-family:'Syne',sans-serif; font-size:.82rem; font-weight:700;
   cursor:pointer; display:flex; align-items:center; justify-content:center;
   gap:.4rem; transition:all .15s;
 }
 .assign-dl-btn.docx {
-  border-color:#0d9488; color:#0d9488; background:#f0fdfb;
+  border-color:var(--cusb-navy); color:var(--cusb-navy); background:#f0f4fa;
 }
-.assign-dl-btn.docx:hover { background:#0d9488; color:#fff; }
+.assign-dl-btn.docx:hover { background:var(--cusb-navy); color:#fff; }
 .assign-dl-btn.pdf {
-  border-color:#b45309; color:#b45309; background:#fffbeb;
+  border-color:var(--cusb-red); color:var(--cusb-red); background:#fff5f5;
 }
-.assign-dl-btn.pdf:hover { background:#b45309; color:#fff; }
+.assign-dl-btn.pdf:hover { background:var(--cusb-red); color:#fff; }
 .assign-dl-btn:disabled { opacity:.45; cursor:not-allowed; }
 
-/* Assign pill hover */
+/* Pill hover */
 .assign-pill { transition:background .15s, color .15s; }
-.assign-pill:hover { background:rgba(13,148,136,.15)!important; color:#0d9488!important; }
+.assign-pill:hover { background:rgba(204,0,0,.12)!important; color:var(--cusb-red)!important; }
 </style>
 
-<!-- Assignment Modal -->
+<!-- Assignment Modal — CUSB Crimson & Navy Theme -->
 <div id="assign-modal">
   <div class="assign-card">
+
+    <!-- ── Header: navy banner with crimson bottom border ── -->
     <div class="assign-header">
       <span class="assign-header-icon">⚖️</span>
       <div>
         <div class="assign-header-title">Law Assignment Generator</div>
-        <div class="assign-header-sub">AI-generated, downloadable DOCX &amp; PDF</div>
+        <div class="assign-header-sub">School of Law &amp; Governance · AI‑Powered</div>
       </div>
-      <button class="assign-close" onclick="closeAssignmentModal()">✕</button>
+      <button class="assign-close" onclick="closeAssignmentModal()" title="Close">✕</button>
     </div>
 
+    <!-- Crimson accent rule under header, inside card -->
+    <div class="assign-section-rule"></div>
+
     <div class="assign-body">
-      <!-- Topic -->
+
+      <!-- ── Topic ── -->
       <div class="assign-field">
         <label class="assign-label" for="assign-topic">Assignment Topic *</label>
         <input class="assign-input" id="assign-topic" type="text" maxlength="300"
-          placeholder="e.g. Right to Privacy under Indian Constitution" />
+          placeholder="e.g. Separation of Powers under Indian Constitution" />
       </div>
 
-      <!-- Name + Roll -->
+      <!-- ── Course & Institution ── -->
       <div class="assign-row">
         <div class="assign-field">
+          <label class="assign-label" for="assign-course">Course *</label>
+          <input class="assign-input" id="assign-course" type="text"
+            placeholder="e.g. BA.LLB | 1st Semester" />
+        </div>
+        <div class="assign-field">
+          <label class="assign-label" for="assign-college">Institution *</label>
+          <input class="assign-input" id="assign-college" type="text"
+            placeholder="e.g. CUSB School of Law" />
+        </div>
+      </div>
+
+      <!-- ── Submitted By (mirrors PDF 2-column cover layout) ── -->
+      <div class="assign-submit-cols">
+        <div class="assign-field" style="margin:0;">
           <label class="assign-label" for="assign-name">Student Name *</label>
           <input class="assign-input" id="assign-name" type="text" placeholder="Full Name" />
         </div>
-        <div class="assign-field">
+        <div class="assign-field" style="margin:0;">
           <label class="assign-label" for="assign-roll">Roll No *</label>
-          <input class="assign-input" id="assign-roll" type="text" placeholder="e.g. LAW2024-047" />
+          <input class="assign-input" id="assign-roll" type="text" placeholder="e.g. CUSB2313125050" />
         </div>
       </div>
 
-      <!-- Course -->
-      <div class="assign-field">
-        <label class="assign-label" for="assign-course">Course *</label>
-        <input class="assign-input" id="assign-course" type="text"
-          placeholder="e.g. B.A. LL.B. (Hons.) — Semester V" />
-      </div>
-
-      <!-- College -->
-      <div class="assign-field">
-        <label class="assign-label" for="assign-college">College / Institution *</label>
-        <input class="assign-input" id="assign-college" type="text"
-          placeholder="e.g. National Law School of India University" />
-      </div>
-
-      <!-- Acknowledgment toggle -->
+      <!-- ── Acknowledgment toggle ── -->
       <div class="assign-toggle-row">
         <label class="assign-toggle">
           <input type="checkbox" id="assign-ack" checked />
@@ -6669,22 +6758,26 @@ function showPptSuccessToast(msg) {
         <span class="assign-toggle-label">Include Acknowledgment page</span>
       </div>
 
-      <!-- Reference Authors (optional) -->
+      <!-- ── Reference Authors ── -->
       <div class="assign-authors-section">
         <div class="assign-authors-header" onclick="toggleAuthorsSection()">
-          <span class="assign-label" style="margin:0;cursor:pointer;">📚 Reference Authors <span style="font-size:.75rem;color:var(--text-3);font-weight:400;">(optional)</span></span>
-          <span id="assign-authors-toggle-icon" style="font-size:.8rem;color:var(--text-3);transition:transform .2s;">▼</span>
+          <span class="assign-label" style="margin:0;cursor:pointer;color:var(--cusb-navy);">
+            📚 Reference Authors
+            <span style="font-size:.72rem;color:#a89e8e;font-weight:400;">(optional)</span>
+          </span>
+          <span id="assign-authors-toggle-icon"
+            style="font-size:.75rem;color:#a89e8e;transition:transform .2s;">▼</span>
         </div>
         <div id="assign-authors-body" style="display:none;margin-top:.6rem;">
-          <p style="font-size:.75rem;color:var(--text-3);margin-bottom:.6rem;">
-            Content will be drawn from these authors &amp; books. Leave empty to let AI choose sources freely.
+          <p style="font-size:.73rem;color:#7a6a58;margin-bottom:.6rem;">
+            Content will draw from these authors. Leave empty to let AI choose sources freely.
           </p>
           <div id="assign-authors-list"></div>
           <button type="button" class="assign-add-author-btn" onclick="addAuthorEntry()">+ Add Author</button>
         </div>
       </div>
 
-      <!-- Actions -->
+      <!-- ── Actions ── -->
       <div class="assign-actions">
         <button class="assign-btn-cancel" id="assign-cancel-btn" onclick="closeAssignmentModal()">Cancel</button>
         <button class="assign-btn-generate" id="assign-gen-btn" onclick="generateAssignment()">
@@ -6692,7 +6785,7 @@ function showPptSuccessToast(msg) {
         </button>
       </div>
 
-      <!-- Progress -->
+      <!-- ── Progress bar ── -->
       <div class="assign-progress" id="assign-progress">
         <div class="assign-prog-bar-bg">
           <div class="assign-prog-bar-fill" id="assign-prog-fill"></div>
@@ -6700,7 +6793,7 @@ function showPptSuccessToast(msg) {
         <div class="assign-prog-text" id="assign-prog-text">Generating…</div>
       </div>
 
-      <!-- Download buttons (shown after generation) -->
+      <!-- ── Download (shown after generation) ── -->
       <div class="assign-dl-row" id="assign-dl-row">
         <button class="assign-dl-btn docx" id="assign-dl-docx" onclick="downloadAssignment('docx')">
           📄 Download DOCX
@@ -6709,9 +6802,10 @@ function showPptSuccessToast(msg) {
           📑 Download PDF
         </button>
       </div>
-    </div>
-  </div>
-</div>
+
+    </div><!-- /.assign-body -->
+  </div><!-- /.assign-card -->
+</div><!-- /#assign-modal -->
 
 <script>
 // ── Assignment feature state (fully isolated) ────────────────────────────────
