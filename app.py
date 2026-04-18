@@ -2074,6 +2074,114 @@ def upload_file():
         })
 
 
+@app.route("/generate_from_pdf", methods=["POST"])
+@limiter.limit("5 per minute")
+def generate_from_pdf():
+    """
+    Accept a PDF upload, extract text, and generate 10-12 teaching slides
+    strictly based on the document content.
+
+    Returns: { "slides": [ { "title": "...", "points": ["...", ...] } ] }
+    """
+    if "file" not in request.files:
+        return jsonify({"error": "No file part in request"}), 400
+
+    f = request.files["file"]
+    if not f or not f.filename:
+        return jsonify({"error": "No file selected"}), 400
+
+    ext = f.filename.rsplit(".", 1)[1].lower() if "." in f.filename else ""
+    if ext != "pdf":
+        return jsonify({"error": "Only PDF files are supported"}), 400
+
+    file_bytes = f.read()
+    if len(file_bytes) > UPLOAD_MAX_MB * 1024 * 1024:
+        return jsonify({"error": f"File too large. Max {UPLOAD_MAX_MB} MB."}), 413
+
+    try:
+        extracted = _extract_pdf_text(file_bytes, max_chars=12000)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 500
+
+    if not extracted or len(extracted.strip()) < 100:
+        return jsonify({"error": "Could not extract sufficient text from PDF. It may be a scanned image-only PDF."}), 422
+
+    prompt = f"""You are a professional teacher creating slides strictly from the provided document.
+
+Document content:
+\"\"\"
+{extracted[:10000]}
+\"\"\"
+
+Instructions:
+- Identify the main topics and headings from the document above.
+- Generate exactly 10 to 12 teaching slides based ONLY on the document content.
+- Do NOT add any information not present in the document.
+- Each slide must have a clear title and 3 to 5 bullet points.
+- Use simple, student-friendly language.
+- Organize slides in a logical learning progression.
+- Return ONLY a valid JSON object in this exact format, no prose, no markdown fences:
+{{
+  "slides": [
+    {{
+      "title": "Slide title here",
+      "points": [
+        "First bullet point explanation",
+        "Second bullet point explanation",
+        "Third bullet point explanation"
+      ]
+    }}
+  ]
+}}"""
+
+    raw = _call_groq(prompt, max_tokens=3500, system="Return valid JSON only. No markdown. No prose.")
+    if not raw:
+        return jsonify({"error": "AI generation failed. Please try again."}), 500
+
+    raw = strip_markdown_fences(raw)
+
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        obj_str = extract_json_object(raw)
+        if not obj_str:
+            return jsonify({"error": "Failed to parse AI response. Please try again."}), 500
+        try:
+            result = json.loads(obj_str)
+        except json.JSONDecodeError:
+            return jsonify({"error": "Failed to parse AI response. Please try again."}), 500
+
+    slides_raw = result.get("slides", [])
+    if not isinstance(slides_raw, list) or len(slides_raw) == 0:
+        return jsonify({"error": "No slides generated. Please try again."}), 500
+
+    # Normalise slides
+    slides = []
+    for s in slides_raw:
+        if not isinstance(s, dict):
+            continue
+        title = str(s.get("title", "")).strip()
+        points_raw = s.get("points", [])
+        if not title:
+            continue
+        points = []
+        for p in points_raw:
+            if isinstance(p, str) and p.strip():
+                points.append(p.strip())
+            elif isinstance(p, dict):
+                t = str(p.get("text", p.get("point", ""))).strip()
+                if t:
+                    points.append(t)
+        if not points:
+            continue
+        slides.append({"title": title, "points": points[:5]})
+
+    if not slides:
+        return jsonify({"error": "No valid slides could be generated."}), 500
+
+    return jsonify({"slides": slides})
+
+
 @app.route("/generate", methods=["POST"])
 @app.route("/generate.php", methods=["POST"])
 @limiter.limit("10 per minute")

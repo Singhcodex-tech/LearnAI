@@ -3131,6 +3131,20 @@
 
     </div><!-- /chat-container -->
 
+    <!-- PDF Upload Section -->
+    <div class="chat-container" style="margin-top:1rem;">
+      <div id="pdf-upload-box" style="background:rgba(255,255,255,.95);border:1.5px dashed rgba(13,148,136,.4);border-radius:20px;padding:1.2rem 1.4rem;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;" onclick="document.getElementById('pdf-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--teal)'" ondragleave="this.style.borderColor='rgba(13,148,136,.4)'" ondrop="handlePdfDrop(event)">
+        <div style="font-size:1.6rem;margin-bottom:.4rem;">📄</div>
+        <div style="font-weight:700;font-size:.88rem;color:var(--text-2);">Upload PDF → Generate Slides</div>
+        <div style="font-size:.75rem;color:var(--text-3);margin-top:.2rem;">Drag & drop or click to select a PDF document</div>
+        <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" onchange="handlePdfSelect(event)">
+      </div>
+      <div id="pdf-status" style="display:none;margin-top:.6rem;padding:.5rem .9rem;border-radius:10px;font-size:.82rem;font-weight:600;"></div>
+      <div id="pdf-generate-row" style="display:none;margin-top:.7rem;text-align:center;">
+        <button id="pdf-gen-btn" onclick="generateSlidesFromPdf()" style="padding:.6rem 1.5rem;background:var(--teal);color:#fff;border:none;border-radius:10px;font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;transition:background .15s;">🎞️ Generate Slides</button>
+      </div>
+    </div>
+
     <!-- Feature pills -->
     <div class="feature-pills">
       <span class="pill">📊 Adaptive Quizzes</span>
@@ -7032,7 +7046,200 @@ function _assignToast(msg) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
 }
+
+// ===================== PDF SLIDES LOGIC =====================
+let _pdfFile = null;
+let _pdfSlides = [];
+let _pdfCurrent = 0;
+
+function handlePdfDrop(e) {
+  e.preventDefault();
+  document.getElementById('pdf-upload-box').style.borderColor = 'rgba(13,148,136,.4)';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') {
+    _setPdfFile(file);
+  } else {
+    _pdfSetStatus('Only PDF files are supported.', 'error');
+  }
+}
+
+function handlePdfSelect(e) {
+  const file = e.target.files[0];
+  if (file) _setPdfFile(file);
+}
+
+function _setPdfFile(file) {
+  _pdfFile = file;
+  const box = document.getElementById('pdf-upload-box');
+  box.querySelector('div:nth-child(2)').textContent = '\uD83D\uDCC4 ' + file.name;
+  box.querySelector('div:nth-child(3)').textContent = (file.size / 1024).toFixed(1) + ' KB — ready to generate';
+  document.getElementById('pdf-generate-row').style.display = 'block';
+  _pdfSetStatus('✓ PDF selected: ' + file.name, 'ok');
+}
+
+function _pdfSetStatus(msg, type) {
+  const el = document.getElementById('pdf-status');
+  el.style.display = 'block';
+  el.textContent = msg;
+  el.style.background = type === 'error' ? 'var(--red-dim)' : type === 'ok' ? 'var(--green-dim)' : 'rgba(13,148,136,.1)';
+  el.style.color = type === 'error' ? 'var(--red)' : type === 'ok' ? 'var(--green)' : 'var(--teal)';
+}
+
+async function generateSlidesFromPdf() {
+  if (!_pdfFile) return;
+  const btn = document.getElementById('pdf-gen-btn');
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  _pdfSetStatus('Extracting document & generating slides…', 'info');
+
+  const fd = new FormData();
+  fd.append('file', _pdfFile);
+
+  try {
+    const res = await fetch('/generate_from_pdf', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      _pdfSetStatus('Error: ' + (data.error || 'Generation failed'), 'error');
+      btn.disabled = false;
+      btn.textContent = 'Generate Slides';
+      return;
+    }
+    _pdfSlides = data.slides || [];
+    if (_pdfSlides.length === 0) {
+      _pdfSetStatus('No slides returned. Try a different PDF.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Generate Slides';
+      return;
+    }
+    _pdfCurrent = 0;
+    _pdfSetStatus('✓ ' + _pdfSlides.length + ' slides generated!', 'ok');
+    btn.disabled = false;
+    btn.textContent = 'Generate Slides';
+    _openPdfSlides();
+  } catch(err) {
+    _pdfSetStatus('Network error — check server', 'error');
+    btn.disabled = false;
+    btn.textContent = 'Generate Slides';
+  }
+}
+
+function _openPdfSlides() {
+  _renderPdfSlide(_pdfCurrent);
+  showScreen('screen-pdf-slides');
+}
+
+function closePdfSlides() {
+  showScreen('screen-start');
+}
+
+function _renderPdfSlide(idx) {
+  const slide = _pdfSlides[idx];
+  if (!slide) return;
+  const total = _pdfSlides.length;
+
+  document.getElementById('pdf-slide-title').textContent = slide.title;
+  document.getElementById('pdf-slide-counter').textContent = (idx + 1) + ' / ' + total;
+
+  const bar = document.getElementById('pdf-progress-bar');
+  bar.style.width = (((idx + 1) / total) * 100) + '%';
+
+  const ul = document.getElementById('pdf-slide-points');
+  ul.innerHTML = '';
+  (slide.points || []).forEach(function(pt) {
+    const li = document.createElement('li');
+    li.style.cssText = 'display:flex;gap:.65rem;align-items:flex-start;padding:.6rem .8rem;background:rgba(13,148,136,.05);border-radius:10px;border-left:3px solid var(--teal);';
+    const arrow = document.createElement('span');
+    arrow.style.cssText = 'color:var(--teal);font-size:.9rem;flex-shrink:0;margin-top:.05rem;';
+    arrow.textContent = '▸';
+    const txt = document.createElement('span');
+    txt.style.cssText = 'font-size:.9rem;line-height:1.6;color:var(--text-2);';
+    txt.textContent = pt;
+    li.appendChild(arrow);
+    li.appendChild(txt);
+    ul.appendChild(li);
+  });
+
+  // Dot nav
+  const dotNav = document.getElementById('pdf-dot-nav');
+  dotNav.innerHTML = '';
+  _pdfSlides.forEach(function(_, i) {
+    const dot = document.createElement('div');
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;cursor:pointer;transition:background .2s;flex-shrink:0;';
+    dot.style.background = i === idx ? 'var(--teal)' : 'rgba(15,23,42,.15)';
+    dot.onclick = (function(ci) { return function() { _pdfCurrent = ci; _renderPdfSlide(ci); }; })(i);
+    dotNav.appendChild(dot);
+  });
+
+  document.getElementById('pdf-prev-btn').disabled = idx === 0;
+  document.getElementById('pdf-prev-btn').style.opacity = idx === 0 ? '.4' : '1';
+  document.getElementById('pdf-next-btn').disabled = idx === total - 1;
+  document.getElementById('pdf-next-btn').style.opacity = idx === total - 1 ? '.4' : '1';
+  document.getElementById('pdf-next-btn').textContent = idx === total - 1 ? 'Done' : 'Next →';
+
+  const card = document.getElementById('pdf-slide-card');
+  if (card) card.scrollTop = 0;
+}
+
+function pdfSlideNext() {
+  if (_pdfCurrent < _pdfSlides.length - 1) {
+    _pdfCurrent++;
+    _renderPdfSlide(_pdfCurrent);
+  }
+}
+
+function pdfSlidePrev() {
+  if (_pdfCurrent > 0) {
+    _pdfCurrent--;
+    _renderPdfSlide(_pdfCurrent);
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (document.getElementById('screen-pdf-slides') &&
+      document.getElementById('screen-pdf-slides').classList.contains('active')) {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') pdfSlideNext();
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   pdfSlidePrev();
+    if (e.key === 'Escape') closePdfSlides();
+  }
+});
+
 </script>
+
+
+<!-- ===================== PDF SLIDES SCREEN ===================== -->
+<div id="screen-pdf-slides" class="screen">
+  <div style="width:min(760px,96vw);position:relative;z-index:2;display:flex;flex-direction:column;height:100%;padding:1.5rem 1rem;">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-shrink:0;">
+      <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--text);">📄 PDF Slides</div>
+      <div style="display:flex;align-items:center;gap:.5rem;">
+        <span id="pdf-slide-counter" style="font-size:.78rem;color:var(--text-3);font-family:var(--mono);"></span>
+        <button onclick="closePdfSlides()" style="background:rgba(15,23,42,.06);border:none;border-radius:8px;padding:.35rem .7rem;cursor:pointer;font-size:.8rem;font-weight:600;color:var(--text-2);">✕ Close</button>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="height:3px;background:rgba(15,23,42,.08);border-radius:2px;margin-bottom:1.2rem;flex-shrink:0;">
+      <div id="pdf-progress-bar" style="height:100%;background:var(--teal);border-radius:2px;transition:width .3s ease;width:0%"></div>
+    </div>
+
+    <!-- Slide card -->
+    <div id="pdf-slide-card" style="flex:1;background:rgba(255,255,255,.97);border:1px solid rgba(203,213,225,.8);border-radius:20px;box-shadow:0 8px 40px rgba(15,23,42,.08);padding:2rem 2.2rem;overflow-y:auto;display:flex;flex-direction:column;gap:1rem;">
+      <div id="pdf-slide-title" style="font-family:'DM Serif Display',serif;font-size:1.45rem;color:var(--text);line-height:1.3;"></div>
+      <div style="height:1.5px;background:linear-gradient(90deg,var(--teal),transparent);border-radius:2px;"></div>
+      <ul id="pdf-slide-points" style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.75rem;"></ul>
+    </div>
+
+    <!-- Navigation -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem;flex-shrink:0;">
+      <button id="pdf-prev-btn" onclick="pdfSlidePrev()" style="padding:.55rem 1.2rem;background:rgba(15,23,42,.06);border:none;border-radius:10px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;color:var(--text-2);transition:background .15s;">← Prev</button>
+      <div id="pdf-dot-nav" style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;max-width:320px;"></div>
+      <button id="pdf-next-btn" onclick="pdfSlideNext()" style="padding:.55rem 1.2rem;background:var(--teal);border:none;border-radius:10px;cursor:pointer;font-family:'Syne',sans-serif;font-size:.85rem;font-weight:700;color:#fff;transition:background .15s;">Next →</button>
+    </div>
+
+  </div>
+</div>
 
 </body>
 </html>
