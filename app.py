@@ -1884,7 +1884,7 @@ def _award_xp(session: dict, quiz_score: float, understood: bool) -> dict:
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return send_file(os.path.join(os.path.dirname(__file__), "index.html"))
 
 
 @app.route("/health")
