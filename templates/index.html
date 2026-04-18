@@ -6880,12 +6880,18 @@ async function generateAssignment() {
 
   // Animate progress while waiting for LLM
   const steps = [
-    [12,  'Writing declaration…'],
-    [25,  'Drafting acknowledgment…'],
-    [42,  'Composing introduction…'],
-    [65,  'Writing legal analysis…'],
-    [82,  'Drafting conclusion…'],
-    [92,  'Compiling bibliography…'],
+    [8,   'Writing declaration…'],
+    [18,  'Drafting acknowledgment…'],
+    [28,  'Composing introduction…'],
+    [38,  'Writing concept & theory…'],
+    [48,  'Analysing structural dimension…'],
+    [56,  'Writing checks & balances…'],
+    [64,  'Drafting India context…'],
+    [72,  'Reconstructing assembly debates…'],
+    [80,  'Writing constitutional reflection…'],
+    [87,  'Analysing case law…'],
+    [93,  'Drafting conclusion…'],
+    [97,  'Compiling bibliography…'],
   ];
   let si = 0;
   const ticker = setInterval(() => {
@@ -6894,7 +6900,7 @@ async function generateAssignment() {
       progText.textContent = steps[si][1];
       si++;
     }
-  }, 1800);
+  }, 4000);
 
   try {
     const res = await fetch('/api/assignment/generate', {

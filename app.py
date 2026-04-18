@@ -3340,12 +3340,18 @@ _ASSIGN_TTL   = 7200          # 2 hours
 
 # Token budget per section — tuned for ≥1 full A4 page each (~600-800 words)
 _ASSIGN_TOKEN = {
-    "declaration":    350,    # ~0.5 page formal declaration
-    "acknowledgment": 400,    # ~0.6 page acknowledgment
-    "introduction":   900,    # ~1.5 pages introduction
-    "body":          2000,    # ~3-4 pages legal analysis (largest section)
-    "conclusion":     700,    # ~1 page conclusion
-    "bibliography":   600,    # ~1 page references
+    "declaration":              350,    # ~0.5 page
+    "acknowledgment":           400,    # ~0.6 page
+    "introduction":            1200,    # ~2 pages
+    "concept":                 1100,    # ~1.5 pages — core doctrinal concept
+    "structural_functional":    900,    # ~1.2 pages
+    "checks_balances":         1000,    # ~1.5 pages
+    "india_context":            900,    # ~1.2 pages
+    "assembly_debates":         900,    # ~1.2 pages
+    "constitutional_reflection":900,    # ~1.2 pages
+    "case_law":                1200,    # ~1.8 pages — landmark cases
+    "conclusion":               800,    # ~1.2 pages
+    "bibliography":             700,    # ~1 page
 }
 
 
@@ -3364,13 +3370,8 @@ def _assign_find_cached(topic: str):
 
 
 def _assign_prompt(section: str, topic: str, meta: dict) -> str:
-    """Build a detailed prompt per section. Each gets its own API call."""
-    system_note = (
-        "You are a senior legal academic writer. Write in formal, precise academic English. "
-        "Use correct legal terminology. Structure content clearly with numbered sub-sections "
-        "where appropriate. Use [CASE: brief description] placeholders for uncertain citations. "
-        "Never use markdown symbols like ** or ##. Write in flowing paragraphs."
-    )
+    """Build a detailed prompt per section. Each gets its own API call.
+    Supports 13-section CUSB-style academic assignments targeting ~15 pages of content."""
 
     # Build author/book instruction if provided
     ref_authors = meta.get("reference_authors", [])
@@ -3380,7 +3381,7 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
             line = e["author"]
             if e.get("book"):
                 book_title = e["book"]
-                line += f", \"{book_title}\"" 
+                line += f", \"{book_title}\""
             author_lines.append(line)
         author_instruction = (
             "IMPORTANT: Draw content, arguments, and analysis primarily from the following "
@@ -3395,70 +3396,179 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
             f"Write a formal academic honesty declaration for a law assignment. "
             f"Student: {meta['student_name']}, Roll No: {meta['roll_no']}, "
             f"Course: {meta['course']}, College: {meta['college']}. "
-            f"The declaration must be detailed and at least 200 words. Include: "
+            f"The declaration must be at least 180 words. Include: "
             f"(1) Statement of original authorship, (2) Confirmation no plagiarism, "
             f"(3) Sources properly acknowledged, (4) No unauthorized assistance, "
-            f"(5) Understanding of academic consequences. Formal, first-person tone."
+            f"(5) Understanding of academic consequences. Formal, first-person tone. "
+            f"End with student name and college name on separate lines."
         )
+
     elif section == "acknowledgment":
         return (
             f"Write a detailed acknowledgment (minimum 200 words) for a law assignment by "
             f"{meta['student_name']} of {meta['college']} on the topic: \"{topic}\". "
-            f"Acknowledge: (1) Faculty supervisor/guide with gratitude for specific guidance, "
-            f"(2) College library and research resources, "
-            f"(3) Fellow students and classmates, "
-            f"(4) Family support, "
-            f"(5) Any other relevant persons. Warm, formal academic tone."
+            f"Acknowledge: (1) H.O.D. and department head with formal gratitude, "
+            f"(2) Subject teacher / faculty supervisor for specific guidance on this topic, "
+            f"(3) College library and research resources, "
+            f"(4) Family support and encouragement, "
+            f"(5) Friends and classmates for peer discussions. "
+            f"Warm but formal academic tone. Close with 'Thanking You' and student name."
         )
+
     elif section == "introduction":
         return (
-            f"{author_instruction}Write a comprehensive Introduction (minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"{author_instruction}Write a comprehensive Introduction (minimum 600 words) for a law assignment on: \"{topic}\". "
             f"Structure with these elements: "
-            f"(1) Opening hook and definition of key terms, "
-            f"(2) Constitutional or statutory basis and legal framework, "
-            f"(3) Historical background and evolution of the topic, "
-            f"(4) Scope and limitations of the present study, "
-            f"(5) Significance and relevance in contemporary legal context, "
-            f"(6) Research objectives and methodology, "
-            f"(7) Clear thesis statement summarising the assignment's argument. "
-            f"Use [CASE: description] for relevant landmark cases. Formal academic tone."
+            f"(1) Opening hook — quote a relevant jurist, philosopher, or constitutional provision to set the context; "
+            f"(2) Clear definition of key legal terms and the core doctrine involved; "
+            f"(3) Historical origins — trace the doctrine from ancient thinkers (e.g. Aristotle, Locke, Montesquieu) "
+            f"to its modern form, naming specific works and dates; "
+            f"(4) Constitutional or statutory basis in Indian law — cite relevant Articles; "
+            f"(5) Scope and limitations of the present study; "
+            f"(6) Significance and relevance in contemporary legal context; "
+            f"(7) Thesis statement summarising the assignment's central argument. "
+            f"Use flowing paragraphs. Never use ** or ## symbols. Formal academic legal prose."
         )
-    elif section == "body":
+
+    elif section == "concept":
         return (
-            f"{author_instruction}Write a detailed Legal Analysis body (minimum 800 words) for a law assignment on: \"{topic}\". "
-            f"Structure with 4 numbered sub-sections: "
-            f"2.1 Constitutional and Statutory Framework — cite relevant Articles, statutes, provisions; "
-            f"2.2 Judicial Interpretation and Evolution — trace case law development, use [CASE: description] placeholders; "
-            f"2.3 Critical Analysis — evaluate strengths and weaknesses of current legal position, "
-            f"compare with international standards where relevant; "
-            f"2.4 Contemporary Issues and Challenges — discuss current debates, recent developments, "
-            f"policy gaps and reform needs. "
-            f"Each sub-section minimum 200 words. Use formal legal academic prose throughout."
+            f"{author_instruction}Write a detailed section titled 'THE CONCEPT AND THEORETICAL FOUNDATIONS' "
+            f"(minimum 550 words) for a law assignment on: \"{topic}\". "
+            f"Cover the following comprehensively: "
+            f"(1) Core theoretical meaning and doctrinal definition of the topic with reference to major jurists; "
+            f"(2) Philosophical justification — why this doctrine is necessary in a constitutional democracy, "
+            f"drawing on thinkers such as Locke, Montesquieu, Madison, or other relevant philosophers; "
+            f"(3) Different scholarly interpretations and academic debates around the concept; "
+            f"(4) Distinction between the strict/pure form of the doctrine and its diluted/practical application; "
+            f"(5) How the doctrine functions as a safeguard against tyranny and arbitrariness. "
+            f"Write in full formal paragraphs. Cite scholars and jurists by name where possible."
         )
+
+    elif section == "structural_functional":
+        return (
+            f"{author_instruction}Write a detailed section titled 'STRUCTURAL VERSUS FUNCTIONAL DIMENSION' "
+            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"Analyse: "
+            f"(1) What it means for the doctrine to be 'structural rather than functional' — "
+            f"the idea that separation is about institutional design, not just task allocation; "
+            f"(2) The three principal organs of government (Legislature, Executive, Judiciary) — "
+            f"their distinct structural roles and how they interact under this doctrine; "
+            f"(3) The problem of functional overlap in modern governance — delegated legislation, "
+            f"quasi-judicial executive bodies, tribunals, ordinance-making powers; "
+            f"(4) Academic critiques of rigid structural separation and arguments for flexible functional separation; "
+            f"(5) How the Indian constitutional design reflects a structural but not absolute separation. "
+            f"Use Lord Acton's maxim on power where relevant. Formal academic tone."
+        )
+
+    elif section == "checks_balances":
+        return (
+            f"{author_instruction}Write a detailed section titled 'THEORY OF CHECKS AND BALANCES' "
+            f"(minimum 550 words) for a law assignment on: \"{topic}\". "
+            f"Cover: "
+            f"(1) Historical origin of the checks and balances theory — Polybius, Roman mixed government, "
+            f"17th-century political theorists; "
+            f"(2) The Madisonian Model — how the U.S. framers operationalised checks and balances "
+            f"alongside separation of powers (presidential veto, Senate confirmation, judicial review); "
+            f"(3) The two foundational principles: (a) power corrupts — no organ should have unchecked power; "
+            f"(b) power must be checked by power — mutual restraint between branches; "
+            f"(4) How checks and balances supplement separation of powers — the inter-organ relationship; "
+            f"(5) Application in the Indian context — legislative override, executive appointment of judges, "
+            f"judicial review of legislation, impeachment. "
+            f"Specific examples from Indian constitutional practice required. Formal prose throughout."
+        )
+
+    elif section == "india_context":
+        return (
+            f"{author_instruction}Write a detailed section titled 'SEPARATION OF POWERS IN INDIA — THE CONSTITUTIONAL POSITION' "
+            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"Analyse: "
+            f"(1) Whether the Indian Constitution expressly adopts the doctrine — explain why there is no rigid separation "
+            f"but sufficient functional differentiation (cite Articles 50, 121, 122, 211, 212, 361 as relevant to the topic); "
+            f"(2) Executive power: President and Governor under Articles 52-78, 154, 161; "
+            f"(3) Legislative power: Parliament's supremacy under Articles 107-122, and limits thereon; "
+            f"(4) Judicial independence: Articles 124-147 and protection of judiciary from executive interference; "
+            f"(5) Overlapping functions that exist by constitutional design — e.g. President's ordinance power (Art. 123), "
+            f"Money Bills, Parliamentary privileges; "
+            f"(6) How the Indian parliamentary system differs from the American presidential model of separation. "
+            f"Cite specific Articles throughout. Formal academic tone."
+        )
+
+    elif section == "assembly_debates":
+        return (
+            f"{author_instruction}Write a detailed section titled 'THE CONSTITUENT ASSEMBLY DEBATES' "
+            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"Reconstruct the key debates in the Constituent Assembly about how the doctrine of separation of powers "
+            f"and related principles were considered during constitution-drafting. Cover: "
+            f"(1) The proposal to include an express separation of powers clause — who proposed it and the reasoning; "
+            f"(2) Arguments in favour of strict separation (presidential model camp); "
+            f"(3) Arguments against rigid separation — Dr. B.R. Ambedkar's position favouring parliamentary system "
+            f"with cooperation between executive and legislature; "
+            f"(4) The final decision and why the Constituent Assembly rejected an express separation of powers clause; "
+            f"(5) What this debate reveals about the framers' vision for the Indian constitution as it relates to: \"{topic}\". "
+            f"Write in formal analytical prose. Use specific names of Assembly members where possible."
+        )
+
+    elif section == "constitutional_reflection":
+        return (
+            f"{author_instruction}Write a detailed section titled 'REFLECTION OF THE DOCTRINE IN THE INDIAN CONSTITUTION' "
+            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
+            f"Demonstrate how, even without express provision, the doctrine is reflected in the Constitution: "
+            f"(1) Distribution of powers between Legislature, Executive, Judiciary — each having exclusive core functions; "
+            f"(2) Fixed tenure, enumerated powers, and constitutional salaries protecting institutional independence; "
+            f"(3) Judicial review under Articles 13, 32, 226 as the primary check on legislative and executive action; "
+            f"(4) Parliamentary controls on the executive through question hour, no-confidence motions, budget approval; "
+            f"(5) Constitutional bars preventing discussion of judicial conduct in Parliament (Art. 121); "
+            f"(6) The basic structure doctrine as a supreme-level constraint on Parliament's amending power — "
+            f"how this represents the highest form of separation of judicial power from legislative supremacy. "
+            f"Formal academic prose. Cite relevant Articles by number."
+        )
+
+    elif section == "case_law":
+        return (
+            f"{author_instruction}Write a detailed section titled 'LANDMARK CASE LAW AND JUDICIAL INTERPRETATION' "
+            f"(minimum 700 words) for a law assignment on: \"{topic}\". "
+            f"Analyse at least 6 landmark Indian Supreme Court judgments relevant to: \"{topic}\". "
+            f"For each case provide: (a) full case name and year, (b) brief facts, (c) key legal question, "
+            f"(d) court's holding and the specific observation about separation of powers or the relevant doctrine, "
+            f"(e) significance and impact on subsequent law. "
+            f"Mandatory cases to cover (adapt if topic differs): "
+            f"(1) Ram Jawaya Kapur v. State of Punjab (1955) — on absence of strict separation in India; "
+            f"(2) Kesavananda Bharati v. State of Kerala (1973) — basic structure and judicial power; "
+            f"(3) Indira Nehru Gandhi v. Raj Narain (1975) — separation in electoral disputes; "
+            f"(4) Minerva Mills v. Union of India (1980) — limits on Parliament's amending power; "
+            f"(5) Delhi Laws Act case — delegation of legislative power; "
+            f"(6) Any recent relevant Supreme Court judgment post-2010. "
+            f"If the topic is not separation of powers, substitute with the most relevant landmark cases for: \"{topic}\". "
+            f"Formal analytical prose. No bullet points — write in full paragraphs."
+        )
+
     elif section == "conclusion":
         return (
-            f"Write a comprehensive Conclusion (minimum 400 words) for a law assignment on: \"{topic}\". "
+            f"Write a comprehensive Conclusion (minimum 450 words) for a law assignment on: \"{topic}\". "
             f"Include: "
-            f"(1) Summary of key findings from each section of the assignment, "
-            f"(2) Restatement and vindication of the thesis, "
-            f"(3) Legal implications and significance of findings, "
-            f"(4) Policy recommendations and suggestions for reform (at least 3 specific recommendations), "
-            f"(5) Areas requiring further research, "
-            f"(6) Closing statement on the broader importance of the topic. "
-            f"No new arguments. Synthesise and conclude. Formal academic tone."
+            f"(1) Synthesis of key findings from each section — do not introduce new arguments; "
+            f"(2) Restatement of the thesis in light of the analysis; "
+            f"(3) The broader constitutional significance of the topic for Indian democracy and rule of law; "
+            f"(4) At least 3 specific, actionable policy recommendations or suggestions for legal reform; "
+            f"(5) Identification of areas requiring further judicial or legislative attention; "
+            f"(6) Closing reflection on why the topic remains vital in contemporary constitutional governance. "
+            f"Formal, measured academic tone. No markdown. No bullet points in the actual text — flowing paragraphs."
         )
+
     elif section == "bibliography":
         return (
-            f"{author_instruction}Write a Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "f"If reference authors were specified above, ensure they appear as primary entries in the Books/Textbooks section. "
-            f"Provide at least 10 entries organised in these categories: "
-            f"A. Cases (minimum 3 entries — use [CASE: description] if uncertain of exact citation), "
-            f"B. Statutes and Constitutional Provisions (minimum 2 entries), "
-            f"C. Books and Textbooks (minimum 2 entries with edition, publisher, year), "
-            f"D. Journal Articles (minimum 2 entries with volume, journal name, year, page), "
-            f"E. Online Sources and Reports (minimum 1 entry with URL and access date). "
-            f"Number all entries. Use [CITATION NEEDED] for uncertain details. "
-            f"Format strictly in Bluebook style."
+            f"{author_instruction}Write a complete Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "
+            f"If reference authors were specified above, ensure they appear as primary entries in the Books section. "
+            f"Provide at least 12 entries organised in these categories: "
+            f"A. Cases (minimum 4 entries — full citation with year and court); "
+            f"B. Statutes and Constitutional Provisions (minimum 2 entries — e.g. Constitution of India Articles, relevant Acts); "
+            f"C. Books and Textbooks (minimum 3 entries — author, title in italics, edition, publisher, year); "
+            f"D. Journal Articles (minimum 2 entries — author, title, volume, journal name, year, page numbers); "
+            f"E. Online Resources (minimum 1 entry — author if available, title, URL, last visited date). "
+            f"Number all entries within each category. "
+            f"Format strictly in Bluebook style. Mark any uncertain citations as [CITATION NEEDED]."
         )
+
     return f"Write a detailed section on {section} for a law assignment about: \"{topic}\"."
 
 
@@ -3488,7 +3598,18 @@ def _assign_assemble(meta: dict) -> dict:
     order = ["declaration"]
     if meta.get("include_acknowledgment", True):
         order.append("acknowledgment")
-    order += ["introduction", "body", "conclusion", "bibliography"]
+    order += [
+        "introduction",
+        "concept",
+        "structural_functional",
+        "checks_balances",
+        "india_context",
+        "assembly_debates",
+        "constitutional_reflection",
+        "case_law",
+        "conclusion",
+        "bibliography",
+    ]
 
     # SEPARATE API call per section — prevents mid-response corruption
     for sec in order:
@@ -3647,12 +3768,18 @@ def _assign_build_docx(record: dict) -> bytes:
     add_heading("TABLE OF CONTENTS")
     add_divider()
     toc_entries = [
-        ("Declaration",      "2"),
-        ("Acknowledgment",   "3") if sections.get("acknowledgment") else None,
-        ("1.  Introduction", "4"),
-        ("2.  Legal Analysis", "6"),
-        ("3.  Conclusion",   "11"),
-        ("4.  Bibliography", "13"),
+        ("Declaration",                                    "2"),
+        ("Acknowledgment",                                 "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction",                               "4"),
+        ("2.  The Concept and Theoretical Foundations",    "6"),
+        ("3.  Structural Versus Functional Dimension",     "7"),
+        ("4.  Theory of Checks and Balances",              "9"),
+        ("5.  Separation of Powers in India",              "11"),
+        ("6.  The Constituent Assembly Debates",           "12"),
+        ("7.  Reflection of the Doctrine in Constitution", "13"),
+        ("8.  Landmark Case Law",                          "14"),
+        ("9.  Conclusion",                                 "16"),
+        ("10. Bibliography",                               "17"),
     ]
     for entry in toc_entries:
         if not entry:
@@ -3688,20 +3815,56 @@ def _assign_build_docx(record: dict) -> bytes:
     add_body(sections.get("introduction", ""))
     page_break()
 
-    # ── BODY ─────────────────────────────────────────────────────────────────
-    add_heading("2.  LEGAL ANALYSIS")
+    # ── CONCEPT ──────────────────────────────────────────────────────────────
+    add_heading("2.  THE CONCEPT AND THEORETICAL FOUNDATIONS")
     add_divider()
-    add_body(sections.get("body", ""))
+    add_body(sections.get("concept", ""))
+    page_break()
+
+    # ── STRUCTURAL vs FUNCTIONAL ──────────────────────────────────────────────
+    add_heading("3.  STRUCTURAL VERSUS FUNCTIONAL DIMENSION")
+    add_divider()
+    add_body(sections.get("structural_functional", ""))
+    page_break()
+
+    # ── CHECKS AND BALANCES ───────────────────────────────────────────────────
+    add_heading("4.  THEORY OF CHECKS AND BALANCES")
+    add_divider()
+    add_body(sections.get("checks_balances", ""))
+    page_break()
+
+    # ── INDIA CONTEXT ─────────────────────────────────────────────────────────
+    add_heading("5.  SEPARATION OF POWERS IN INDIA")
+    add_divider()
+    add_body(sections.get("india_context", ""))
+    page_break()
+
+    # ── CONSTITUENT ASSEMBLY DEBATES ──────────────────────────────────────────
+    add_heading("6.  THE CONSTITUENT ASSEMBLY DEBATES")
+    add_divider()
+    add_body(sections.get("assembly_debates", ""))
+    page_break()
+
+    # ── CONSTITUTIONAL REFLECTION ─────────────────────────────────────────────
+    add_heading("7.  REFLECTION OF THE DOCTRINE IN THE INDIAN CONSTITUTION")
+    add_divider()
+    add_body(sections.get("constitutional_reflection", ""))
+    page_break()
+
+    # ── CASE LAW ──────────────────────────────────────────────────────────────
+    add_heading("8.  LANDMARK CASE LAW AND JUDICIAL INTERPRETATION")
+    add_divider()
+    add_body(sections.get("case_law", ""))
     page_break()
 
     # ── CONCLUSION ───────────────────────────────────────────────────────────
-    add_heading("3.  CONCLUSION")
+    add_heading("9.  CONCLUSION")
     add_divider()
     add_body(sections.get("conclusion", ""))
     page_break()
 
     # ── BIBLIOGRAPHY ─────────────────────────────────────────────────────────
-    add_heading("4.  BIBLIOGRAPHY")
+    add_heading("10. BIBLIOGRAPHY")
     p   = doc.add_paragraph()
     run = p.add_run("(Bluebook Citation Format)")
     set_font(run, 10, color=RGBColor(0x64, 0x64, 0x64))
@@ -3857,12 +4020,18 @@ def _assign_build_pdf(record: dict) -> bytes:
     story.append(h1("TABLE OF CONTENTS"))
     story.append(hr())
     toc_items = [
-        ("Declaration",        "2"),
-        ("Acknowledgment",     "3") if sections.get("acknowledgment") else None,
-        ("1.  Introduction",   "4"),
-        ("2.  Legal Analysis", "6"),
-        ("3.  Conclusion",     "11"),
-        ("4.  Bibliography",   "13"),
+        ("Declaration",                                    "2"),
+        ("Acknowledgment",                                 "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction",                               "4"),
+        ("2.  The Concept and Theoretical Foundations",    "6"),
+        ("3.  Structural Versus Functional Dimension",     "7"),
+        ("4.  Theory of Checks and Balances",              "9"),
+        ("5.  Separation of Powers in India",              "11"),
+        ("6.  The Constituent Assembly Debates",           "12"),
+        ("7.  Reflection of the Doctrine in Constitution", "13"),
+        ("8.  Landmark Case Law",                          "14"),
+        ("9.  Conclusion",                                 "16"),
+        ("10. Bibliography",                               "17"),
     ]
     for item in toc_items:
         if item:
@@ -3902,14 +4071,26 @@ def _assign_build_pdf(record: dict) -> bytes:
         add_section("ACKNOWLEDGMENT", sections["acknowledgment"])
         story.append(PageBreak())
 
-    add_section("1.  INTRODUCTION",   sections.get("introduction", ""))
+    add_section("1.  INTRODUCTION",                                        sections.get("introduction", ""))
     story.append(PageBreak())
-    add_section("2.  LEGAL ANALYSIS", sections.get("body", ""))
+    add_section("2.  THE CONCEPT AND THEORETICAL FOUNDATIONS",             sections.get("concept", ""))
     story.append(PageBreak())
-    add_section("3.  CONCLUSION",     sections.get("conclusion", ""))
+    add_section("3.  STRUCTURAL VERSUS FUNCTIONAL DIMENSION",              sections.get("structural_functional", ""))
+    story.append(PageBreak())
+    add_section("4.  THEORY OF CHECKS AND BALANCES",                       sections.get("checks_balances", ""))
+    story.append(PageBreak())
+    add_section("5.  SEPARATION OF POWERS IN INDIA",                       sections.get("india_context", ""))
+    story.append(PageBreak())
+    add_section("6.  THE CONSTITUENT ASSEMBLY DEBATES",                    sections.get("assembly_debates", ""))
+    story.append(PageBreak())
+    add_section("7.  REFLECTION OF THE DOCTRINE IN THE INDIAN CONSTITUTION", sections.get("constitutional_reflection", ""))
+    story.append(PageBreak())
+    add_section("8.  LANDMARK CASE LAW AND JUDICIAL INTERPRETATION",       sections.get("case_law", ""))
+    story.append(PageBreak())
+    add_section("9.  CONCLUSION",                                          sections.get("conclusion", ""))
     story.append(PageBreak())
 
-    story.append(h1("4.  BIBLIOGRAPHY"))
+    story.append(h1("10. BIBLIOGRAPHY"))
     story.append(Paragraph("(Bluebook Citation Format)", S["sig"]))
     story.append(hr())
     for line in (sections.get("bibliography") or "").split("\n"):
