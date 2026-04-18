@@ -37,9 +37,10 @@ limiter = Limiter(
 # ---------------------------------------------------------------------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    raise ValueError(
+    import warnings
+    warnings.warn(
         "GROQ_API_KEY environment variable is not set. "
-        "Export it before starting the server."
+        "API calls will fail at request time."
     )
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -166,6 +167,8 @@ def _call_groq(
     - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
     Returns raw text or None on error.
     """
+    if not GROQ_API_KEY:
+        return None  # key not set — fail gracefully
     global LAST_GROQ_CALL_AT
     model = FALLBACK_MODEL if use_fallback else MODEL_NAME
     messages = []
