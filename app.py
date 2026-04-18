@@ -3560,19 +3560,168 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
     return f"Write a detailed section on {section} for a law assignment about: \"{topic}\"."
 
 
-def _assign_gen_section(section: str, topic: str, meta: dict) -> str:
-    """Each section = one dedicated _call_groq call. No batching = no corruption."""
+def _assign_generate_outline(topic: str) -> list:
+    """Pass 1: Ask LLM to generate 8 custom subtopic titles for this specific topic.
+    Returns a list of dicts: [{key, title}, ...]"""
+    system = (
+        "You are a senior legal academic at an Indian law school. "
+        "Return valid JSON only. No markdown, no explanation, no preamble."
+    )
+    prompt = (
+        f'Generate exactly 8 subtopic section titles for a 15-page Indian law assignment on: "{topic}".\n'
+        f'Rules:\n'
+        f'- Each title must be specific to "{topic}" — do NOT use generic titles like "Introduction", "Conclusion", or titles about unrelated legal doctrines.\n'
+        f'- Titles should cover angles like: definition/concept, historical evolution, theoretical framework, constitutional/statutory provisions, judicial interpretation, critical analysis, comparative perspective, contemporary issues/reforms — adapted to what "{topic}" actually is.\n'
+        f'- Each title should be 4-10 words, formal, academic.\n'
+        f'Return a JSON array of exactly 8 strings. Example format:\n'
+        f'["Title One", "Title Two", "Title Three", "Title Four", "Title Five", "Title Six", "Title Seven", "Title Eight"]'
+    )
+    raw = _call_groq(prompt, max_tokens=400, system=system)
+    if not raw:
+        return _default_outline(topic)
+    try:
+        import re as _re2
+        cleaned = _re2.sub(r"```[a-z]*", "", raw).strip().strip("`").strip()
+        titles = json.loads(cleaned)
+        if isinstance(titles, list) and len(titles) >= 6:
+            return [{"key": f"body_{i}", "title": str(t)} for i, t in enumerate(titles[:8])]
+    except Exception:
+        pass
+    return _default_outline(topic)
+
+
+def _default_outline(topic: str) -> list:
+    """Fallback outline if JSON parse fails."""
+    titles = [
+        f"Definition and Concept of {topic}",
+        f"Historical Evolution of {topic}",
+        f"Constitutional and Statutory Framework",
+        f"Judicial Interpretation and Case Law",
+        f"Critical Analysis of {topic}",
+        f"Comparative Perspective",
+        f"Contemporary Issues and Challenges",
+        f"Reform Proposals and Way Forward",
+    ]
+    return [{"key": f"body_{i}", "title": t} for i, t in enumerate(titles)]
+
+
+def _assign_gen_body_section(section_title: str, topic: str, meta: dict, section_number: int) -> str:
+    """Write one body section for the given custom title."""
+    author_instruction = ""
+    ref_authors = meta.get("reference_authors", [])
+    if ref_authors:
+        lines = []
+        for e in ref_authors:
+            line = e["author"]
+            if e.get("book"):
+                line += f', "{e["book"]}"\'
+            lines.append(line)
+        author_instruction = "Draw content and analysis primarily from: " + "; ".join(lines) + ". "
+
     system = (
         "You are a senior legal academic writer at a reputed Indian law school. "
         "Write in formal, precise academic English. Use correct legal terminology. "
-        "Structure content clearly. Never use markdown symbols like ** or ##. "
-        "Write in full sentences and flowing paragraphs. Minimum length per your instructions."
+        "Never use markdown symbols like ** or ##. Write in flowing paragraphs only."
     )
-    result = _call_groq(
-        _assign_prompt(section, topic, meta),
-        max_tokens=_ASSIGN_TOKEN.get(section, 800),
-        system=system,
+    prompt = (
+        f"{author_instruction}"
+        f'Write section {section_number} of a law assignment.\n'
+        f'Assignment topic: "{topic}"\n'
+        f'This section title: "{section_title}"\n\n'
+        f'Requirements:\n'
+        f'- Minimum 500 words\n'
+        f'- Write entirely about "{topic}" through the lens of "{section_title}"\n'
+        f'- Cite relevant Indian Supreme Court cases, constitutional Articles, or statutes by name\n'
+        f'- Formal academic legal prose in flowing paragraphs\n'
+        f'- Do NOT write about unrelated legal doctrines\n'
+        f'- Do NOT use bullet points, ** or ## symbols'
     )
+    result = _call_groq(prompt, max_tokens=1100, system=system)
+    return (result or "").strip()
+
+
+def _assign_gen_fixed(section: str, topic: str, meta: dict) -> str:
+    """Generate declaration, acknowledgment, introduction, conclusion, bibliography."""
+    author_instruction = ""
+    ref_authors = meta.get("reference_authors", [])
+    if ref_authors:
+        lines = []
+        for e in ref_authors:
+            line = e["author"]
+            if e.get("book"):
+                line += f', "{e["book"]}"\'
+            lines.append(line)
+        author_instruction = "Draw content from: " + "; ".join(lines) + ". "
+
+    system = (
+        "You are a senior legal academic writer at a reputed Indian law school. "
+        "Write in formal, precise academic English. Use correct legal terminology. "
+        "Never use markdown symbols like ** or ##. Write in flowing paragraphs."
+    )
+
+    if section == "declaration":
+        prompt = (
+            f"Write a formal academic honesty declaration for a law assignment. "
+            f"Student: {meta['student_name']}, Roll No: {meta['roll_no']}, "
+            f"Course: {meta['course']}, College: {meta['college']}. "
+            f"Minimum 180 words. Include: original authorship, no plagiarism, sources acknowledged, "
+            f"no unauthorized assistance, awareness of academic consequences. "
+            f"First-person formal tone. End with student name and college on separate lines."
+        )
+        max_tok = 400
+
+    elif section == "acknowledgment":
+        prompt = (
+            f"Write a detailed acknowledgment (minimum 200 words) for a law assignment by "
+            f"{meta['student_name']} of {meta['college']} on: \"{topic}\". "
+            f"Acknowledge: H.O.D., subject teacher, library resources, family, classmates. "
+            f"Warm but formal academic tone. End with 'Thanking You' and student name."
+        )
+        max_tok = 450
+
+    elif section == "introduction":
+        prompt = (
+            f"{author_instruction}Write a comprehensive Introduction (minimum 600 words) "
+            f'for a law assignment on: "{topic}".\n'
+            f"Cover: (1) opening hook quoting a relevant jurist or legal provision, "
+            f'(2) clear definition of key terms in "{topic}", '
+            f'(3) historical origins specific to "{topic}", '
+            f"(4) constitutional or statutory basis in Indian law, "
+            f"(5) scope and limitations of this study, "
+            f"(6) significance in contemporary legal context, "
+            f"(7) thesis statement. "
+            f"Formal academic legal prose. No bullet points."
+        )
+        max_tok = 1200
+
+    elif section == "conclusion":
+        prompt = (
+            f'Write a comprehensive Conclusion (minimum 450 words) for a law assignment on: "{topic}".\n'
+            f"Include: synthesis of key findings, restatement of thesis, broader constitutional significance, "
+            f'at least 3 specific policy/reform recommendations for "{topic}", '
+            f"areas for further research, closing reflection. "
+            f"No new arguments. Formal academic tone. No bullet points."
+        )
+        max_tok = 900
+
+    elif section == "bibliography":
+        prompt = (
+            f"{author_instruction}Write a complete Bibliography in Bluebook citation format "
+            f'for a law assignment on: "{topic}".\n'
+            f"Minimum 12 entries in categories: "
+            f'A. Cases (min 4, all relevant to "{topic}"), '
+            f"B. Statutes and Constitutional Provisions (min 2), "
+            f"C. Books and Textbooks (min 3 with edition, publisher, year), "
+            f"D. Journal Articles (min 2 with volume, year, pages), "
+            f"E. Online Resources (min 1 with URL). "
+            f"Number all entries. Bluebook style. Mark uncertain citations [CITATION NEEDED]."
+        )
+        max_tok = 750
+
+    else:
+        return ""
+
+    result = _call_groq(prompt, max_tokens=max_tok, system=system)
     return (result or "").strip()
 
 
@@ -3582,32 +3731,38 @@ def _assign_assemble(meta: dict) -> dict:
     if cached:
         return cached
 
-    sections: dict = {}
-    order = ["declaration"]
-    if meta.get("include_acknowledgment", True):
-        order.append("acknowledgment")
-    order += [
-        "introduction",
-        "concept",
-        "structural_functional",
-        "checks_balances",
-        "india_context",
-        "assembly_debates",
-        "constitutional_reflection",
-        "case_law",
-        "conclusion",
-        "bibliography",
-    ]
+    topic = meta["topic"]
 
-    # SEPARATE API call per section — prevents mid-response corruption
-    for sec in order:
-        sections[sec] = _assign_gen_section(sec, meta["topic"], meta)
+    # Pass 1 — LLM generates custom subtopic titles for this topic
+    outline = _assign_generate_outline(topic)  # [{key, title}, ...]
+
+    sections: dict = {}
+    section_titles: dict = {}
+
+    # Fixed front sections
+    sections["declaration"] = _assign_gen_fixed("declaration", topic, meta)
+    if meta.get("include_acknowledgment", True):
+        sections["acknowledgment"] = _assign_gen_fixed("acknowledgment", topic, meta)
+    sections["introduction"] = _assign_gen_fixed("introduction", topic, meta)
+
+    # Dynamic body sections — LLM-generated titles
+    for i, entry in enumerate(outline):
+        key   = entry["key"]
+        title = entry["title"]
+        section_titles[key] = title
+        sections[key] = _assign_gen_body_section(title, topic, meta, i + 2)
+
+    # Fixed tail sections
+    sections["conclusion"]   = _assign_gen_fixed("conclusion", topic, meta)
+    sections["bibliography"] = _assign_gen_fixed("bibliography", topic, meta)
 
     record = {
-        "id":         str(uuid.uuid4()),
-        "meta":       meta,
-        "sections":   sections,
-        "created_at": time.time(),
+        "id":             str(uuid.uuid4()),
+        "meta":           meta,
+        "sections":       sections,
+        "section_titles": section_titles,
+        "outline":        outline,
+        "created_at":     time.time(),
     }
     _ASSIGN_STORE[record["id"]] = record
     return record
@@ -3752,32 +3907,40 @@ def _assign_build_docx(record: dict) -> bytes:
 
     page_break()
 
-    # ── TABLE OF CONTENTS ────────────────────────────────────────────────────
+    # ── TABLE OF CONTENTS — dynamic ─────────────────────────────────────────
+    outline        = record.get("outline", [])
+    section_titles = record.get("section_titles", {})
+
     add_heading("TABLE OF CONTENTS")
     add_divider()
-    toc_entries = [
-        ("Declaration",                                    "2"),
-        ("Acknowledgment",                                 "3") if sections.get("acknowledgment") else None,
-        ("1.  Introduction",                               "4"),
-        ("2.  The Concept and Theoretical Foundations",    "6"),
-        ("3.  Structural Versus Functional Dimension",     "7"),
-        ("4.  Theory of Checks and Balances",              "9"),
-        ("5.  Separation of Powers in India",              "11"),
-        ("6.  The Constituent Assembly Debates",           "12"),
-        ("7.  Reflection of the Doctrine in Constitution", "13"),
-        ("8.  Landmark Case Law",                          "14"),
-        ("9.  Conclusion",                                 "16"),
-        ("10. Bibliography",                               "17"),
+    toc_fixed_top = [
+        ("Declaration", "2"),
+        ("Acknowledgment", "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction", "4"),
     ]
-    for entry in toc_entries:
+    for entry in toc_fixed_top:
         if not entry:
             continue
-        p   = doc.add_paragraph()
+        p  = doc.add_paragraph()
         p.paragraph_format.space_after = Pt(4)
-        r1  = p.add_run(entry[0])
+        r1 = p.add_run(entry[0])
         set_font(r1, 12)
-        r2  = p.add_run(f"{'.' * max(1, 55 - len(entry[0]))} {entry[1]}")
+        r2 = p.add_run(f"{'.' * max(1, 55 - len(entry[0]))} {entry[1]}")
         set_font(r2, 12)
+    for i, entry in enumerate(outline):
+        label = f"{i + 2}.  {entry['title']}"
+        p  = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        r1 = p.add_run(label)
+        set_font(r1, 12)
+        r2 = p.add_run(f"{'.' * max(1, 55 - len(label))} {i + 6}")
+        set_font(r2, 12)
+    last_num = len(outline) + 2
+    for label in [f"{last_num}.  Conclusion", f"{last_num + 1}. Bibliography"]:
+        p  = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(4)
+        r1 = p.add_run(label)
+        set_font(r1, 12)
     page_break()
 
     # ── DECLARATION ──────────────────────────────────────────────────────────
@@ -3803,56 +3966,24 @@ def _assign_build_docx(record: dict) -> bytes:
     add_body(sections.get("introduction", ""))
     page_break()
 
-    # ── CONCEPT ──────────────────────────────────────────────────────────────
-    add_heading("2.  THE CONCEPT AND THEORETICAL FOUNDATIONS")
-    add_divider()
-    add_body(sections.get("concept", ""))
-    page_break()
-
-    # ── STRUCTURAL vs FUNCTIONAL ──────────────────────────────────────────────
-    add_heading("3.  STRUCTURAL VERSUS FUNCTIONAL DIMENSION")
-    add_divider()
-    add_body(sections.get("structural_functional", ""))
-    page_break()
-
-    # ── CHECKS AND BALANCES ───────────────────────────────────────────────────
-    add_heading("4.  THEORY OF CHECKS AND BALANCES")
-    add_divider()
-    add_body(sections.get("checks_balances", ""))
-    page_break()
-
-    # ── INDIA CONTEXT ─────────────────────────────────────────────────────────
-    add_heading("5.  SEPARATION OF POWERS IN INDIA")
-    add_divider()
-    add_body(sections.get("india_context", ""))
-    page_break()
-
-    # ── CONSTITUENT ASSEMBLY DEBATES ──────────────────────────────────────────
-    add_heading("6.  THE CONSTITUENT ASSEMBLY DEBATES")
-    add_divider()
-    add_body(sections.get("assembly_debates", ""))
-    page_break()
-
-    # ── CONSTITUTIONAL REFLECTION ─────────────────────────────────────────────
-    add_heading("7.  REFLECTION OF THE DOCTRINE IN THE INDIAN CONSTITUTION")
-    add_divider()
-    add_body(sections.get("constitutional_reflection", ""))
-    page_break()
-
-    # ── CASE LAW ──────────────────────────────────────────────────────────────
-    add_heading("8.  LANDMARK CASE LAW AND JUDICIAL INTERPRETATION")
-    add_divider()
-    add_body(sections.get("case_law", ""))
-    page_break()
+    # ── DYNAMIC BODY SECTIONS ─────────────────────────────────────────────────
+    for i, entry in enumerate(outline):
+        num   = i + 2
+        title = entry["title"]
+        key   = entry["key"]
+        add_heading(f"{num}.  {title.upper()}")
+        add_divider()
+        add_body(sections.get(key, ""))
+        page_break()
 
     # ── CONCLUSION ───────────────────────────────────────────────────────────
-    add_heading("9.  CONCLUSION")
+    add_heading(f"{len(outline) + 2}.  CONCLUSION")
     add_divider()
     add_body(sections.get("conclusion", ""))
     page_break()
 
     # ── BIBLIOGRAPHY ─────────────────────────────────────────────────────────
-    add_heading("10. BIBLIOGRAPHY")
+    add_heading(f"{len(outline) + 3}. BIBLIOGRAPHY")
     p   = doc.add_paragraph()
     run = p.add_run("(Bluebook Citation Format)")
     set_font(run, 10, color=RGBColor(0x64, 0x64, 0x64))
@@ -4004,29 +4135,33 @@ def _assign_build_pdf(record: dict) -> bytes:
     story.append(cover_tbl)
     story.append(PageBreak())
 
-    # TOC
+    # TOC — dynamic
+    outline        = record.get("outline", [])
+    section_titles = record.get("section_titles", {})
+
     story.append(h1("TABLE OF CONTENTS"))
     story.append(hr())
-    toc_items = [
-        ("Declaration",                                    "2"),
-        ("Acknowledgment",                                 "3") if sections.get("acknowledgment") else None,
-        ("1.  Introduction",                               "4"),
-        ("2.  The Concept and Theoretical Foundations",    "6"),
-        ("3.  Structural Versus Functional Dimension",     "7"),
-        ("4.  Theory of Checks and Balances",              "9"),
-        ("5.  Separation of Powers in India",              "11"),
-        ("6.  The Constituent Assembly Debates",           "12"),
-        ("7.  Reflection of the Doctrine in Constitution", "13"),
-        ("8.  Landmark Case Law",                          "14"),
-        ("9.  Conclusion",                                 "16"),
-        ("10. Bibliography",                               "17"),
+    toc_fixed = [
+        ("Declaration", "2"),
+        ("Acknowledgment", "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction", "4"),
     ]
-    for item in toc_items:
+    for item in toc_fixed:
         if item:
             dots = "." * max(1, 58 - len(item[0]))
             story.append(Paragraph(
                 f'{item[0]} <font color="#A89E8E">{dots}</font> {item[1]}', S["toc"]
             ))
+    for i, entry in enumerate(outline):
+        label = f"{i + 2}.  {entry['title']}"
+        dots  = "." * max(1, 58 - len(label))
+        story.append(Paragraph(
+            f'{label} <font color="#A89E8E">{dots}</font> {i + 6}', S["toc"]
+        ))
+    last_num = len(outline) + 2
+    for label in [f"{last_num}.  Conclusion", f"{last_num + 1}. Bibliography"]:
+        dots = "." * max(1, 58 - len(label))
+        story.append(Paragraph(f'{label} <font color="#A89E8E">{dots}</font>', S["toc"]))
     story.append(PageBreak())
 
     def add_section(heading_text, text, bib=False):
@@ -4059,26 +4194,21 @@ def _assign_build_pdf(record: dict) -> bytes:
         add_section("ACKNOWLEDGMENT", sections["acknowledgment"])
         story.append(PageBreak())
 
-    add_section("1.  INTRODUCTION",                                        sections.get("introduction", ""))
-    story.append(PageBreak())
-    add_section("2.  THE CONCEPT AND THEORETICAL FOUNDATIONS",             sections.get("concept", ""))
-    story.append(PageBreak())
-    add_section("3.  STRUCTURAL VERSUS FUNCTIONAL DIMENSION",              sections.get("structural_functional", ""))
-    story.append(PageBreak())
-    add_section("4.  THEORY OF CHECKS AND BALANCES",                       sections.get("checks_balances", ""))
-    story.append(PageBreak())
-    add_section("5.  SEPARATION OF POWERS IN INDIA",                       sections.get("india_context", ""))
-    story.append(PageBreak())
-    add_section("6.  THE CONSTITUENT ASSEMBLY DEBATES",                    sections.get("assembly_debates", ""))
-    story.append(PageBreak())
-    add_section("7.  REFLECTION OF THE DOCTRINE IN THE INDIAN CONSTITUTION", sections.get("constitutional_reflection", ""))
-    story.append(PageBreak())
-    add_section("8.  LANDMARK CASE LAW AND JUDICIAL INTERPRETATION",       sections.get("case_law", ""))
-    story.append(PageBreak())
-    add_section("9.  CONCLUSION",                                          sections.get("conclusion", ""))
+    add_section("1.  INTRODUCTION", sections.get("introduction", ""))
     story.append(PageBreak())
 
-    story.append(h1("10. BIBLIOGRAPHY"))
+    # Dynamic body sections
+    for i, entry in enumerate(outline):
+        num   = i + 2
+        title = entry["title"]
+        key   = entry["key"]
+        add_section(f"{num}.  {title.upper()}", sections.get(key, ""))
+        story.append(PageBreak())
+
+    add_section(f"{len(outline) + 2}.  CONCLUSION", sections.get("conclusion", ""))
+    story.append(PageBreak())
+
+    story.append(h1(f"{len(outline) + 3}. BIBLIOGRAPHY"))
     story.append(Paragraph("(Bluebook Citation Format)", S["sig"]))
     story.append(hr())
     for line in (sections.get("bibliography") or "").split("\n"):
