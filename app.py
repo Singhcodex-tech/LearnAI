@@ -37,10 +37,9 @@ limiter = Limiter(
 # ---------------------------------------------------------------------------
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
-    import warnings
-    warnings.warn(
+    raise ValueError(
         "GROQ_API_KEY environment variable is not set. "
-        "API calls will fail at request time."
+        "Export it before starting the server."
     )
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -167,8 +166,6 @@ def _call_groq(
     - On 429 (rate-limit) or timeout, retries once with FALLBACK_MODEL.
     Returns raw text or None on error.
     """
-    if not GROQ_API_KEY:
-        return None  # key not set — fail gracefully
     global LAST_GROQ_CALL_AT
     model = FALLBACK_MODEL if use_fallback else MODEL_NAME
     messages = []
@@ -1887,7 +1884,7 @@ def _award_xp(session: dict, quiz_score: float, understood: bool) -> dict:
 
 @app.route("/")
 def home():
-    return send_file(os.path.join(os.path.dirname(__file__), "index.html"))
+    return render_template("index.html")
 
 
 @app.route("/health")
@@ -3343,18 +3340,12 @@ _ASSIGN_TTL   = 7200          # 2 hours
 
 # Token budget per section — tuned for ≥1 full A4 page each (~600-800 words)
 _ASSIGN_TOKEN = {
-    "declaration":              350,    # ~0.5 page
-    "acknowledgment":           400,    # ~0.6 page
-    "introduction":            1200,    # ~2 pages
-    "concept":                 1100,    # ~1.5 pages — core doctrinal concept
-    "structural_functional":    900,    # ~1.2 pages
-    "checks_balances":         1000,    # ~1.5 pages
-    "india_context":            900,    # ~1.2 pages
-    "assembly_debates":         900,    # ~1.2 pages
-    "constitutional_reflection":900,    # ~1.2 pages
-    "case_law":                1200,    # ~1.8 pages — landmark cases
-    "conclusion":               800,    # ~1.2 pages
-    "bibliography":             700,    # ~1 page
+    "declaration":    350,    # ~0.5 page formal declaration
+    "acknowledgment": 400,    # ~0.6 page acknowledgment
+    "introduction":   900,    # ~1.5 pages introduction
+    "body":          2000,    # ~3-4 pages legal analysis (largest section)
+    "conclusion":     700,    # ~1 page conclusion
+    "bibliography":   600,    # ~1 page references
 }
 
 
@@ -3373,8 +3364,13 @@ def _assign_find_cached(topic: str):
 
 
 def _assign_prompt(section: str, topic: str, meta: dict) -> str:
-    """Build a detailed prompt per section. Each gets its own API call.
-    Supports 13-section CUSB-style academic assignments targeting ~15 pages of content."""
+    """Build a detailed prompt per section. Each gets its own API call."""
+    system_note = (
+        "You are a senior legal academic writer. Write in formal, precise academic English. "
+        "Use correct legal terminology. Structure content clearly with numbered sub-sections "
+        "where appropriate. Use [CASE: brief description] placeholders for uncertain citations. "
+        "Never use markdown symbols like ** or ##. Write in flowing paragraphs."
+    )
 
     # Build author/book instruction if provided
     ref_authors = meta.get("reference_authors", [])
@@ -3384,7 +3380,7 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
             line = e["author"]
             if e.get("book"):
                 book_title = e["book"]
-                line += f", \"{book_title}\""
+                line += f", \"{book_title}\"" 
             author_lines.append(line)
         author_instruction = (
             "IMPORTANT: Draw content, arguments, and analysis primarily from the following "
@@ -3399,332 +3395,86 @@ def _assign_prompt(section: str, topic: str, meta: dict) -> str:
             f"Write a formal academic honesty declaration for a law assignment. "
             f"Student: {meta['student_name']}, Roll No: {meta['roll_no']}, "
             f"Course: {meta['course']}, College: {meta['college']}. "
-            f"The declaration must be at least 180 words. Include: "
+            f"The declaration must be detailed and at least 200 words. Include: "
             f"(1) Statement of original authorship, (2) Confirmation no plagiarism, "
             f"(3) Sources properly acknowledged, (4) No unauthorized assistance, "
-            f"(5) Understanding of academic consequences. Formal, first-person tone. "
-            f"End with student name and college name on separate lines."
+            f"(5) Understanding of academic consequences. Formal, first-person tone."
         )
-
     elif section == "acknowledgment":
         return (
             f"Write a detailed acknowledgment (minimum 200 words) for a law assignment by "
             f"{meta['student_name']} of {meta['college']} on the topic: \"{topic}\". "
-            f"Acknowledge: (1) H.O.D. and department head with formal gratitude, "
-            f"(2) Subject teacher / faculty supervisor for specific guidance on this topic, "
-            f"(3) College library and research resources, "
-            f"(4) Family support and encouragement, "
-            f"(5) Friends and classmates for peer discussions. "
-            f"Warm but formal academic tone. Close with 'Thanking You' and student name."
+            f"Acknowledge: (1) Faculty supervisor/guide with gratitude for specific guidance, "
+            f"(2) College library and research resources, "
+            f"(3) Fellow students and classmates, "
+            f"(4) Family support, "
+            f"(5) Any other relevant persons. Warm, formal academic tone."
         )
-
     elif section == "introduction":
         return (
-            f"{author_instruction}Write a comprehensive Introduction (minimum 600 words) for a law assignment on: \"{topic}\". "
+            f"{author_instruction}Write a comprehensive Introduction (minimum 500 words) for a law assignment on: \"{topic}\". "
             f"Structure with these elements: "
-            f"(1) Opening hook — quote a relevant jurist, philosopher, or constitutional provision to set the context; "
-            f"(2) Clear definition of key legal terms and the core doctrine involved; "
-            f"(3) Historical origins — trace the doctrine from ancient thinkers (e.g. Aristotle, Locke, Montesquieu) "
-            f"to its modern form, naming specific works and dates; "
-            f"(4) Constitutional or statutory basis in Indian law — cite relevant Articles; "
-            f"(5) Scope and limitations of the present study; "
-            f"(6) Significance and relevance in contemporary legal context; "
-            f"(7) Thesis statement summarising the assignment's central argument. "
-            f"Use flowing paragraphs. Never use ** or ## symbols. Formal academic legal prose."
+            f"(1) Opening hook and definition of key terms, "
+            f"(2) Constitutional or statutory basis and legal framework, "
+            f"(3) Historical background and evolution of the topic, "
+            f"(4) Scope and limitations of the present study, "
+            f"(5) Significance and relevance in contemporary legal context, "
+            f"(6) Research objectives and methodology, "
+            f"(7) Clear thesis statement summarising the assignment's argument. "
+            f"Use [CASE: description] for relevant landmark cases. Formal academic tone."
         )
-
-    elif section == "concept":
+    elif section == "body":
         return (
-            f"{author_instruction}Write a detailed section titled 'THE CONCEPT AND THEORETICAL FOUNDATIONS' "
-            f"(minimum 550 words) for a law assignment on: \"{topic}\". "
-            f"This section must be entirely about \"{topic}\" — do not drift to other doctrines. Cover: "
-            f"(1) Core theoretical meaning and doctrinal definition of \"{topic}\" with reference to major jurists "
-            f"and scholars who have written specifically on this subject; "
-            f"(2) Philosophical and jurisprudential justification — why this concept exists and what problem it solves "
-            f"in a legal or constitutional system; "
-            f"(3) Different scholarly interpretations and academic debates around \"{topic}\"; "
-            f"(4) Distinction between the strict/classical form of the concept and its modern practical application; "
-            f"(5) How \"{topic}\" functions as a safeguard for rights, justice, or governance. "
-            f"Write in full formal paragraphs. Cite scholars and jurists by name where possible."
+            f"{author_instruction}Write a detailed Legal Analysis body (minimum 800 words) for a law assignment on: \"{topic}\". "
+            f"Structure with 4 numbered sub-sections: "
+            f"2.1 Constitutional and Statutory Framework — cite relevant Articles, statutes, provisions; "
+            f"2.2 Judicial Interpretation and Evolution — trace case law development, use [CASE: description] placeholders; "
+            f"2.3 Critical Analysis — evaluate strengths and weaknesses of current legal position, "
+            f"compare with international standards where relevant; "
+            f"2.4 Contemporary Issues and Challenges — discuss current debates, recent developments, "
+            f"policy gaps and reform needs. "
+            f"Each sub-section minimum 200 words. Use formal legal academic prose throughout."
         )
-
-    elif section == "structural_functional":
-        return (
-            f"{author_instruction}Write a detailed section titled 'SCOPE, NATURE AND DIMENSIONS' "
-            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
-            f"This section must analyse \"{topic}\" specifically. Cover: "
-            f"(1) The nature and scope of \"{topic}\" — what it covers, what it excludes, its boundaries in law; "
-            f"(2) Key dimensions or classifications within \"{topic}\" as recognised by courts and scholars; "
-            f"(3) How \"{topic}\" operates in practice — institutional, procedural, and substantive aspects; "
-            f"(4) Tensions, overlaps, or conflicts that arise in applying \"{topic}\" in real cases; "
-            f"(5) Academic critiques — strengths and weaknesses of the current legal framework on \"{topic}\". "
-            f"Formal academic tone throughout."
-        )
-
-    elif section == "checks_balances":
-        return (
-            f"{author_instruction}Write a detailed section titled 'HISTORICAL EVOLUTION AND COMPARATIVE PERSPECTIVE' "
-            f"(minimum 550 words) for a law assignment on: \"{topic}\". "
-            f"This section must trace the history and compare jurisdictions specifically in relation to \"{topic}\". Cover: "
-            f"(1) Historical origins and evolution of \"{topic}\" — how it developed from ancient or early modern law "
-            f"to its current form, naming specific statutes, cases, or thinkers at each stage; "
-            f"(2) How \"{topic}\" developed in England/common law tradition; "
-            f"(3) How \"{topic}\" is treated in the United States or other major jurisdictions (comparative analysis); "
-            f"(4) How \"{topic}\" was received and adapted in India — pre-independence roots and post-1950 development; "
-            f"(5) Key milestones: landmark legislation, constitutional provisions, or judicial decisions that shaped \"{topic}\". "
-            f"Specific examples and dates required. Formal prose throughout."
-        )
-
-    elif section == "india_context":
-        return (
-            f"{author_instruction}Write a detailed section titled '{topic.upper()} IN INDIA — THE LEGAL AND CONSTITUTIONAL FRAMEWORK' "
-            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
-            f"Analyse how Indian law specifically deals with \"{topic}\". Cover: "
-            f"(1) Relevant constitutional provisions — cite specific Articles of the Indian Constitution that govern "
-            f"or relate to \"{topic}\"; "
-            f"(2) Relevant statutes and legislation — name the key Acts of Parliament that implement or regulate \"{topic}\"; "
-            f"(3) How the Indian approach to \"{topic}\" differs from or aligns with international standards; "
-            f"(4) Role of the judiciary in shaping \"{topic}\" in India — judicial activism or restraint; "
-            f"(5) Practical implementation challenges — how \"{topic}\" functions on the ground in India, "
-            f"including any institutional gaps or enforcement issues. "
-            f"Cite specific Articles and Acts throughout. Formal academic tone."
-        )
-
-    elif section == "assembly_debates":
-        return (
-            f"{author_instruction}Write a detailed section titled 'LEGISLATIVE HISTORY AND CONSTITUENT INTENT' "
-            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
-            f"Examine how \"{topic}\" was debated and shaped during constitution-making or legislative drafting. Cover: "
-            f"(1) How \"{topic}\" was discussed in the Constituent Assembly or Parliament — key debates, proposals, "
-            f"and amendments that were considered; "
-            f"(2) Competing viewpoints among framers or legislators — who argued for broader protection or stricter "
-            f"limits, and why; "
-            f"(3) What was ultimately adopted and why — the reasoning behind the final constitutional or statutory text; "
-            f"(4) How the drafting history of \"{topic}\" has been used by courts to interpret its meaning; "
-            f"(5) What the legislative intent reveals about the policy goals underlying \"{topic}\". "
-            f"Write in formal analytical prose. Use specific names of Assembly members or legislators where possible."
-        )
-
-    elif section == "constitutional_reflection":
-        return (
-            f"{author_instruction}Write a detailed section titled 'CRITICAL ANALYSIS AND CONTEMPORARY ISSUES' "
-            f"(minimum 500 words) for a law assignment on: \"{topic}\". "
-            f"Critically evaluate \"{topic}\" in its current form. Cover: "
-            f"(1) How effectively does the current legal framework address the core objectives of \"{topic}\"? "
-            f"— identify gaps, ambiguities, or areas of underperformance; "
-            f"(2) Contemporary challenges or emerging issues that strain the existing framework on \"{topic}\"; "
-            f"(3) Impact of recent Supreme Court judgments or legislative changes on \"{topic}\" (post-2010); "
-            f"(4) Comparison with best practices from other democracies — what India can learn; "
-            f"(5) Reform proposals — what legislative, judicial, or institutional changes would strengthen \"{topic}\". "
-            f"Formal academic prose. Cite relevant cases and Articles by name/number."
-        )
-
-    elif section == "case_law":
-        return (
-            f"{author_instruction}Write a detailed section titled 'LANDMARK CASE LAW AND JUDICIAL INTERPRETATION' "
-            f"(minimum 700 words) for a law assignment on: \"{topic}\". "
-            f"Analyse at least 6 landmark Indian Supreme Court or High Court judgments that are directly relevant "
-            f"to \"{topic}\". For each case provide: "
-            f"(a) full case name and year, (b) brief facts relevant to \"{topic}\", (c) key legal question decided, "
-            f"(d) the court's holding and the specific reasoning or observation on \"{topic}\", "
-            f"(e) significance — how this case shaped the law on \"{topic}\" and its impact on subsequent decisions. "
-            f"All 6 cases must be genuinely about \"{topic}\" — do not substitute unrelated cases. "
-            f"If fewer than 6 Indian cases exist, include relevant Privy Council or comparative cases. "
-            f"Formal analytical prose. Write in full paragraphs — no bullet lists."
-        )
-
     elif section == "conclusion":
         return (
-            f"Write a comprehensive Conclusion (minimum 450 words) for a law assignment on: \"{topic}\". "
+            f"Write a comprehensive Conclusion (minimum 400 words) for a law assignment on: \"{topic}\". "
             f"Include: "
-            f"(1) Synthesis of key findings from each section — do not introduce new arguments; "
-            f"(2) Restatement of the thesis in light of the analysis; "
-            f"(3) The broader constitutional significance of the topic for Indian democracy and rule of law; "
-            f"(4) At least 3 specific, actionable policy recommendations or suggestions for legal reform; "
-            f"(5) Identification of areas requiring further judicial or legislative attention; "
-            f"(6) Closing reflection on why the topic remains vital in contemporary constitutional governance. "
-            f"Formal, measured academic tone. No markdown. No bullet points in the actual text — flowing paragraphs."
+            f"(1) Summary of key findings from each section of the assignment, "
+            f"(2) Restatement and vindication of the thesis, "
+            f"(3) Legal implications and significance of findings, "
+            f"(4) Policy recommendations and suggestions for reform (at least 3 specific recommendations), "
+            f"(5) Areas requiring further research, "
+            f"(6) Closing statement on the broader importance of the topic. "
+            f"No new arguments. Synthesise and conclude. Formal academic tone."
         )
-
     elif section == "bibliography":
         return (
-            f"{author_instruction}Write a complete Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "
-            f"If reference authors were specified above, ensure they appear as primary entries in the Books section. "
-            f"Provide at least 12 entries organised in these categories: "
-            f"A. Cases (minimum 4 entries — full citation with year and court); "
-            f"B. Statutes and Constitutional Provisions (minimum 2 entries — e.g. Constitution of India Articles, relevant Acts); "
-            f"C. Books and Textbooks (minimum 3 entries — author, title in italics, edition, publisher, year); "
-            f"D. Journal Articles (minimum 2 entries — author, title, volume, journal name, year, page numbers); "
-            f"E. Online Resources (minimum 1 entry — author if available, title, URL, last visited date). "
-            f"Number all entries within each category. "
-            f"Format strictly in Bluebook style. Mark any uncertain citations as [CITATION NEEDED]."
+            f"{author_instruction}Write a Bibliography in Bluebook citation format for a law assignment on: \"{topic}\". "f"If reference authors were specified above, ensure they appear as primary entries in the Books/Textbooks section. "
+            f"Provide at least 10 entries organised in these categories: "
+            f"A. Cases (minimum 3 entries — use [CASE: description] if uncertain of exact citation), "
+            f"B. Statutes and Constitutional Provisions (minimum 2 entries), "
+            f"C. Books and Textbooks (minimum 2 entries with edition, publisher, year), "
+            f"D. Journal Articles (minimum 2 entries with volume, journal name, year, page), "
+            f"E. Online Sources and Reports (minimum 1 entry with URL and access date). "
+            f"Number all entries. Use [CITATION NEEDED] for uncertain details. "
+            f"Format strictly in Bluebook style."
         )
-
     return f"Write a detailed section on {section} for a law assignment about: \"{topic}\"."
 
 
-def _assign_generate_outline(topic: str) -> list:
-    """Pass 1: Ask LLM to generate 8 custom subtopic titles for this specific topic.
-    Returns a list of dicts: [{key, title}, ...]"""
-    system = (
-        "You are a senior legal academic at an Indian law school. "
-        "Return valid JSON only. No markdown, no explanation, no preamble."
-    )
-    prompt = (
-        f'Generate exactly 8 subtopic section titles for a 15-page Indian law assignment on: "{topic}".\n'
-        f'Rules:\n'
-        f'- Each title must be specific to "{topic}" — do NOT use generic titles like "Introduction", "Conclusion", or titles about unrelated legal doctrines.\n'
-        f'- Titles should cover angles like: definition/concept, historical evolution, theoretical framework, constitutional/statutory provisions, judicial interpretation, critical analysis, comparative perspective, contemporary issues/reforms — adapted to what "{topic}" actually is.\n'
-        f'- Each title should be 4-10 words, formal, academic.\n'
-        f'Return a JSON array of exactly 8 strings. Example format:\n'
-        f'["Title One", "Title Two", "Title Three", "Title Four", "Title Five", "Title Six", "Title Seven", "Title Eight"]'
-    )
-    raw = _call_groq(prompt, max_tokens=400, system=system)
-    if not raw:
-        return _default_outline(topic)
-    try:
-        import re as _re2
-        cleaned = _re2.sub(r"```[a-z]*", "", raw).strip().strip("`").strip()
-        titles = json.loads(cleaned)
-        if isinstance(titles, list) and len(titles) >= 6:
-            return [{"key": f"body_{i}", "title": str(t)} for i, t in enumerate(titles[:8])]
-    except Exception:
-        pass
-    return _default_outline(topic)
-
-
-def _default_outline(topic: str) -> list:
-    """Fallback outline if JSON parse fails."""
-    titles = [
-        f"Definition and Concept of {topic}",
-        f"Historical Evolution of {topic}",
-        f"Constitutional and Statutory Framework",
-        f"Judicial Interpretation and Case Law",
-        f"Critical Analysis of {topic}",
-        f"Comparative Perspective",
-        f"Contemporary Issues and Challenges",
-        f"Reform Proposals and Way Forward",
-    ]
-    return [{"key": f"body_{i}", "title": t} for i, t in enumerate(titles)]
-
-
-def _assign_gen_body_section(section_title: str, topic: str, meta: dict, section_number: int) -> str:
-    """Write one body section for the given custom title."""
-    author_instruction = ""
-    ref_authors = meta.get("reference_authors", [])
-    if ref_authors:
-        lines = []
-        for e in ref_authors:
-            line = e["author"]
-            if e.get("book"):
-                line += f', "{e["book"]}"'
-            lines.append(line)
-        author_instruction = "Draw content and analysis primarily from: " + "; ".join(lines) + ". "
-
+def _assign_gen_section(section: str, topic: str, meta: dict) -> str:
+    """Each section = one dedicated _call_groq call. No batching = no corruption."""
     system = (
         "You are a senior legal academic writer at a reputed Indian law school. "
         "Write in formal, precise academic English. Use correct legal terminology. "
-        "Never use markdown symbols like ** or ##. Write in flowing paragraphs only."
+        "Structure content clearly. Never use markdown symbols like ** or ##. "
+        "Write in full sentences and flowing paragraphs. Minimum length per your instructions."
     )
-    prompt = (
-        f"{author_instruction}"
-        f'Write section {section_number} of a law assignment.\n'
-        f'Assignment topic: "{topic}"\n'
-        f'This section title: "{section_title}"\n\n'
-        f'Requirements:\n'
-        f'- Minimum 500 words\n'
-        f'- Write entirely about "{topic}" through the lens of "{section_title}"\n'
-        f'- Cite relevant Indian Supreme Court cases, constitutional Articles, or statutes by name\n'
-        f'- Formal academic legal prose in flowing paragraphs\n'
-        f'- Do NOT write about unrelated legal doctrines\n'
-        f'- Do NOT use bullet points, ** or ## symbols'
+    result = _call_groq(
+        _assign_prompt(section, topic, meta),
+        max_tokens=_ASSIGN_TOKEN.get(section, 800),
+        system=system,
     )
-    result = _call_groq(prompt, max_tokens=1100, system=system)
-    return (result or "").strip()
-
-
-def _assign_gen_fixed(section: str, topic: str, meta: dict) -> str:
-    """Generate declaration, acknowledgment, introduction, conclusion, bibliography."""
-    author_instruction = ""
-    ref_authors = meta.get("reference_authors", [])
-    if ref_authors:
-        lines = []
-        for e in ref_authors:
-            line = e["author"]
-            if e.get("book"):
-                line += f', "{e["book"]}"'
-            lines.append(line)
-        author_instruction = "Draw content from: " + "; ".join(lines) + ". "
-
-    system = (
-        "You are a senior legal academic writer at a reputed Indian law school. "
-        "Write in formal, precise academic English. Use correct legal terminology. "
-        "Never use markdown symbols like ** or ##. Write in flowing paragraphs."
-    )
-
-    if section == "declaration":
-        prompt = (
-            f"Write a formal academic honesty declaration for a law assignment. "
-            f"Student: {meta['student_name']}, Roll No: {meta['roll_no']}, "
-            f"Course: {meta['course']}, College: {meta['college']}. "
-            f"Minimum 180 words. Include: original authorship, no plagiarism, sources acknowledged, "
-            f"no unauthorized assistance, awareness of academic consequences. "
-            f"First-person formal tone. End with student name and college on separate lines."
-        )
-        max_tok = 400
-
-    elif section == "acknowledgment":
-        prompt = (
-            f"Write a detailed acknowledgment (minimum 200 words) for a law assignment by "
-            f"{meta['student_name']} of {meta['college']} on: \"{topic}\". "
-            f"Acknowledge: H.O.D., subject teacher, library resources, family, classmates. "
-            f"Warm but formal academic tone. End with 'Thanking You' and student name."
-        )
-        max_tok = 450
-
-    elif section == "introduction":
-        prompt = (
-            f"{author_instruction}Write a comprehensive Introduction (minimum 600 words) "
-            f'for a law assignment on: "{topic}".\n'
-            f"Cover: (1) opening hook quoting a relevant jurist or legal provision, "
-            f'(2) clear definition of key terms in "{topic}", '
-            f'(3) historical origins specific to "{topic}", '
-            f"(4) constitutional or statutory basis in Indian law, "
-            f"(5) scope and limitations of this study, "
-            f"(6) significance in contemporary legal context, "
-            f"(7) thesis statement. "
-            f"Formal academic legal prose. No bullet points."
-        )
-        max_tok = 1200
-
-    elif section == "conclusion":
-        prompt = (
-            f'Write a comprehensive Conclusion (minimum 450 words) for a law assignment on: "{topic}".\n'
-            f"Include: synthesis of key findings, restatement of thesis, broader constitutional significance, "
-            f'at least 3 specific policy/reform recommendations for "{topic}", '
-            f"areas for further research, closing reflection. "
-            f"No new arguments. Formal academic tone. No bullet points."
-        )
-        max_tok = 900
-
-    elif section == "bibliography":
-        prompt = (
-            f"{author_instruction}Write a complete Bibliography in Bluebook citation format "
-            f'for a law assignment on: "{topic}".\n'
-            f"Minimum 12 entries in categories: "
-            f'A. Cases (min 4, all relevant to "{topic}"), '
-            f"B. Statutes and Constitutional Provisions (min 2), "
-            f"C. Books and Textbooks (min 3 with edition, publisher, year), "
-            f"D. Journal Articles (min 2 with volume, year, pages), "
-            f"E. Online Resources (min 1 with URL). "
-            f"Number all entries. Bluebook style. Mark uncertain citations [CITATION NEEDED]."
-        )
-        max_tok = 750
-
-    else:
-        return ""
-
-    result = _call_groq(prompt, max_tokens=max_tok, system=system)
     return (result or "").strip()
 
 
@@ -3734,38 +3484,21 @@ def _assign_assemble(meta: dict) -> dict:
     if cached:
         return cached
 
-    topic = meta["topic"]
-
-    # Pass 1 — LLM generates custom subtopic titles for this topic
-    outline = _assign_generate_outline(topic)  # [{key, title}, ...]
-
     sections: dict = {}
-    section_titles: dict = {}
-
-    # Fixed front sections
-    sections["declaration"] = _assign_gen_fixed("declaration", topic, meta)
+    order = ["declaration"]
     if meta.get("include_acknowledgment", True):
-        sections["acknowledgment"] = _assign_gen_fixed("acknowledgment", topic, meta)
-    sections["introduction"] = _assign_gen_fixed("introduction", topic, meta)
+        order.append("acknowledgment")
+    order += ["introduction", "body", "conclusion", "bibliography"]
 
-    # Dynamic body sections — LLM-generated titles
-    for i, entry in enumerate(outline):
-        key   = entry["key"]
-        title = entry["title"]
-        section_titles[key] = title
-        sections[key] = _assign_gen_body_section(title, topic, meta, i + 2)
-
-    # Fixed tail sections
-    sections["conclusion"]   = _assign_gen_fixed("conclusion", topic, meta)
-    sections["bibliography"] = _assign_gen_fixed("bibliography", topic, meta)
+    # SEPARATE API call per section — prevents mid-response corruption
+    for sec in order:
+        sections[sec] = _assign_gen_section(sec, meta["topic"], meta)
 
     record = {
-        "id":             str(uuid.uuid4()),
-        "meta":           meta,
-        "sections":       sections,
-        "section_titles": section_titles,
-        "outline":        outline,
-        "created_at":     time.time(),
+        "id":         str(uuid.uuid4()),
+        "meta":       meta,
+        "sections":   sections,
+        "created_at": time.time(),
     }
     _ASSIGN_STORE[record["id"]] = record
     return record
@@ -3910,40 +3643,26 @@ def _assign_build_docx(record: dict) -> bytes:
 
     page_break()
 
-    # ── TABLE OF CONTENTS — dynamic ─────────────────────────────────────────
-    outline        = record.get("outline", [])
-    section_titles = record.get("section_titles", {})
-
+    # ── TABLE OF CONTENTS ────────────────────────────────────────────────────
     add_heading("TABLE OF CONTENTS")
     add_divider()
-    toc_fixed_top = [
-        ("Declaration", "2"),
-        ("Acknowledgment", "3") if sections.get("acknowledgment") else None,
+    toc_entries = [
+        ("Declaration",      "2"),
+        ("Acknowledgment",   "3") if sections.get("acknowledgment") else None,
         ("1.  Introduction", "4"),
+        ("2.  Legal Analysis", "6"),
+        ("3.  Conclusion",   "11"),
+        ("4.  Bibliography", "13"),
     ]
-    for entry in toc_fixed_top:
+    for entry in toc_entries:
         if not entry:
             continue
-        p  = doc.add_paragraph()
+        p   = doc.add_paragraph()
         p.paragraph_format.space_after = Pt(4)
-        r1 = p.add_run(entry[0])
+        r1  = p.add_run(entry[0])
         set_font(r1, 12)
-        r2 = p.add_run(f"{'.' * max(1, 55 - len(entry[0]))} {entry[1]}")
+        r2  = p.add_run(f"{'.' * max(1, 55 - len(entry[0]))} {entry[1]}")
         set_font(r2, 12)
-    for i, entry in enumerate(outline):
-        label = f"{i + 2}.  {entry['title']}"
-        p  = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(4)
-        r1 = p.add_run(label)
-        set_font(r1, 12)
-        r2 = p.add_run(f"{'.' * max(1, 55 - len(label))} {i + 6}")
-        set_font(r2, 12)
-    last_num = len(outline) + 2
-    for label in [f"{last_num}.  Conclusion", f"{last_num + 1}. Bibliography"]:
-        p  = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(4)
-        r1 = p.add_run(label)
-        set_font(r1, 12)
     page_break()
 
     # ── DECLARATION ──────────────────────────────────────────────────────────
@@ -3969,24 +3688,20 @@ def _assign_build_docx(record: dict) -> bytes:
     add_body(sections.get("introduction", ""))
     page_break()
 
-    # ── DYNAMIC BODY SECTIONS ─────────────────────────────────────────────────
-    for i, entry in enumerate(outline):
-        num   = i + 2
-        title = entry["title"]
-        key   = entry["key"]
-        add_heading(f"{num}.  {title.upper()}")
-        add_divider()
-        add_body(sections.get(key, ""))
-        page_break()
+    # ── BODY ─────────────────────────────────────────────────────────────────
+    add_heading("2.  LEGAL ANALYSIS")
+    add_divider()
+    add_body(sections.get("body", ""))
+    page_break()
 
     # ── CONCLUSION ───────────────────────────────────────────────────────────
-    add_heading(f"{len(outline) + 2}.  CONCLUSION")
+    add_heading("3.  CONCLUSION")
     add_divider()
     add_body(sections.get("conclusion", ""))
     page_break()
 
     # ── BIBLIOGRAPHY ─────────────────────────────────────────────────────────
-    add_heading(f"{len(outline) + 3}. BIBLIOGRAPHY")
+    add_heading("4.  BIBLIOGRAPHY")
     p   = doc.add_paragraph()
     run = p.add_run("(Bluebook Citation Format)")
     set_font(run, 10, color=RGBColor(0x64, 0x64, 0x64))
@@ -4138,33 +3853,23 @@ def _assign_build_pdf(record: dict) -> bytes:
     story.append(cover_tbl)
     story.append(PageBreak())
 
-    # TOC — dynamic
-    outline        = record.get("outline", [])
-    section_titles = record.get("section_titles", {})
-
+    # TOC
     story.append(h1("TABLE OF CONTENTS"))
     story.append(hr())
-    toc_fixed = [
-        ("Declaration", "2"),
-        ("Acknowledgment", "3") if sections.get("acknowledgment") else None,
-        ("1.  Introduction", "4"),
+    toc_items = [
+        ("Declaration",        "2"),
+        ("Acknowledgment",     "3") if sections.get("acknowledgment") else None,
+        ("1.  Introduction",   "4"),
+        ("2.  Legal Analysis", "6"),
+        ("3.  Conclusion",     "11"),
+        ("4.  Bibliography",   "13"),
     ]
-    for item in toc_fixed:
+    for item in toc_items:
         if item:
             dots = "." * max(1, 58 - len(item[0]))
             story.append(Paragraph(
                 f'{item[0]} <font color="#A89E8E">{dots}</font> {item[1]}', S["toc"]
             ))
-    for i, entry in enumerate(outline):
-        label = f"{i + 2}.  {entry['title']}"
-        dots  = "." * max(1, 58 - len(label))
-        story.append(Paragraph(
-            f'{label} <font color="#A89E8E">{dots}</font> {i + 6}', S["toc"]
-        ))
-    last_num = len(outline) + 2
-    for label in [f"{last_num}.  Conclusion", f"{last_num + 1}. Bibliography"]:
-        dots = "." * max(1, 58 - len(label))
-        story.append(Paragraph(f'{label} <font color="#A89E8E">{dots}</font>', S["toc"]))
     story.append(PageBreak())
 
     def add_section(heading_text, text, bib=False):
@@ -4197,21 +3902,14 @@ def _assign_build_pdf(record: dict) -> bytes:
         add_section("ACKNOWLEDGMENT", sections["acknowledgment"])
         story.append(PageBreak())
 
-    add_section("1.  INTRODUCTION", sections.get("introduction", ""))
+    add_section("1.  INTRODUCTION",   sections.get("introduction", ""))
+    story.append(PageBreak())
+    add_section("2.  LEGAL ANALYSIS", sections.get("body", ""))
+    story.append(PageBreak())
+    add_section("3.  CONCLUSION",     sections.get("conclusion", ""))
     story.append(PageBreak())
 
-    # Dynamic body sections
-    for i, entry in enumerate(outline):
-        num   = i + 2
-        title = entry["title"]
-        key   = entry["key"]
-        add_section(f"{num}.  {title.upper()}", sections.get(key, ""))
-        story.append(PageBreak())
-
-    add_section(f"{len(outline) + 2}.  CONCLUSION", sections.get("conclusion", ""))
-    story.append(PageBreak())
-
-    story.append(h1(f"{len(outline) + 3}. BIBLIOGRAPHY"))
+    story.append(h1("4.  BIBLIOGRAPHY"))
     story.append(Paragraph("(Bluebook Citation Format)", S["sig"]))
     story.append(hr())
     for line in (sections.get("bibliography") or "").split("\n"):
