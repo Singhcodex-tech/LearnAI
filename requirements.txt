@@ -6,4 +6,4 @@ python-pptx
 gunicorn
 PyMuPDF
 python-docx
-reportlab
+reportlab>=4.0.0

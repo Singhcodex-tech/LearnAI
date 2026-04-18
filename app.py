@@ -3614,7 +3614,7 @@ def _assign_gen_body_section(section_title: str, topic: str, meta: dict, section
         for e in ref_authors:
             line = e["author"]
             if e.get("book"):
-                line += f', "{e["book"]}"\'
+                line += f', "{e["book"]}"'
             lines.append(line)
         author_instruction = "Draw content and analysis primarily from: " + "; ".join(lines) + ". "
 
@@ -3649,7 +3649,7 @@ def _assign_gen_fixed(section: str, topic: str, meta: dict) -> str:
         for e in ref_authors:
             line = e["author"]
             if e.get("book"):
-                line += f', "{e["book"]}"\'
+                line += f', "{e["book"]}"'
             lines.append(line)
         author_instruction = "Draw content from: " + "; ".join(lines) + ". "
 
