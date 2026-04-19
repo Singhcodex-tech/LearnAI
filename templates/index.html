@@ -18,22 +18,22 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #f5f7fa;
-      --surface:  #ffffff;
-      --card:     #ffffff;
-      --border:   #e2e8f0;
-      --border2:  #cbd5e1;
-      --gold:     #b45309;
-      --gold-dim: #d97706;
-      --teal:     #0d9488;
-      --teal-dim: #14b8a6;
-      --red:      #dc2626;
-      --red-dim:  #fee2e2;
-      --green:    #16a34a;
-      --green-dim:#dcfce7;
-      --text:     #0f172a;
-      --text-2:   #334155;
-      --text-3:   #64748b;
+      --bg:       #0B0F19;
+      --surface:  #111827;
+      --card:     #1F2937;
+      --border:   #374151;
+      --border2:  #4B5563;
+      --gold:     #6366F1;
+      --gold-dim: #4F46E5;
+      --teal:     #10B981;
+      --teal-dim: #059669;
+      --red:      #EF4444;
+      --red-dim:  #7F1D1D;
+      --green:    #10B981;
+      --green-dim:#064E3B;
+      --text:     #F9FAFB;
+      --text-2:   #D1D5DB;
+      --text-3:   #9CA3AF;
       --mono:     'JetBrains Mono', monospace;
     }
 
@@ -43,50 +43,15 @@
       font-family: 'Syne', sans-serif;
       background: var(--bg);
       background-image: 
-        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(180,83,9,.04) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(13,148,136,.04) 0%, transparent 60%),
-        linear-gradient(180deg, #f0f4f8 0%, #f5f7fa 50%, #eef2f7 100%);
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(99,102,241,.08) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 80%, rgba(16,185,129,.08) 0%, transparent 60%),
+        linear-gradient(180deg, #0B0F19 0%, #111827 100%);
       color: var(--text);
       min-height: 100vh;
       overflow-x: hidden;
     }
 
-    /* ===================== LEARNAI FLOATING BACKGROUND ===================== */
-    .learnai-bg {
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      overflow: hidden;
-    }
-    .learnai-word {
-      position: absolute;
-      font-family: 'DM Serif Display', serif;
-      font-size: clamp(3rem, 8vw, 7rem);
-      font-weight: 900;
-      letter-spacing: .08em;
-      color: rgba(15, 23, 42, 0.04);
-      user-select: none;
-      animation: learnaiFloat linear infinite;
-      white-space: nowrap;
-    }
-    .learnai-word:nth-child(1)  { top: 5%;  left: -10%; animation-duration: 28s; animation-delay: 0s;   font-size: clamp(2.5rem,7vw,6rem); }
-    .learnai-word:nth-child(2)  { top: 22%; left: 60%;  animation-duration: 34s; animation-delay: -8s;  font-size: clamp(1.8rem,5vw,4.5rem); color: rgba(180, 83, 9, 0.05); }
-    .learnai-word:nth-child(3)  { top: 42%; left: 20%;  animation-duration: 40s; animation-delay: -14s; font-size: clamp(3rem,9vw,8rem); }
-    .learnai-word:nth-child(4)  { top: 65%; left: 70%;  animation-duration: 24s; animation-delay: -4s;  font-size: clamp(1.5rem,4vw,3.5rem); color: rgba(13, 148, 136, 0.05); }
-    .learnai-word:nth-child(5)  { top: 80%; left: 5%;   animation-duration: 36s; animation-delay: -20s; font-size: clamp(2rem,6vw,5rem); }
-    .learnai-word:nth-child(6)  { top: 12%; left: 35%;  animation-duration: 30s; animation-delay: -6s;  font-size: clamp(1.2rem,3.5vw,3rem); color: rgba(180, 83, 9, 0.04); }
-    .learnai-word:nth-child(7)  { top: 55%; left: 45%;  animation-duration: 45s; animation-delay: -18s; font-size: clamp(2.5rem,7vw,6.5rem); }
-    .learnai-word:nth-child(8)  { top: 88%; left: 55%;  animation-duration: 22s; animation-delay: -2s;  font-size: clamp(1.5rem,4vw,3.5rem); color: rgba(13, 148, 136, 0.04); }
-
-    @keyframes learnaiFloat {
-      0%   { transform: translateY(0px) translateX(0px) rotate(-2deg); opacity: 0.6; }
-      20%  { transform: translateY(-18px) translateX(12px) rotate(0deg); opacity: 1; }
-      40%  { transform: translateY(-8px) translateX(-8px) rotate(1.5deg); opacity: 0.7; }
-      60%  { transform: translateY(-24px) translateX(6px) rotate(-1deg); opacity: 1; }
-      80%  { transform: translateY(-10px) translateX(-14px) rotate(2deg); opacity: 0.65; }
-      100% { transform: translateY(0px) translateX(0px) rotate(-2deg); opacity: 0.6; }
-    }
+    /* Removed LEARNAI Floating Background for Professional Look */
 
     /* ===================== NOISE OVERLAY ===================== */
     body::before {
@@ -196,13 +161,18 @@
     }
 
     .chat-box {
-      background: rgba(255,255,255,.95);
-      border: 1px solid rgba(203,213,225,.8);
+      background: rgba(31, 41, 55, 0.85);
+      border: 1px solid rgba(75, 85, 99, 0.6);
       border-radius: 20px;
       backdrop-filter: blur(24px);
-      box-shadow: 0 8px 40px rgba(15,23,42,.08), 0 2px 8px rgba(15,23,42,.04);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.1);
       position: relative;
       overflow: visible;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .chat-box:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 50px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
     }
 
     /* Command palette */
@@ -210,12 +180,12 @@
       position: absolute;
       left: 1rem; right: 1rem;
       bottom: calc(100% + 8px);
-      background: rgba(255,255,255,.98);
-      border: 1px solid rgba(203,213,225,.9);
+      background: rgba(31, 41, 55, 0.98);
+      border: 1px solid rgba(75, 85, 99, 0.9);
       border-radius: 12px;
       overflow: hidden;
       z-index: 50;
-      box-shadow: 0 12px 40px rgba(15,23,42,.12);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4);
       opacity: 0; transform: translateY(6px);
       pointer-events: none;
       transition: opacity .15s, transform .15s;
@@ -2953,21 +2923,23 @@
 </head>
 <body>
 
-<!-- Floating LEARNAI background -->
-<div class="learnai-bg" aria-hidden="true">
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
-  <span class="learnai-word">LEARNAI</span>
+<!-- Premium Advertisement Banner -->
+<div style="width: 100%; background: linear-gradient(90deg, #6366F1, #10B981); color: #FFF; text-align: center; padding: 0.5rem; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.05em; z-index: 9999; position: relative; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+  🚀 SPECIAL OFFER: Upgrade to EduPro Premium for Advanced AI Features! <a href="#" style="color: #FFF; text-decoration: underline; margin-left: 10px;">Learn More</a>
 </div>
 
+<!-- Removed LEARNAI background for professional look -->
 
-<!-- ===================== START SCREEN ===================== -->
-<div id="screen-start" class="screen active">
+
+<div id="screen-start" class="screen active" style="display: flex; justify-content: center; gap: 2rem; width: 100%; max-width: 1400px; margin: 0 auto;">
+
+  <!-- Left Advertisement Sidebar -->
+  <div style="display: flex; flex-direction: column; justify-content: center; width: 160px; z-index: 5;" class="ad-sidebar">
+      <div style="width: 160px; height: 600px; background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.4); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: var(--text-3); font-size: 0.75rem; text-align: center; padding: 1rem; backdrop-filter: blur(10px);">
+        <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">📈</span>
+        <b>Grow Your Skills</b><br>Join 10,000+ professionals learning with AI.<br><br><span style="font-size: 0.65rem; opacity: 0.6;">Advertisement</span>
+      </div>
+  </div>
 
   <!-- Ambient glows -->
   <div class="start-glow-blob"></div>
@@ -2981,15 +2953,15 @@
 
     <!-- Brand heading -->
     <div class="brand-mark" style="animation: containerFadeUp .5s ease both;">
-      Adaptive<span>Learn</span>
+      Edu<span>Pro</span>
     </div>
     <div class="brand-divider" style="max-width:280px;"></div>
     <div class="brand-sub" style="animation: containerFadeUp .5s ease .15s both;">
-      AI-Powered Lecture Engine
+      Premium Learning Platform
     </div>
 
     <!-- ======= Animated Chat Box ======= -->
-    <div class="chat-container">
+    <div class="chat-container" style="max-width: 600px; width: 100%;">
       <div class="chat-box" id="chat-box">
 
         <!-- Command palette -->
@@ -3160,6 +3132,15 @@
     </div>
 
   </div>
+
+  <!-- Right Advertisement Sidebar -->
+  <div style="display: flex; flex-direction: column; justify-content: center; width: 160px; z-index: 5;" class="ad-sidebar">
+      <div style="width: 160px; height: 600px; background: rgba(31, 41, 55, 0.6); border: 1px solid rgba(75, 85, 99, 0.4); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: var(--text-3); font-size: 0.75rem; text-align: center; padding: 1rem; backdrop-filter: blur(10px);">
+        <span style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</span>
+        <b>Master the Code</b><br>Get 50% off EduPro for Devs.<br><br><span style="font-size: 0.65rem; opacity: 0.6;">Advertisement</span>
+      </div>
+  </div>
+
 </div>
 
 <!-- Typing indicator (shared, shown over start screen) -->
