@@ -54,8 +54,8 @@
         radial-gradient(ellipse 70% 55% at 15% 10%, rgba(124,255,178,.05) 0%, transparent 55%),
         radial-gradient(ellipse 55% 45% at 85% 85%, rgba(198,124,78,.05) 0%, transparent 55%);
       color: var(--text);
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100vh;
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
     }
@@ -74,7 +74,7 @@
     #app-container {
       flex: 1;
       position: relative;
-      overflow: hidden;
+      overflow-y: auto;
       width: 100%;
     }
     .screen {
