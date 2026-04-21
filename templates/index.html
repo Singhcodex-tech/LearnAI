@@ -4334,15 +4334,8 @@ async function startSession() {
   state.topic = topic;
   state.explanationMode = explanationMode;
 
-  // Show typing indicator on start screen briefly
-  const typingBar = document.getElementById('typing-bar');
-  if (typingBar) typingBar.classList.add('show');
-
+  // Always go straight to loading screen (no delay, no typing bar flash)
   setLoading('Generating your lecture…', 'Crafting 10–12 slides on: ' + topic);
-
-  // Short delay so user sees the typing animation, then transition
-  await new Promise(r => setTimeout(r, 600));
-  if (typingBar) typingBar.classList.remove('show');
   showScreen('screen-loading');
 
   try {
@@ -4351,7 +4344,12 @@ async function startSession() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic, explanation_mode: explanationMode, subject, mode, depth }),
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (jsonErr) {
+      throw new Error('Server returned an invalid response. Please check your connection and try again.');
+    }
 
     if (!res.ok) throw new Error(data.error || 'Failed to generate slides.');
 
@@ -4373,7 +4371,11 @@ async function startSession() {
     loadSlide(0);
 
   } catch (err) {
-    showScreen('screen-start');
+    // Return to landing page on failure
+    document.getElementById('landing-page').style.display = 'block';
+    document.getElementById('lp-nav').style.display = 'block';
+    document.getElementById('app-wrapper').classList.remove('active');
+    document.body.style.overflow = '';
     showToast(err.message);
   }
 }
@@ -7971,6 +7973,10 @@ function heroLearn() {
   var aw = document.getElementById('app-wrapper');
   aw.classList.add('active');
   document.body.style.overflow = 'hidden';
+  // Jump straight to loading screen — never show screen-start with reviews
+  if (typeof showScreen === 'function') showScreen('screen-loading');
+  if (typeof setLoading === 'function') setLoading('Generating your lecture\u2026', 'Crafting slides on: ' + val);
+  if (typeof _startLoadingCycle === 'function') _startLoadingCycle();
   // Start session
   if (typeof startSession === 'function') startSession();
 }
