@@ -670,27 +670,133 @@
       align-items: stretch;
       padding: 0;
       overflow: hidden;
+      background: var(--bg);
+      background-image:
+        radial-gradient(ellipse 60% 45% at 10% 5%, rgba(124,255,178,.045) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 40% at 90% 90%, rgba(198,124,78,.04) 0%, transparent 55%);
     }
 
-    /* UPDATED: HUD glass */
+    /* HUD — matches homepage nav glass */
     .hud {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: .6rem;
       padding: 1rem 1.5rem;
-      border-bottom: 1px solid var(--glass-border);
-      background: rgba(14,14,16,0.75);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      background: rgba(10,10,11,0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       flex-shrink: 0;
       flex-wrap: wrap;
+      box-shadow: 0 1px 0 rgba(124,255,178,0.06), 0 4px 24px rgba(0,0,0,0.3);
     }
-    /* UPDATED: progress bar mint */
+    /* progress bar mint */
     .progress-bar-fill {
       height: 100%;
       background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
       transition: width .5s ease;
+      box-shadow: 0 0 10px rgba(124,255,178,.35);
+    }
+
+    /* --- Learning body background — rich dark with subtle ambient --- */
+    .learning-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 2rem 1.5rem;
+      display: flex; flex-direction: column; gap: 1.5rem;
+      background: transparent;
+      position: relative;
+    }
+    .learning-body::before {
+      content: '';
+      position: absolute; inset: 0; z-index: 0;
+      background:
+        radial-gradient(ellipse 50% 35% at 80% 20%, rgba(124,255,178,.025) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(198,124,78,.02) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .learning-body > * { position: relative; z-index: 1; }
+
+    /* Slide card — homepage lp-glass card style */
+    .slide-card {
+      background: rgba(20,20,24,0.72) !important;
+      border: 1px solid rgba(255,255,255,0.09) !important;
+      border-radius: 20px !important;
+      padding: 2rem !important;
+      animation: fadeSlideIn .4s ease;
+      backdrop-filter: blur(28px) !important;
+      -webkit-backdrop-filter: blur(28px) !important;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+      transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+    }
+    .slide-card:hover {
+      transform: translateY(-3px) !important;
+      box-shadow: 0 16px 52px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.07) !important;
+      border-color: rgba(124,255,178,0.12) !important;
+    }
+
+    /* Slide title — larger, DM Serif with mint accent on first word */
+    .slide-title {
+      font-family: 'DM Serif Display', serif !important;
+      font-size: clamp(1.45rem, 3.5vw, 2.1rem) !important;
+      color: var(--text) !important;
+      line-height: 1.2 !important;
+      margin-bottom: 1.75rem !important;
+      letter-spacing: -.01em !important;
+    }
+
+    /* Slide points — deeper glass, stronger border, subtle mint left accent */
+    .slide-point {
+      display: flex;
+      gap: 1rem;
+      padding: 1.1rem 1.25rem;
+      background: rgba(255,255,255,0.035) !important;
+      border: 1px solid rgba(255,255,255,0.07) !important;
+      border-left: 2px solid rgba(124,255,178,0.22) !important;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 14px !important;
+      font-size: .93rem;
+      line-height: 1.7;
+      color: var(--text-2);
+      transition: background 0.3s, border-color 0.3s, transform 0.2s, box-shadow 0.2s;
+      animation: pointReveal .4s ease both;
+    }
+    .slide-point:hover {
+      background: rgba(124,255,178,0.04) !important;
+      border-color: rgba(255,255,255,0.11) !important;
+      border-left-color: rgba(124,255,178,0.4) !important;
+      transform: translateY(-2px) !important;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.3) !important;
+    }
+    .slide-point.reteach-point {
+      border-left-color: rgba(198,124,78,0.35) !important;
+      background: rgba(198,124,78,0.04) !important;
+    }
+    .slide-point.reteach-point:hover {
+      background: rgba(198,124,78,0.07) !important;
+      border-left-color: rgba(198,124,78,0.55) !important;
+    }
+
+    /* Understanding section — matches card style */
+    .understanding-section {
+      background: rgba(20,20,24,0.65) !important;
+      border: 1px solid rgba(255,255,255,0.08) !important;
+      border-radius: 18px !important;
+      padding: 1.5rem !important;
+      backdrop-filter: blur(24px) !important;
+      -webkit-backdrop-filter: blur(24px) !important;
+      box-shadow: 0 6px 32px rgba(0,0,0,0.35) !important;
+    }
+
+    /* Quiz section */
+    .quiz-section {
+      background: rgba(20,20,24,0.65) !important;
+      border: 1px solid rgba(255,255,255,0.08) !important;
+      border-radius: 18px !important;
+      backdrop-filter: blur(24px) !important;
+      box-shadow: 0 6px 32px rgba(0,0,0,0.35) !important;
     }
     .hud-left {
       display: flex;
@@ -853,13 +959,7 @@
       flex-shrink: 0;
     }
 
-    /* --- Slide body --- */
-    .learning-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 2rem 1.5rem;
-      display: flex; flex-direction: column; gap: 1.5rem;
-    }
+    /* --- Slide body (overrides above for specificity) --- */
 
     /* Adaptive banner */
     .adaptive-banner {
@@ -887,22 +987,7 @@
       color: var(--teal);
     }
 
-    /* UPDATED: slide-card glass */
-    .slide-card {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 2rem;
-      animation: fadeSlideIn .4s ease;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      box-shadow: var(--shadow-deep);
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-    .slide-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 14px 40px rgba(0,0,0,0.45);
-    }
+    /* UPDATED: slide-card — see learning screen section above */
     @keyframes fadeSlideIn {
       from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -919,47 +1004,10 @@
     }
     .slide-number-tag.reteach-tag { color: var(--teal-dim); }
 
-    .slide-title {
-      font-family: 'DM Serif Display', serif;
-      font-size: clamp(1.3rem, 3vw, 1.9rem);
-      color: var(--text);
-      line-height: 1.25;
-      margin-bottom: 1.5rem;
-    }
+    /* slide-title — see learning screen section */
 
-    /* ── Slide points — homepage glass-card style ── */
+    /* slide-point — see learning screen section */
     .slide-points { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
-
-    .slide-point {
-      display: flex;
-      gap: 1rem;
-      padding: 1rem 1.15rem;
-      /* homepage lp-glass */
-      background: rgba(255,255,255,0.042);
-      border: 1px solid rgba(255,255,255,0.08);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: 16px;
-      font-size: .92rem;
-      line-height: 1.65;
-      color: var(--text-2);
-      transition: background 0.3s, border-color 0.3s, transform 0.2s, box-shadow 0.2s;
-      animation: pointReveal .4s ease both;
-    }
-    .slide-point:hover {
-      background: rgba(255,255,255,0.07);
-      border-color: rgba(255,255,255,0.13);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 28px rgba(0,0,0,0.25);
-    }
-    .slide-point.reteach-point {
-      border-color: rgba(198,124,78,0.22);
-      background: rgba(198,124,78,0.045);
-    }
-    .slide-point.reteach-point:hover {
-      background: rgba(198,124,78,0.08);
-      border-color: rgba(198,124,78,0.35);
-    }
 
     @keyframes pointReveal {
       from { opacity: 0; transform: translateY(10px) scale(.98); }
@@ -1032,17 +1080,7 @@
     .point-text-body .katex { font-size: 1.05em; }
 
     /* --- Understanding buttons --- */
-    /* UPDATED: understanding-section glass */
-    .understanding-section {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 1.5rem;
-      animation: fadeSlideIn .4s ease .1s both;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      box-shadow: var(--shadow-deep);
-    }
+    /* understanding-section — see learning screen section */
 
     .understanding-label {
       font-size: .75rem;
@@ -4595,7 +4633,6 @@ function loadSlide(index, overrideSlide = null) {
           style="animation-delay:${idx * 0.07}s;">
         <span class="point-bullet"></span>
         <div class="point-main-text">
-          <div class="point-idx-tag">Point ${idx + 1}</div>
           <span class="point-text-body">${text}</span>
           ${sourceHtml}
         </div>
@@ -7846,11 +7883,9 @@ function _renderPdfSlide(idx) {
     inner.style.cssText = 'flex:1;min-width:0;';
     const tag = document.createElement('div');
     tag.style.cssText = 'display:inline-block;font-family:var(--mono);font-size:.6rem;font-weight:600;letter-spacing:.1em;color:var(--gold);background:rgba(124,255,178,0.08);border:1px solid rgba(124,255,178,0.18);border-radius:5px;padding:.08rem .4rem;margin-bottom:.3rem;text-transform:uppercase;';
-    tag.textContent = 'Point ' + (pidx + 1);
     const txt = document.createElement('span');
     txt.style.cssText = 'font-size:.9rem;line-height:1.65;color:var(--text-2);display:block;';
     txt.textContent = pt;
-    inner.appendChild(tag);
     inner.appendChild(txt);
     li.appendChild(badge);
     li.appendChild(inner);
