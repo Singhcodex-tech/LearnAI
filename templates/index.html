@@ -664,12 +664,590 @@
       50%       { opacity: 1; }
     }
 
-    /* ===================== LEARNING SCREEN ===================== */
+    /* ===================== LEARNING SCREEN — REDESIGNED ===================== */
     #screen-learning {
       flex-direction: column;
       align-items: stretch;
       padding: 0;
       overflow: hidden;
+    }
+
+    /* ── AI Output Panel layout ── */
+    #ai-output-panel {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      gap: 0;
+    }
+
+    /* ── Main content column ── */
+    #main-content-col {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.75rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(124,255,178,.15) transparent;
+    }
+    #main-content-col::-webkit-scrollbar { width: 4px; }
+    #main-content-col::-webkit-scrollbar-track { background: transparent; }
+    #main-content-col::-webkit-scrollbar-thumb { background: rgba(124,255,178,.15); border-radius: 2px; }
+
+    /* ── Notes + Summary sidebar ── */
+    #side-panel {
+      width: 320px;
+      flex-shrink: 0;
+      border-left: 1px solid var(--glass-border);
+      background: rgba(12,12,14,0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width 0.3s ease;
+    }
+    #side-panel.collapsed { width: 0; border-left: none; overflow: hidden; }
+
+    .side-panel-toggle {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10;
+    }
+
+    /* ── Slide card — redesigned ── */
+    .slide-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 2rem;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: var(--shadow-deep), 0 0 0 1px rgba(124,255,178,.03);
+      animation: cardReveal .5s cubic-bezier(0.16,1,0.3,1) both;
+      position: relative;
+      overflow: hidden;
+    }
+    .slide-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,255,178,.25), rgba(198,124,78,.2), transparent);
+    }
+    @keyframes cardReveal {
+      from { opacity: 0; transform: translateY(20px) scale(.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ── Slide header ── */
+    .slide-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+    }
+    .slide-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      font-family: var(--mono);
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      background: rgba(124,255,178,.06);
+      border: 1px solid rgba(124,255,178,.14);
+      border-radius: 8px;
+      padding: .3rem .65rem;
+    }
+    .slide-chip::before {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 6px rgba(124,255,178,.7);
+    }
+    .slide-chip.reteach-chip {
+      color: var(--teal-dim);
+      background: rgba(198,124,78,.06);
+      border-color: rgba(198,124,78,.14);
+    }
+    .slide-chip.reteach-chip::before { background: var(--teal); box-shadow: 0 0 6px rgba(198,124,78,.7); }
+
+    .slide-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.3rem, 3vw, 1.85rem);
+      color: var(--text);
+      line-height: 1.25;
+      margin-bottom: 1.5rem;
+      letter-spacing: -.01em;
+    }
+
+    /* ── Content block grid — replaces bullet list ── */
+    .content-blocks {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: .85rem;
+    }
+
+    .content-block {
+      display: flex;
+      gap: .9rem;
+      padding: 1rem 1.1rem;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.065);
+      border-radius: 14px;
+      transition: background .25s, border-color .25s, transform .2s, box-shadow .2s;
+      animation: blockIn .45s cubic-bezier(0.16,1,0.3,1) both;
+      cursor: default;
+    }
+    .content-block:hover {
+      background: rgba(255,255,255,.055);
+      border-color: rgba(124,255,178,.18);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0,0,0,.28);
+    }
+    .content-block.reteach-block {
+      border-color: rgba(198,124,78,.15);
+      background: rgba(198,124,78,.03);
+    }
+    .content-block.reteach-block:hover {
+      background: rgba(198,124,78,.07);
+      border-color: rgba(198,124,78,.28);
+    }
+    @keyframes blockIn {
+      from { opacity: 0; transform: translateX(-10px) scale(.98); }
+      to   { opacity: 1; transform: translateX(0) scale(1); }
+    }
+
+    .block-icon {
+      flex-shrink: 0;
+      width: 34px; height: 34px;
+      border-radius: 10px;
+      background: rgba(124,255,178,.1);
+      border: 1px solid rgba(124,255,178,.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem;
+      margin-top: .1rem;
+    }
+    .reteach-block .block-icon {
+      background: rgba(198,124,78,.1);
+      border-color: rgba(198,124,78,.2);
+    }
+
+    .block-body { flex: 1; min-width: 0; }
+
+    .block-label {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      font-family: var(--mono);
+      font-size: .6rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      background: rgba(124,255,178,.07);
+      border: 1px solid rgba(124,255,178,.15);
+      border-radius: 5px;
+      padding: .1rem .45rem;
+      margin-bottom: .4rem;
+    }
+    .reteach-block .block-label {
+      color: var(--teal);
+      background: rgba(198,124,78,.07);
+      border-color: rgba(198,124,78,.15);
+    }
+
+    .block-text {
+      font-size: .9rem;
+      line-height: 1.7;
+      color: var(--text-2);
+    }
+    .block-text .katex-display { margin: .4rem 0; overflow-x: auto; }
+    .block-text .katex { font-size: 1.05em; }
+
+    .block-source {
+      margin-top: .5rem;
+      font-size: .74rem;
+      color: var(--text-3);
+      line-height: 1.4;
+    }
+    .block-source a {
+      color: var(--teal);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(198,124,78,.35);
+    }
+    .block-source a:hover { color: var(--gold); }
+
+    /* ── Slide points (kept for compatibility) ── */
+    .slide-points { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
+
+    .slide-point {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem 1.15rem;
+      background: rgba(255,255,255,0.042);
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      font-size: .92rem;
+      line-height: 1.65;
+      color: var(--text-2);
+      transition: background 0.3s, border-color 0.3s, transform 0.2s, box-shadow 0.2s;
+      animation: blockIn .4s ease both;
+    }
+    .slide-point:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.13);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.25);
+    }
+    .slide-point.reteach-point {
+      border-color: rgba(198,124,78,0.22);
+      background: rgba(198,124,78,0.045);
+    }
+    .slide-point.reteach-point:hover {
+      background: rgba(198,124,78,0.08);
+      border-color: rgba(198,124,78,0.35);
+    }
+
+    @keyframes pointReveal {
+      from { opacity: 0; transform: translateY(10px) scale(.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .point-bullet {
+      flex-shrink: 0;
+      width: 32px; height: 32px;
+      border-radius: 10px;
+      background: rgba(124,255,178,0.12);
+      border: 1px solid rgba(124,255,178,0.22);
+      display: flex; align-items: center; justify-content: center;
+      margin-top: .05rem;
+    }
+    .point-bullet::after {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 8px rgba(124,255,178,.6);
+    }
+    .reteach-point .point-bullet {
+      background: rgba(198,124,78,0.12);
+      border-color: rgba(198,124,78,0.25);
+    }
+    .reteach-point .point-bullet::after {
+      background: var(--teal);
+      box-shadow: 0 0 8px rgba(198,124,78,.6);
+    }
+
+    .point-main-text { flex: 1; min-width: 0; }
+
+    .point-idx-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: .62rem;
+      font-weight: 600;
+      letter-spacing: .1em;
+      color: var(--gold);
+      background: rgba(124,255,178,0.08);
+      border: 1px solid rgba(124,255,178,0.18);
+      border-radius: 6px;
+      padding: .1rem .45rem;
+      margin-bottom: .35rem;
+      text-transform: uppercase;
+    }
+    .reteach-point .point-idx-tag {
+      color: var(--teal);
+      background: rgba(198,124,78,0.08);
+      border-color: rgba(198,124,78,0.2);
+    }
+
+    .point-source {
+      margin-top: .5rem;
+      font-size: .76rem;
+      color: var(--text-3);
+      line-height: 1.45;
+      opacity: .95;
+    }
+    .point-source a {
+      color: var(--teal);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(198,124,78,.4);
+    }
+    .point-source a:hover { color: var(--gold); border-bottom-color: var(--gold); }
+    .point-text-body .katex-display { margin: .4rem 0; overflow-x: auto; }
+    .point-text-body .katex { font-size: 1.05em; }
+
+    /* ── Notes panel in sidebar ── */
+    #notes-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .85rem 1rem;
+      border-bottom: 1px solid var(--glass-border);
+      flex-shrink: 0;
+    }
+    .panel-header-title {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+    .panel-header-title .ph-icon {
+      width: 22px; height: 22px;
+      border-radius: 6px;
+      background: rgba(124,255,178,.08);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem;
+    }
+    .panel-header-badge {
+      font-family: var(--mono);
+      font-size: .6rem;
+      color: var(--gold);
+      background: rgba(124,255,178,.08);
+      border: 1px solid rgba(124,255,178,.15);
+      border-radius: 5px;
+      padding: .1rem .4rem;
+    }
+
+    .panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: .85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .65rem;
+    }
+    .panel-body::-webkit-scrollbar { width: 3px; }
+    .panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
+
+    .notes-textarea-new {
+      width: 100%;
+      flex: 1;
+      min-height: 130px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .85rem;
+      line-height: 1.6;
+      padding: .85rem 1rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .notes-textarea-new::placeholder { color: var(--text-3); }
+    .notes-textarea-new:focus {
+      border-color: rgba(124,255,178,.3);
+      box-shadow: 0 0 0 3px rgba(124,255,178,.06);
+    }
+
+    .notes-save-btn-new {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .4rem;
+      width: 100%;
+      padding: .6rem;
+      border-radius: 9px;
+      border: none;
+      background: rgba(124,255,178,.1);
+      color: var(--gold);
+      font-family: 'Syne', sans-serif;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      cursor: pointer;
+      transition: background .2s, box-shadow .2s;
+      flex-shrink: 0;
+    }
+    .notes-save-btn-new:hover {
+      background: rgba(124,255,178,.18);
+      box-shadow: 0 0 16px rgba(124,255,178,.12);
+    }
+    .notes-saved-indicator {
+      text-align: center;
+      font-size: .7rem;
+      color: var(--gold);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .notes-saved-indicator.show { opacity: 1; }
+
+    /* ── Summary panel ── */
+    #summary-panel {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      max-height: 45%;
+    }
+    #summary-panel .panel-body {
+      overflow-y: auto;
+    }
+
+    .summary-generate-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+      width: 100%;
+      padding: .6rem;
+      border-radius: 9px;
+      border: 1px solid rgba(198,124,78,.25);
+      background: rgba(198,124,78,.07);
+      color: var(--teal);
+      font-family: 'Syne', sans-serif;
+      font-size: .78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+      flex-shrink: 0;
+    }
+    .summary-generate-btn:hover {
+      background: rgba(198,124,78,.14);
+      border-color: rgba(198,124,78,.4);
+      box-shadow: 0 0 16px rgba(198,124,78,.1);
+    }
+    .summary-generate-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    .summary-card-new {
+      background: rgba(198,124,78,.04);
+      border: 1px solid rgba(198,124,78,.15);
+      border-radius: 10px;
+      padding: .85rem;
+      font-size: .83rem;
+      line-height: 1.65;
+      color: var(--text-2);
+      animation: cardReveal .4s ease both;
+      display: none;
+    }
+    .summary-card-new.show { display: block; }
+
+    .summary-spinner {
+      display: none;
+      align-items: center;
+      gap: .5rem;
+      font-size: .78rem;
+      color: var(--text-3);
+      padding: .35rem 0;
+    }
+    .summary-spinner.show { display: flex; }
+    .summary-spin-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--teal);
+      animation: dotBounce 1s ease-in-out infinite;
+    }
+    .summary-spin-dot:nth-child(2) { animation-delay: .12s; }
+    .summary-spin-dot:nth-child(3) { animation-delay: .24s; }
+
+    /* ── Sidebar toggle btn ── */
+    #sidebar-toggle-btn {
+      position: absolute;
+      right: 320px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 20;
+      width: 20px; height: 48px;
+      background: rgba(20,20,22,0.85);
+      border: 1px solid var(--glass-border);
+      border-right: none;
+      border-radius: 6px 0 0 6px;
+      color: var(--text-3);
+      font-size: .7rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: right .3s, color .2s, background .2s;
+    }
+    #sidebar-toggle-btn:hover { color: var(--gold); background: rgba(30,30,34,0.95); }
+    #sidebar-toggle-btn.collapsed { right: 0; border-radius: 6px 0 0 6px; }
+
+    /* ── Notes section (kept for JS compatibility, hidden) ── */
+    .notes-section { display: none !important; }
+
+    /* ── Learning body ── */
+    .learning-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    /* Adaptive banner */
+    .adaptive-banner {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .75rem 1rem;
+      border-radius: 10px;
+      font-size: .8rem;
+      font-weight: 600;
+      border: 1px solid;
+      animation: cardReveal .4s ease;
+      margin-bottom: .5rem;
+    }
+    .adaptive-banner.simplify {
+      background: rgba(224, 84, 84, .07);
+      border-color: rgba(224, 84, 84, .25);
+      color: #f08080;
+    }
+    .adaptive-banner.advanced {
+      background: rgba(62, 200, 122, .07);
+      border-color: rgba(62, 200, 122, .25);
+      color: #60d490;
+    }
+    .adaptive-banner.reteach {
+      background: rgba(32, 197, 176, .07);
+      border-color: rgba(32, 197, 176, .25);
+      color: var(--teal);
+    }
+
+    /* ── scroll-fade kept for JS ── */
+    .scroll-fade {
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .scroll-fade.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 860px) {
+      #side-panel { display: none; }
+      #sidebar-toggle-btn { display: none; }
+      #main-content-col { padding: 1.25rem 1rem; }
+    }
+    @media (max-width: 480px) {
+      .slide-card { padding: 1.25rem; }
+      #main-content-col { padding: .9rem; gap: .9rem; }
     }
 
     /* UPDATED: HUD glass */
@@ -853,61 +1431,9 @@
       flex-shrink: 0;
     }
 
-    /* --- Slide body --- */
-    .learning-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 2rem 1.5rem;
-      display: flex; flex-direction: column; gap: 1.5rem;
-    }
+    /* kept: adaptive-banner defined in redesign block above */
 
-    /* Adaptive banner */
-    .adaptive-banner {
-      display: flex; align-items: center; gap: .75rem;
-      padding: .75rem 1rem;
-      border-radius: 10px;
-      font-size: .8rem;
-      font-weight: 600;
-      border: 1px solid;
-      animation: fadeSlideIn .4s ease;
-    }
-    .adaptive-banner.simplify {
-      background: rgba(224, 84, 84, .07);
-      border-color: rgba(224, 84, 84, .25);
-      color: #f08080;
-    }
-    .adaptive-banner.advanced {
-      background: rgba(62, 200, 122, .07);
-      border-color: rgba(62, 200, 122, .25);
-      color: #60d490;
-    }
-    .adaptive-banner.reteach {
-      background: rgba(32, 197, 176, .07);
-      border-color: rgba(32, 197, 176, .25);
-      color: var(--teal);
-    }
-
-    /* UPDATED: slide-card glass */
-    .slide-card {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 2rem;
-      animation: fadeSlideIn .4s ease;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      box-shadow: var(--shadow-deep);
-      transition: transform 0.25s ease, box-shadow 0.25s ease;
-    }
-    .slide-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 14px 40px rgba(0,0,0,0.45);
-    }
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
+    /* slide-number-tag — kept for JS compat */
     .slide-number-tag {
       font-family: var(--mono);
       font-size: .65rem;
@@ -918,118 +1444,6 @@
       margin-bottom: .75rem;
     }
     .slide-number-tag.reteach-tag { color: var(--teal-dim); }
-
-    .slide-title {
-      font-family: 'DM Serif Display', serif;
-      font-size: clamp(1.3rem, 3vw, 1.9rem);
-      color: var(--text);
-      line-height: 1.25;
-      margin-bottom: 1.5rem;
-    }
-
-    /* ── Slide points — homepage glass-card style ── */
-    .slide-points { list-style: none; display: flex; flex-direction: column; gap: .75rem; }
-
-    .slide-point {
-      display: flex;
-      gap: 1rem;
-      padding: 1rem 1.15rem;
-      /* homepage lp-glass */
-      background: rgba(255,255,255,0.042);
-      border: 1px solid rgba(255,255,255,0.08);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: 16px;
-      font-size: .92rem;
-      line-height: 1.65;
-      color: var(--text-2);
-      transition: background 0.3s, border-color 0.3s, transform 0.2s, box-shadow 0.2s;
-      animation: pointReveal .4s ease both;
-    }
-    .slide-point:hover {
-      background: rgba(255,255,255,0.07);
-      border-color: rgba(255,255,255,0.13);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 28px rgba(0,0,0,0.25);
-    }
-    .slide-point.reteach-point {
-      border-color: rgba(198,124,78,0.22);
-      background: rgba(198,124,78,0.045);
-    }
-    .slide-point.reteach-point:hover {
-      background: rgba(198,124,78,0.08);
-      border-color: rgba(198,124,78,0.35);
-    }
-
-    @keyframes pointReveal {
-      from { opacity: 0; transform: translateY(10px) scale(.98); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-
-    /* Icon badge replacing plain dot */
-    .point-bullet {
-      flex-shrink: 0;
-      width: 32px; height: 32px;
-      border-radius: 10px;
-      background: rgba(124,255,178,0.12);
-      border: 1px solid rgba(124,255,178,0.22);
-      display: flex; align-items: center; justify-content: center;
-      margin-top: .05rem;
-    }
-    .point-bullet::after {
-      content: '';
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--gold);
-      box-shadow: 0 0 8px rgba(124,255,178,.6);
-    }
-    .reteach-point .point-bullet {
-      background: rgba(198,124,78,0.12);
-      border-color: rgba(198,124,78,0.25);
-    }
-    .reteach-point .point-bullet::after {
-      background: var(--teal);
-      box-shadow: 0 0 8px rgba(198,124,78,.6);
-    }
-
-    .point-main-text { flex: 1; min-width: 0; }
-
-    /* Tag-style label for point index */
-    .point-idx-tag {
-      display: inline-block;
-      font-family: var(--mono);
-      font-size: .62rem;
-      font-weight: 600;
-      letter-spacing: .1em;
-      color: var(--gold);
-      background: rgba(124,255,178,0.08);
-      border: 1px solid rgba(124,255,178,0.18);
-      border-radius: 6px;
-      padding: .1rem .45rem;
-      margin-bottom: .35rem;
-      text-transform: uppercase;
-    }
-    .reteach-point .point-idx-tag {
-      color: var(--teal);
-      background: rgba(198,124,78,0.08);
-      border-color: rgba(198,124,78,0.2);
-    }
-
-    .point-source {
-      margin-top: .5rem;
-      font-size: .76rem;
-      color: var(--text-3);
-      line-height: 1.45;
-      opacity: .95;
-    }
-    .point-source a {
-      color: var(--teal);
-      text-decoration: none;
-      border-bottom: 1px dashed rgba(198,124,78,.4);
-    }
-    .point-source a:hover { color: var(--gold); border-bottom-color: var(--gold); }
-    .point-text-body .katex-display { margin: .4rem 0; overflow-x: auto; }
-    .point-text-body .katex { font-size: 1.05em; }
 
     /* --- Understanding buttons --- */
     /* UPDATED: understanding-section glass */
@@ -3870,95 +4284,281 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
     <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
   </div>
 
-  <!-- Scrollable body -->
-  <div class="learning-body" id="learning-body">
-    <!-- Adaptive banner (conditionally shown) -->
-    <div id="adaptive-banner" class="adaptive-banner" style="display:none;"></div>
+  <!-- ===== NEW: AI Output Panel (two-column: content + sidebar) ===== -->
+  <div id="ai-output-panel">
 
-    <!-- Slide card -->
-    <div id="slide-card" class="slide-card"></div>
+    <!-- ── Main content column ── -->
+    <div id="learning-body" class="learning-body" style="flex:1;overflow-y:auto;padding:1.75rem 1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
 
-    <!-- Visual panel (shown on demand) -->
-    <div id="visual-panel" style="display:none;"></div>
+      <!-- Adaptive banner (conditionally shown) -->
+      <div id="adaptive-banner" class="adaptive-banner" style="display:none;"></div>
 
-    <!-- Understanding buttons -->
-    <div id="understanding-section" class="understanding-section">
-      <div class="understanding-label">Did you understand this slide?</div>
-      <div class="understanding-btns">
-        <button class="u-btn yes" data-val="yes">
-          <span class="icon">✅</span>Yes, clearly
-        </button>
-        <button class="u-btn somewhat" data-val="somewhat">
-          <span class="icon">🤔</span>Somewhat
-        </button>
-        <button class="u-btn no" data-val="no">
-          <span class="icon">❌</span>Not really
-        </button>
-      </div>
-    </div>
+      <!-- Slide card — content injected by JS -->
+      <div id="slide-card" class="slide-card"></div>
 
-    <!-- Quiz section (shown after understanding choice) -->
-    <div id="quiz-section" class="quiz-section" style="display:none;"></div>
+      <!-- Visual panel (shown on demand) -->
+      <div id="visual-panel" style="display:none;"></div>
 
-    <!-- AI Tutor Chat -->
-    <div id="chat-section" class="chat-section" style="display:none;">
-      <div class="chat-header">
-        <div class="chat-header-label">🤖 Ask the AI Tutor</div>
-        <button class="chat-toggle-btn" onclick="closeChatSection()">✕ Close</button>
-      </div>
-      <div class="chat-body">
-        <div class="chat-messages" id="chat-messages"></div>
-        <div class="chat-input-row">
-          <textarea class="chat-input" id="chat-input" placeholder="Ask anything about this slide…" rows="1"></textarea>
-          <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Ask →</button>
+      <!-- Understanding buttons -->
+      <div id="understanding-section" class="understanding-section">
+        <div class="understanding-label">Did you understand this slide?</div>
+        <div class="understanding-btns">
+          <button class="u-btn yes" data-val="yes">
+            <span class="icon">✅</span>Yes, clearly
+          </button>
+          <button class="u-btn somewhat" data-val="somewhat">
+            <span class="icon">🤔</span>Somewhat
+          </button>
+          <button class="u-btn no" data-val="no">
+            <span class="icon">❌</span>Not really
+          </button>
         </div>
       </div>
-    </div>
 
-    <!-- Math Interactive Tutor (shown only when subject=Math) -->
-    <div id="math-tutor-section" style="display:none;">
-      <div class="math-tutor-panel">
-        <div class="math-tutor-header">
-          <div class="math-tutor-label">📐 Math Interactive Tutor</div>
-          <span class="math-tutor-mode-badge" id="math-tutor-mode-badge">Tutor Mode</span>
+      <!-- Quiz section (shown after understanding choice) -->
+      <div id="quiz-section" class="quiz-section" style="display:none;"></div>
+
+      <!-- AI Tutor Chat -->
+      <div id="chat-section" class="chat-section" style="display:none;">
+        <div class="chat-header">
+          <div class="chat-header-label">🤖 Ask the AI Tutor</div>
+          <button class="chat-toggle-btn" onclick="closeChatSection()">✕ Close</button>
         </div>
-        <div class="math-tutor-body" id="math-tutor-body">
-          <div class="math-action-row">
-            <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Generate Problem</button>
-            <button class="math-btn math-btn-ghost" onclick="mathSolveToggle()">⚡ Direct Solve</button>
+        <div class="chat-body">
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-row">
+            <textarea class="chat-input" id="chat-input" placeholder="Ask anything about this slide…" rows="1"></textarea>
+            <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Ask →</button>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Learner Notes -->
-    <div id="notes-section" class="notes-section" style="display:none;">
-      <div class="notes-header" onclick="toggleNotes()">
-        <div class="notes-header-label">📝 My Notes</div>
-        <span class="notes-toggle-icon" id="notes-toggle-icon">▼</span>
-      </div>
-      <div class="notes-body" id="notes-body" style="display:none;">
-        <textarea class="notes-textarea" id="notes-textarea" placeholder="Write your notes for this slide…"></textarea>
-        <div class="notes-save-row">
-          <span class="notes-saved-msg" id="notes-saved-msg">✓ Saved</span>
-          <button class="btn-save-note" onclick="saveNote()">Save Note</button>
+      <!-- Math Interactive Tutor (shown only when subject=Math) -->
+      <div id="math-tutor-section" style="display:none;">
+        <div class="math-tutor-panel">
+          <div class="math-tutor-header">
+            <div class="math-tutor-label">📐 Math Interactive Tutor</div>
+            <span class="math-tutor-mode-badge" id="math-tutor-mode-badge">Tutor Mode</span>
+          </div>
+          <div class="math-tutor-body" id="math-tutor-body">
+            <div class="math-action-row">
+              <button class="math-btn math-btn-primary" onclick="mathTutorStart()">🎯 Generate Problem</button>
+              <button class="math-btn math-btn-ghost" onclick="mathSolveToggle()">⚡ Direct Solve</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Sources / References panel -->
-    <div id="sources-section" class="sources-panel" style="display:none;">
-      <div class="sources-panel-header" onclick="toggleSources()">
-        <div class="sources-panel-label">📚 References &amp; Sources</div>
-        <span class="sources-toggle-icon" id="sources-toggle-icon">▼</span>
+      <!-- Notes section (hidden — compatibility, real notes in sidebar) -->
+      <div id="notes-section" class="notes-section" style="display:none;">
+        <div class="notes-header" onclick="toggleNotes()">
+          <div class="notes-header-label">📝 My Notes</div>
+          <span class="notes-toggle-icon" id="notes-toggle-icon">▼</span>
+        </div>
+        <div class="notes-body" id="notes-body" style="display:none;">
+          <textarea class="notes-textarea" id="notes-textarea" placeholder="Write your notes for this slide…"></textarea>
+          <div class="notes-save-row">
+            <span class="notes-saved-msg" id="notes-saved-msg">✓ Saved</span>
+            <button class="btn-save-note" onclick="saveNote()">Save Note</button>
+          </div>
+        </div>
       </div>
-      <div class="sources-body" id="sources-body">
-        <!-- populated by JS -->
-      </div>
-    </div>
 
-  </div><!-- /learning-body -->
-</div>
+      <!-- Sources / References panel -->
+      <div id="sources-section" class="sources-panel" style="display:none;">
+        <div class="sources-panel-header" onclick="toggleSources()">
+          <div class="sources-panel-label">📚 References &amp; Sources</div>
+          <span class="sources-toggle-icon" id="sources-toggle-icon">▼</span>
+        </div>
+        <div class="sources-body" id="sources-body">
+          <!-- populated by JS -->
+        </div>
+      </div>
+
+    </div><!-- /main-content-col -->
+
+    <!-- ── Sidebar Toggle Button ── -->
+    <button id="sidebar-toggle-btn" onclick="_toggleSidebar()" title="Toggle Notes & Summary panel">›</button>
+
+    <!-- ── Side Panel (Notes + Summary) ── -->
+    <div id="side-panel">
+
+      <!-- Notes Panel -->
+      <div id="notes-panel">
+        <div class="panel-header">
+          <div class="panel-header-title">
+            <div class="ph-icon">📝</div>
+            My Notes
+          </div>
+          <span class="panel-header-badge" id="notes-slide-badge">Slide 1</span>
+        </div>
+        <div class="panel-body">
+          <textarea
+            class="notes-textarea-new"
+            id="notes-textarea-sidebar"
+            placeholder="Capture your thoughts, key points, or questions for this slide…"
+          ></textarea>
+          <button class="notes-save-btn-new" onclick="_saveNoteSidebar()">
+            💾 Save Note
+          </button>
+          <div class="notes-saved-indicator" id="notes-saved-sidebar">✓ Saved to this slide</div>
+        </div>
+      </div>
+
+      <!-- Summary Panel -->
+      <div id="summary-panel">
+        <div class="panel-header">
+          <div class="panel-header-title">
+            <div class="ph-icon" style="background:rgba(198,124,78,.1);">✦</div>
+            AI Summary
+          </div>
+        </div>
+        <div class="panel-body">
+          <button class="summary-generate-btn" id="summary-gen-btn" onclick="_generateSummary()">
+            ✦ Generate Summary
+          </button>
+          <div class="summary-spinner" id="summary-spinner">
+            <div class="summary-spin-dot"></div>
+            <div class="summary-spin-dot"></div>
+            <div class="summary-spin-dot"></div>
+            <span>Summarizing…</span>
+          </div>
+          <div class="summary-card-new" id="summary-card"></div>
+        </div>
+      </div>
+
+    </div><!-- /side-panel -->
+
+  </div><!-- /ai-output-panel -->
+
+</div><!-- /screen-learning -->
+
+<script>
+// ── Sidebar toggle ────────────────────────────────────────────────────────
+function _toggleSidebar() {
+  const sp = document.getElementById('side-panel');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  const collapsed = sp.classList.toggle('collapsed');
+  btn.classList.toggle('collapsed', collapsed);
+  btn.textContent = collapsed ? '‹' : '›';
+  // Also update right position of toggle btn
+  if (collapsed) {
+    btn.style.right = '0';
+  } else {
+    btn.style.right = '320px';
+  }
+}
+
+// ── Sidebar notes save ────────────────────────────────────────────────────
+function _saveNoteSidebar() {
+  const idx = (typeof state !== 'undefined') ? state.currentIndex : 0;
+  const val = document.getElementById('notes-textarea-sidebar').value;
+  // Sync with existing notes state
+  if (typeof state !== 'undefined') state.notesBySlide[idx] = val;
+  // Sync with legacy notes textarea
+  const legacy = document.getElementById('notes-textarea');
+  if (legacy) legacy.value = val;
+  // Save to localStorage
+  try {
+    const key = 'learnai_notes_' + (typeof state !== 'undefined' ? state.topic || 'default' : 'default');
+    const saved = JSON.parse(localStorage.getItem(key) || '{}');
+    saved[idx] = val;
+    localStorage.setItem(key, JSON.stringify(saved));
+  } catch(e) {}
+  // Show feedback
+  const ind = document.getElementById('notes-saved-sidebar');
+  ind.classList.add('show');
+  setTimeout(() => ind.classList.remove('show'), 2200);
+}
+
+// ── Load notes from localStorage on slide change ──────────────────────────
+function _loadSidebarNote(index) {
+  // First try state
+  let val = '';
+  if (typeof state !== 'undefined') {
+    val = state.notesBySlide[index] || '';
+  }
+  // Fallback localStorage
+  if (!val) {
+    try {
+      const key = 'learnai_notes_' + (typeof state !== 'undefined' ? state.topic || 'default' : 'default');
+      const saved = JSON.parse(localStorage.getItem(key) || '{}');
+      val = saved[index] || '';
+      if (val && typeof state !== 'undefined') state.notesBySlide[index] = val;
+    } catch(e) {}
+  }
+  const ta = document.getElementById('notes-textarea-sidebar');
+  if (ta) ta.value = val;
+  // Update slide badge
+  const badge = document.getElementById('notes-slide-badge');
+  if (badge) badge.textContent = 'Slide ' + (index + 1);
+  // Reset summary
+  document.getElementById('summary-card').classList.remove('show');
+  document.getElementById('summary-card').textContent = '';
+  document.getElementById('summary-gen-btn').disabled = false;
+  document.getElementById('summary-spinner').classList.remove('show');
+}
+
+// ── Patch loadSlide to sync sidebar ──────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  const _origLoadSlide = window.loadSlide;
+  if (typeof _origLoadSlide === 'function') {
+    window.loadSlide = function(index, overrideSlide) {
+      _origLoadSlide(index, overrideSlide);
+      _loadSidebarNote(index);
+    };
+  }
+});
+
+// ── Generate AI Summary ───────────────────────────────────────────────────
+async function _generateSummary() {
+  if (typeof state === 'undefined' || !state.slides || !state.slides.length) {
+    document.getElementById('summary-card').textContent = 'No content loaded yet.';
+    document.getElementById('summary-card').classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('summary-gen-btn');
+  const spinner = document.getElementById('summary-spinner');
+  const card = document.getElementById('summary-card');
+
+  btn.disabled = true;
+  spinner.classList.add('show');
+  card.classList.remove('show');
+
+  // Build summary prompt from slides
+  const allContent = state.slides.map((s, i) =>
+    `Slide ${i+1}: ${s.title}\n` +
+    (s.points || []).map(p => typeof p === 'object' ? (p.text || '') : String(p)).join('\n')
+  ).join('\n\n');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: 'You are a concise educational assistant. Summarize learning content clearly in 150-200 words max. Plain text only, no markdown symbols.',
+        messages: [{
+          role: 'user',
+          content: `Summarize the following lesson slides in 150-200 words:\n\n${allContent}\n\nTopic: ${state.topic || 'this lesson'}`
+        }]
+      })
+    });
+    const data = await res.json();
+    const text = (data.content || []).map(c => c.text || '').join('');
+    card.textContent = text || 'Summary unavailable.';
+    card.classList.add('show');
+  } catch(err) {
+    card.textContent = '⚠️ Could not generate summary. Check your connection.';
+    card.classList.add('show');
+  } finally {
+    spinner.classList.remove('show');
+    btn.disabled = false;
+  }
+}
+</script>
 
 <!-- ===================== STATS SCREEN ===================== -->
 <div id="screen-stats" class="screen">
@@ -4583,23 +5183,27 @@ function loadSlide(index, overrideSlide = null) {
     const sourceUrl = isObj ? String(p.source_url || '').trim() : '';
 
     const sourceHtml = sourceTitle
-      ? `<div class="point-source">Source: ${
+      ? `<div class="block-source">Source: ${
           sourceUrl
             ? `<a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(sourceTitle)}</a>`
             : escHtml(sourceTitle)
         }</div>`
       : '';
 
+    // Pick an icon based on index rotation
+    const icons = ['💡','📖','🔑','⚡','🧩','🎯','🔍','📌','✨','🧠'];
+    const icon = icons[idx % icons.length];
+
     return `
-      <li class="slide-point ${isReteach ? 'reteach-point' : ''}"
-          style="animation-delay:${idx * 0.07}s;">
-        <span class="point-bullet"></span>
-        <div class="point-main-text">
-          <div class="point-idx-tag">Point ${idx + 1}</div>
-          <span class="point-text-body">${text}</span>
+      <div class="content-block ${isReteach ? 'reteach-block' : ''}"
+           style="animation-delay:${idx * 0.07}s;">
+        <div class="block-icon">${icon}</div>
+        <div class="block-body">
+          <div class="block-label">Point ${idx + 1}</div>
+          <div class="block-text point-text-body">${text}</div>
           ${sourceHtml}
         </div>
-      </li>`;
+      </div>`;
   }
 
   // ── Helper: render the MATH CODE BLOCK for one concept ──────────────────
@@ -4678,15 +5282,15 @@ function loadSlide(index, overrideSlide = null) {
         ${workedHtml}
       </div>`;
   } else {
-    // Default mode: prose bullet points
+    // Default mode: card blocks
     const pointsHtml = slide.points.map((p, i) => renderPoint(p, i, isReteach)).join('');
     const workedHtml = slide.worked_example ? renderWorkedExample(slide.worked_example) : '';
-    mainContentHtml  = `<ul class="slide-points">${pointsHtml}</ul>${workedHtml}`;
+    mainContentHtml  = `<div class="content-blocks">${pointsHtml}</div>${workedHtml}`;
   }
 
   card.innerHTML = `
-    <div class="slide-number-tag ${isReteach ? 'reteach-tag' : ''}">
-      ${isReteach ? '🔁 Re-Teaching — ' : ''}Slide ${index + 1}
+    <div class="slide-meta-row">
+      <div class="slide-chip ${isReteach ? 'reteach-chip' : ''}">${isReteach ? '🔁 Re-Teaching — ' : ''}Slide ${index + 1}</div>
     </div>
     <div class="slide-title">${escHtml(slide.title)}</div>
     ${mainContentHtml}
