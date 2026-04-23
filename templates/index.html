@@ -4332,7 +4332,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   <div id="ai-output-panel">
 
     <!-- ── Main content column ── -->
-    <div id="learning-body" class="learning-body" style="flex:1;overflow-y:auto;padding:1.75rem 1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+    <div id="learning-body" class="learning-body" style="flex:1;overflow-y:auto;padding:1.75rem 1.5rem 3rem;display:flex;flex-direction:column;gap:1.25rem;">
 
       <!-- Adaptive banner (conditionally shown) -->
       <div id="adaptive-banner" class="adaptive-banner" style="display:none;"></div>
@@ -4343,41 +4343,28 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
       <!-- Visual panel (shown on demand) -->
       <div id="visual-panel" style="display:none;"></div>
 
-      <!-- Understanding buttons -->
-      <div id="understanding-section" class="understanding-section">
-        <div class="understanding-label">Did you understand this slide?</div>
+      <!-- Understanding section: kept in DOM for JS compat, visually hidden, non-blocking -->
+      <div id="understanding-section" style="display:none;">
         <div class="understanding-btns">
-          <button class="u-btn yes" data-val="yes">
-            <span class="icon">✅</span>Yes, clearly
-          </button>
-          <button class="u-btn somewhat" data-val="somewhat">
-            <span class="icon">🤔</span>Somewhat
-          </button>
-          <button class="u-btn no" data-val="no">
-            <span class="icon">❌</span>Not really
-          </button>
+          <button class="u-btn yes" data-val="yes"><span class="icon">✅</span>Yes</button>
+          <button class="u-btn somewhat" data-val="somewhat"><span class="icon">🤔</span>Somewhat</button>
+          <button class="u-btn no" data-val="no"><span class="icon">❌</span>No</button>
         </div>
       </div>
 
-      <!-- Quiz section (shown after understanding choice) -->
-      <div id="quiz-section" class="quiz-section" style="display:none;"></div>
+      <!-- Quiz: kept in DOM for JS compat, hidden -->
+      <div id="quiz-section" style="display:none;"></div>
 
-      <!-- AI Tutor Chat -->
-      <div id="chat-section" class="chat-section" style="display:none;">
-        <div class="chat-header">
-          <div class="chat-header-label">🤖 Ask the AI Tutor</div>
-          <button class="chat-toggle-btn" onclick="closeChatSection()">✕ Close</button>
-        </div>
-        <div class="chat-body">
-          <div class="chat-messages" id="chat-messages"></div>
-          <div class="chat-input-row">
-            <textarea class="chat-input" id="chat-input" placeholder="Ask anything about this slide…" rows="1"></textarea>
-            <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Ask →</button>
-          </div>
+      <!-- Chat: kept in DOM for JS compat, hidden -->
+      <div id="chat-section" style="display:none;">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <textarea class="chat-input" id="chat-input" rows="1"></textarea>
+          <button class="chat-send-btn" id="chat-send-btn" onclick="sendChatMessage()">Ask →</button>
         </div>
       </div>
 
-      <!-- Math Interactive Tutor (shown only when subject=Math) -->
+      <!-- Math tutor: kept in DOM for JS compat -->
       <div id="math-tutor-section" style="display:none;">
         <div class="math-tutor-panel">
           <div class="math-tutor-header">
@@ -4393,33 +4380,22 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         </div>
       </div>
 
-      <!-- Notes section (hidden — compatibility, real notes in sidebar) -->
-      <div id="notes-section" class="notes-section" style="display:none;">
-        <div class="notes-header" onclick="toggleNotes()">
-          <div class="notes-header-label">📝 My Notes</div>
-          <span class="notes-toggle-icon" id="notes-toggle-icon">▼</span>
-        </div>
-        <div class="notes-body" id="notes-body" style="display:none;">
-          <textarea class="notes-textarea" id="notes-textarea" placeholder="Write your notes for this slide…"></textarea>
-          <div class="notes-save-row">
-            <span class="notes-saved-msg" id="notes-saved-msg">✓ Saved</span>
-            <button class="btn-save-note" onclick="saveNote()">Save Note</button>
-          </div>
+      <!-- Legacy notes: kept for JS compat, invisible -->
+      <div id="notes-section" style="display:none;">
+        <div id="notes-body" style="display:none;">
+          <textarea id="notes-textarea"></textarea>
+          <span id="notes-saved-msg"></span>
+          <span id="notes-toggle-icon"></span>
         </div>
       </div>
 
-      <!-- Sources / References panel -->
-      <div id="sources-section" class="sources-panel" style="display:none;">
-        <div class="sources-panel-header" onclick="toggleSources()">
-          <div class="sources-panel-label">📚 References &amp; Sources</div>
-          <span class="sources-toggle-icon" id="sources-toggle-icon">▼</span>
-        </div>
-        <div class="sources-body" id="sources-body">
-          <!-- populated by JS -->
-        </div>
+      <!-- Sources: kept for JS compat, hidden -->
+      <div id="sources-section" style="display:none;">
+        <div id="sources-body"></div>
+        <span id="sources-toggle-icon"></span>
       </div>
 
-    </div><!-- /main-content-col -->
+    </div><!-- /learning-body -->
 
     <!-- ── Sidebar Toggle Button ── -->
     <button id="sidebar-toggle-btn" onclick="_toggleSidebar()" title="Toggle Notes & Summary panel">›</button>
@@ -4480,52 +4456,38 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
 <script>
 // ── Sidebar toggle ────────────────────────────────────────────────────────
 function _toggleSidebar() {
-  const sp = document.getElementById('side-panel');
+  const sp  = document.getElementById('side-panel');
   const btn = document.getElementById('sidebar-toggle-btn');
   const collapsed = sp.classList.toggle('collapsed');
   btn.classList.toggle('collapsed', collapsed);
   btn.textContent = collapsed ? '‹' : '›';
-  // Also update right position of toggle btn
-  if (collapsed) {
-    btn.style.right = '0';
-  } else {
-    btn.style.right = '320px';
-  }
+  btn.style.right  = collapsed ? '0' : '320px';
 }
 
 // ── Sidebar notes save ────────────────────────────────────────────────────
 function _saveNoteSidebar() {
   const idx = (typeof state !== 'undefined') ? state.currentIndex : 0;
   const val = document.getElementById('notes-textarea-sidebar').value;
-  // Sync with existing notes state
   if (typeof state !== 'undefined') state.notesBySlide[idx] = val;
-  // Sync with legacy notes textarea
   const legacy = document.getElementById('notes-textarea');
   if (legacy) legacy.value = val;
-  // Save to localStorage
   try {
-    const key = 'learnai_notes_' + (typeof state !== 'undefined' ? state.topic || 'default' : 'default');
+    const key = 'learnai_notes_' + ((typeof state !== 'undefined' && state.topic) ? state.topic : 'default');
     const saved = JSON.parse(localStorage.getItem(key) || '{}');
     saved[idx] = val;
     localStorage.setItem(key, JSON.stringify(saved));
   } catch(e) {}
-  // Show feedback
   const ind = document.getElementById('notes-saved-sidebar');
-  ind.classList.add('show');
-  setTimeout(() => ind.classList.remove('show'), 2200);
+  if (ind) { ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 2200); }
 }
 
-// ── Load notes from localStorage on slide change ──────────────────────────
+// ── Load sidebar note for current slide ──────────────────────────────────
 function _loadSidebarNote(index) {
-  // First try state
   let val = '';
-  if (typeof state !== 'undefined') {
-    val = state.notesBySlide[index] || '';
-  }
-  // Fallback localStorage
+  if (typeof state !== 'undefined') val = state.notesBySlide[index] || '';
   if (!val) {
     try {
-      const key = 'learnai_notes_' + (typeof state !== 'undefined' ? state.topic || 'default' : 'default');
+      const key = 'learnai_notes_' + ((typeof state !== 'undefined' && state.topic) ? state.topic : 'default');
       const saved = JSON.parse(localStorage.getItem(key) || '{}');
       val = saved[index] || '';
       if (val && typeof state !== 'undefined') state.notesBySlide[index] = val;
@@ -4533,69 +4495,101 @@ function _loadSidebarNote(index) {
   }
   const ta = document.getElementById('notes-textarea-sidebar');
   if (ta) ta.value = val;
-  // Update slide badge
   const badge = document.getElementById('notes-slide-badge');
   if (badge) badge.textContent = 'Slide ' + (index + 1);
-  // Reset summary
-  document.getElementById('summary-card').classList.remove('show');
-  document.getElementById('summary-card').textContent = '';
-  document.getElementById('summary-gen-btn').disabled = false;
-  document.getElementById('summary-spinner').classList.remove('show');
+  // Reset summary display (keep existing summary — don't wipe on every slide nav)
 }
 
-// ── Patch loadSlide to sync sidebar ──────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function() {
-  const _origLoadSlide = window.loadSlide;
-  if (typeof _origLoadSlide === 'function') {
-    window.loadSlide = function(index, overrideSlide) {
-      _origLoadSlide(index, overrideSlide);
-      _loadSidebarNote(index);
-    };
+// ── Patch loadSlide — use polling to wait for it to be defined ────────────
+(function _patchLoadSlide() {
+  const MAX_TRIES = 40;
+  let tries = 0;
+  function attempt() {
+    tries++;
+    if (typeof window.loadSlide === 'function' && window.loadSlide._patched !== true) {
+      const _orig = window.loadSlide;
+      window.loadSlide = function(index, overrideSlide) {
+        _orig.call(this, index, overrideSlide);
+        _loadSidebarNote(index);
+      };
+      window.loadSlide._patched = true;
+    } else if (tries < MAX_TRIES) {
+      setTimeout(attempt, 100);
+    }
   }
-});
+  // Try immediately + after DOM ready
+  attempt();
+  document.addEventListener('DOMContentLoaded', attempt);
+})();
 
-// ── Generate AI Summary ───────────────────────────────────────────────────
+// ── Generate AI Summary (fixed) ───────────────────────────────────────────
 async function _generateSummary() {
-  if (typeof state === 'undefined' || !state.slides || !state.slides.length) {
-    document.getElementById('summary-card').textContent = 'No content loaded yet.';
-    document.getElementById('summary-card').classList.add('show');
+  const btn     = document.getElementById('summary-gen-btn');
+  const spinner = document.getElementById('summary-spinner');
+  const card    = document.getElementById('summary-card');
+
+  // Collect content from state.slides (most reliable)
+  let allContent = '';
+  let topicLabel = 'this lesson';
+
+  if (typeof state !== 'undefined' && state.slides && state.slides.length > 0) {
+    topicLabel  = state.topic || topicLabel;
+    allContent  = state.slides.map((s, i) => {
+      const pts = (s.points || []).map(p =>
+        (typeof p === 'object' && p !== null) ? (p.text || '') : String(p)
+      ).filter(Boolean).join('\n• ');
+      return `Slide ${i+1}: ${s.title}${pts ? '\n• ' + pts : ''}`;
+    }).join('\n\n');
+  }
+
+  // Fallback: scrape rendered DOM cards
+  if (!allContent) {
+    const blocks = document.querySelectorAll('.block-text, .point-text-body, .slide-title');
+    const texts  = [];
+    blocks.forEach(el => { const t = el.textContent.trim(); if (t) texts.push(t); });
+    allContent = texts.join('\n');
+  }
+
+  if (!allContent) {
+    card.textContent = 'No lesson content found. Generate a topic first.';
+    card.classList.add('show');
     return;
   }
-
-  const btn = document.getElementById('summary-gen-btn');
-  const spinner = document.getElementById('summary-spinner');
-  const card = document.getElementById('summary-card');
 
   btn.disabled = true;
   spinner.classList.add('show');
   card.classList.remove('show');
-
-  // Build summary prompt from slides
-  const allContent = state.slides.map((s, i) =>
-    `Slide ${i+1}: ${s.title}\n` +
-    (s.points || []).map(p => typeof p === 'object' ? (p.text || '') : String(p)).join('\n')
-  ).join('\n\n');
+  card.textContent = '';
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': '',                              // proxied — no key needed client-side
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: 'You are a concise educational assistant. Summarize learning content clearly in 150-200 words max. Plain text only, no markdown symbols.',
-        messages: [{
-          role: 'user',
-          content: `Summarize the following lesson slides in 150-200 words:\n\n${allContent}\n\nTopic: ${state.topic || 'this lesson'}`
-        }]
+        max_tokens: 400,
+        system: 'You are a concise educational assistant. Write a clear 150-200 word summary of the lesson. Use plain text only — no bullet symbols, no markdown, no asterisks. Write in flowing paragraphs.',
+        messages: [{ role: 'user', content: `Topic: ${topicLabel}\n\n${allContent}\n\nSummarize this lesson in 150-200 words.` }]
       })
     });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `API error ${res.status}`);
+    }
+
     const data = await res.json();
-    const text = (data.content || []).map(c => c.text || '').join('');
-    card.textContent = text || 'Summary unavailable.';
+    const text = (data.content || []).map(c => c.text || '').join('').trim();
+    card.textContent = text || 'Summary unavailable — try again.';
     card.classList.add('show');
+
   } catch(err) {
-    card.textContent = '⚠️ Could not generate summary. Check your connection.';
+    card.textContent = '⚠️ ' + (err.message || 'Could not generate summary.');
     card.classList.add('show');
   } finally {
     spinner.classList.remove('show');
@@ -5363,12 +5357,13 @@ function loadSlide(index, overrideSlide = null) {
   state.visualLoaded = false;
   state.visualOpen = false;
 
-  // Reset understanding section
+  // Understanding section — kept hidden (removed from visible UI)
   const us = document.getElementById('understanding-section');
-  us.style.display = '';
-  us.classList.remove('done');
-  us.querySelectorAll('.u-btn').forEach(b => b.classList.remove('selected'));
-  us.querySelectorAll('.u-btn').forEach(b => b.disabled = false);
+  if (us) {
+    us.style.display = 'none';
+    us.classList.remove('done');
+    us.querySelectorAll('.u-btn').forEach(b => { b.classList.remove('selected'); b.disabled = false; });
+  }
 
   // Hide quiz
   const qs = document.getElementById('quiz-section');
@@ -5481,7 +5476,7 @@ document.querySelectorAll('.u-btn').forEach(btn => {
 // =====================================================================
 async function loadQuiz() {
   const qs = document.getElementById('quiz-section');
-  qs.style.display = 'block';
+  qs.style.display = 'none'; // quiz removed from visible UI
   qs.innerHTML = `
     <div class="quiz-header">
       <div class="quiz-label">Quick Quiz</div>
