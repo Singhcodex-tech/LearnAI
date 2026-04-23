@@ -666,6 +666,9 @@
 
     /* ===================== LEARNING SCREEN — REDESIGNED ===================== */
     #screen-learning {
+      /* Override .screen's position:absolute so the layout fills the viewport properly */
+      position: fixed !important;
+      inset: 0 !important;
       flex-direction: column;
       align-items: stretch;
       padding: 0;
@@ -678,6 +681,7 @@
       flex: 1;
       overflow: hidden;
       gap: 0;
+      min-height: 0; /* critical: allows flex children to shrink + scroll */
     }
 
     /* ── Main content column ── */
@@ -690,6 +694,7 @@
       gap: 1.25rem;
       scrollbar-width: thin;
       scrollbar-color: rgba(124,255,178,.15) transparent;
+      min-height: 0; /* allow shrink */
     }
     #main-content-col::-webkit-scrollbar { width: 4px; }
     #main-content-col::-webkit-scrollbar-track { background: transparent; }
@@ -707,6 +712,7 @@
       flex-direction: column;
       overflow: hidden;
       transition: width 0.3s ease;
+      min-height: 0;
     }
     #side-panel.collapsed { width: 0; border-left: none; overflow: hidden; }
 
@@ -4332,7 +4338,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   <div id="ai-output-panel">
 
     <!-- ── Main content column ── -->
-    <div id="learning-body" class="learning-body" style="flex:1;overflow-y:auto;padding:1.75rem 1.5rem 3rem;display:flex;flex-direction:column;gap:1.25rem;">
+    <div id="learning-body" class="learning-body" style="flex:1;overflow-y:auto;padding:1.75rem 1.5rem 3rem;display:flex;flex-direction:column;gap:1.25rem;min-height:0;">
 
       <!-- Adaptive banner (conditionally shown) -->
       <div id="adaptive-banner" class="adaptive-banner" style="display:none;"></div>
@@ -4522,35 +4528,35 @@ function _loadSidebarNote(index) {
   document.addEventListener('DOMContentLoaded', attempt);
 })();
 
-// ── Generate AI Summary (fixed) ───────────────────────────────────────────
+// ── Generate Summary (pure JS — no external API) ─────────────────────────
 async function _generateSummary() {
   const btn     = document.getElementById('summary-gen-btn');
   const spinner = document.getElementById('summary-spinner');
   const card    = document.getElementById('summary-card');
 
   // Collect content from state.slides (most reliable)
-  let allContent = '';
+  let allText = '';
   let topicLabel = 'this lesson';
 
   if (typeof state !== 'undefined' && state.slides && state.slides.length > 0) {
-    topicLabel  = state.topic || topicLabel;
-    allContent  = state.slides.map((s, i) => {
+    topicLabel = state.topic || topicLabel;
+    allText = state.slides.map((s, i) => {
       const pts = (s.points || []).map(p =>
         (typeof p === 'object' && p !== null) ? (p.text || '') : String(p)
-      ).filter(Boolean).join('\n• ');
-      return `Slide ${i+1}: ${s.title}${pts ? '\n• ' + pts : ''}`;
-    }).join('\n\n');
+      ).filter(Boolean);
+      return [s.title, ...pts].join('. ');
+    }).join(' ');
   }
 
-  // Fallback: scrape rendered DOM cards
-  if (!allContent) {
-    const blocks = document.querySelectorAll('.block-text, .point-text-body, .slide-title');
-    const texts  = [];
-    blocks.forEach(el => { const t = el.textContent.trim(); if (t) texts.push(t); });
-    allContent = texts.join('\n');
+  // Fallback: scrape rendered DOM
+  if (!allText.trim()) {
+    const nodes = document.querySelectorAll('#learning-body .block-text, #learning-body .point-text-body, #learning-body .slide-title');
+    const parts = [];
+    nodes.forEach(el => { const t = el.textContent.trim(); if (t) parts.push(t); });
+    allText = parts.join(' ');
   }
 
-  if (!allContent) {
+  if (!allText.trim()) {
     card.textContent = 'No lesson content found. Generate a topic first.';
     card.classList.add('show');
     return;
@@ -4559,42 +4565,63 @@ async function _generateSummary() {
   btn.disabled = true;
   spinner.classList.add('show');
   card.classList.remove('show');
-  card.textContent = '';
+
+  // Simulate brief processing delay for UX
+  await new Promise(r => setTimeout(r, 420));
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': '',                              // proxied — no key needed client-side
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 400,
-        system: 'You are a concise educational assistant. Write a clear 150-200 word summary of the lesson. Use plain text only — no bullet symbols, no markdown, no asterisks. Write in flowing paragraphs.',
-        messages: [{ role: 'user', content: `Topic: ${topicLabel}\n\n${allContent}\n\nSummarize this lesson in 150-200 words.` }]
-      })
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error?.message || `API error ${res.status}`);
-    }
-
-    const data = await res.json();
-    const text = (data.content || []).map(c => c.text || '').join('').trim();
-    card.textContent = text || 'Summary unavailable — try again.';
+    // Pure JS summarization: extract key sentences, cap at ~200 words
+    const summary = _buildSummaryFromText(allText, topicLabel);
+    card.textContent = summary;
     card.classList.add('show');
-
   } catch(err) {
-    card.textContent = '⚠️ ' + (err.message || 'Could not generate summary.');
+    card.textContent = '⚠️ Could not generate summary.';
     card.classList.add('show');
   } finally {
     spinner.classList.remove('show');
     btn.disabled = false;
   }
+}
+
+function _buildSummaryFromText(rawText, topic) {
+  // Clean up text
+  const text = rawText.replace(/\s+/g, ' ').trim();
+
+  // Split into sentences
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  if (sentences.length === 0) {
+    // No sentences found — just truncate to 200 words
+    const words = text.split(' ');
+    return words.slice(0, 200).join(' ') + (words.length > 200 ? '…' : '');
+  }
+
+  // Score sentences: prefer ones with topic keywords and earlier positions
+  const topicWords = topic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+
+  const scored = sentences.map((s, i) => {
+    const lower = s.toLowerCase();
+    let score = 1 / (i + 1); // position score: earlier = higher
+    topicWords.forEach(w => { if (lower.includes(w)) score += 0.5; });
+    // Penalise very short or very long sentences
+    const wc = s.split(' ').length;
+    if (wc < 5 || wc > 60) score *= 0.4;
+    return { s: s.trim(), i, score };
+  });
+
+  // Pick top sentences by score, keep original order, stop at ~200 words
+  const top = scored.sort((a,b) => b.score - a.score).slice(0, 12);
+  top.sort((a,b) => a.i - b.i); // restore original order
+
+  let result = '';
+  let wordCount = 0;
+  for (const { s } of top) {
+    const wc = s.split(' ').length;
+    if (wordCount + wc > 200) break;
+    result += (result ? ' ' : '') + s;
+    wordCount += wc;
+  }
+
+  return result || text.split(' ').slice(0, 200).join(' ') + '…';
 }
 </script>
 
@@ -4623,7 +4650,7 @@ async function _generateSummary() {
     </div>
 
     <!-- AI Summary Panel -->
-    <div class="summary-panel" id="summary-panel">
+    <div class="summary-panel" id="stats-summary-panel">
       <div class="summary-panel-header">
         <div class="summary-panel-title">✨ AI Session Summary</div>
         <button class="btn-gen-summary" id="btn-gen-summary" onclick="generateSummary()">Generate Summary</button>
