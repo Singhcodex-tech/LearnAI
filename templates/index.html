@@ -1445,67 +1445,115 @@
     }
     .slide-number-tag.reteach-tag { color: var(--teal-dim); }
 
-    /* --- Understanding buttons --- */
-    /* UPDATED: understanding-section glass */
+    /* ── Understanding feedback — compact sticky bar ── */
     .understanding-section {
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 1.5rem;
-      animation: fadeSlideIn .4s ease .1s both;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      box-shadow: var(--shadow-deep);
+      /* Pulled OUT of flow — fixed bottom bar */
+      position: fixed;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(0);
+      z-index: 80;
+
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      padding: .55rem .75rem;
+
+      background: rgba(14,14,16,0.88);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 999px;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      box-shadow: 0 8px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04);
+
+      animation: feedbackPop .35s cubic-bezier(0.34,1.56,0.64,1) both;
+      white-space: nowrap;
+    }
+
+    @keyframes feedbackPop {
+      from { opacity: 0; transform: translateX(-50%) translateY(18px) scale(.92); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    }
+
+    /* hide when disabled/done — JS adds .done class */
+    .understanding-section.done {
+      animation: feedbackFade .3s ease forwards;
+    }
+    @keyframes feedbackFade {
+      to { opacity: 0; transform: translateX(-50%) translateY(10px); pointer-events: none; }
     }
 
     .understanding-label {
-      font-size: .75rem;
+      font-size: .68rem;
       font-weight: 700;
-      letter-spacing: .14em;
+      letter-spacing: .1em;
       text-transform: uppercase;
       color: var(--text-3);
-      margin-bottom: 1rem;
-      display: flex; align-items: center; gap: .5rem;
+      margin-bottom: 0;
+      display: flex; align-items: center; gap: .4rem;
+      padding-right: .4rem;
+      border-right: 1px solid rgba(255,255,255,.08);
     }
     .understanding-label::before {
       content: '';
       width: 4px; height: 4px; border-radius: 50%;
       background: var(--gold);
+      box-shadow: 0 0 5px rgba(124,255,178,.5);
     }
 
     .understanding-btns {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem;
+      display: flex;
+      gap: .35rem;
     }
 
     .u-btn {
-      padding: .8rem .5rem;
-      border-radius: 10px;
-      border: 1px solid var(--border2);
-      background: var(--surface);
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,.1);
+      background: rgba(255,255,255,.05);
       color: var(--text-2);
       font-family: 'Syne', sans-serif;
-      font-size: .8rem;
+      font-size: .82rem;
       font-weight: 600;
       cursor: pointer;
-      transition: all .2s;
-      display: flex; flex-direction: column; align-items: center; gap: .35rem;
+      transition: all .18s ease;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0;
     }
-    .u-btn .icon { font-size: 1.3rem; }
-    .u-btn:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .u-btn .icon { font-size: 1.05rem; line-height: 1; }
+    /* hide text labels — keep only icons */
+    .u-btn > :not(.icon) { display: none; }
+
+    .u-btn:hover { transform: scale(1.15); border-color: rgba(255,255,255,.25); background: rgba(255,255,255,.1); }
+    .u-btn:active { transform: scale(.93); }
+
     .u-btn.yes:hover, .u-btn.yes.selected {
-      background: rgba(62,200,122,.1);
+      background: rgba(62,200,122,.18);
       border-color: var(--green);
-      color: var(--green);
+      box-shadow: 0 0 10px rgba(62,200,122,.25);
     }
     .u-btn.somewhat:hover, .u-btn.somewhat.selected {
-      background: rgba(232,160,32,.1);
+      background: rgba(232,160,32,.18);
       border-color: var(--gold);
-      color: var(--gold);
+      box-shadow: 0 0 10px rgba(232,160,32,.25);
     }
     .u-btn.no:hover, .u-btn.no.selected {
-      background: rgba(224,84,84,.1);
+      background: rgba(224,84,84,.18);
       border-color: var(--red);
-      color: var(--red);
+      box-shadow: 0 0 10px rgba(224,84,84,.25);
+    }
+
+    /* bottom padding so content doesn't hide under bar */
+    #learning-body { padding-bottom: 5.5rem; }
+
+    @media (max-width: 600px) {
+      .understanding-section {
+        bottom: .75rem;
+        gap: .45rem;
+        padding: .45rem .65rem;
+      }
+      .u-btn { width: 32px; height: 32px; }
+      .understanding-label { display: none; }
     }
 
     /* UPDATED: quiz-section glass */
@@ -2082,8 +2130,6 @@
       .brand-mark { font-size: clamp(1.8rem, 8vw, 3rem); }
       .chat-container { width: 95vw; }
       .lc-row { grid-template-columns: 1fr 1fr; gap: .4rem; }
-      .understanding-btns { grid-template-columns: repeat(3, 1fr); gap: .5rem; }
-      .u-btn { padding: .65rem .3rem; font-size: .73rem; }
       .hud { padding: .75rem 1rem; }
       .hud-right { width: 100%; flex: 1 1 100%; }
       .slide-card { padding: 1.25rem; }
@@ -2505,7 +2551,6 @@
 
     /* Responsive tweaks */
     @media (max-width: 500px) {
-      .understanding-btns { grid-template-columns: 1fr; }
       .hud { padding: .75rem 1rem; }
       .learning-body { padding: 1rem; }
       .xp-bar-wrap { display: none; }
@@ -2528,7 +2573,6 @@
       }
       .hud-search-input { width: 100%; }
       .slide-card,
-      .understanding-section,
       .quiz-section,
       .stats-panel,
       .summary-panel,
@@ -5321,7 +5365,8 @@ function loadSlide(index, overrideSlide = null) {
 
   // Reset understanding section
   const us = document.getElementById('understanding-section');
-  us.style.display = 'block';
+  us.style.display = '';
+  us.classList.remove('done');
   us.querySelectorAll('.u-btn').forEach(b => b.classList.remove('selected'));
   us.querySelectorAll('.u-btn').forEach(b => b.disabled = false);
 
@@ -5419,6 +5464,12 @@ document.querySelectorAll('.u-btn').forEach(btn => {
     // Visual feedback
     document.querySelectorAll('.u-btn').forEach(b => b.disabled = true);
     btn.classList.add('selected');
+
+    // Fade out bar after brief delay
+    setTimeout(() => {
+      const us = document.getElementById('understanding-section');
+      if (us) us.classList.add('done');
+    }, 600);
 
     // Fetch quiz
     await loadQuiz();
