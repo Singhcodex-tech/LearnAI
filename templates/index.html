@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>LEARNAI — Master Any Topic Instantly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
@@ -666,7 +666,6 @@
 
     /* ===================== LEARNING SCREEN — REDESIGNED ===================== */
     #screen-learning {
-      /* Override .screen's position:absolute so the layout fills the viewport properly */
       position: fixed !important;
       inset: 0 !important;
       flex-direction: column;
@@ -679,14 +678,15 @@
     #ai-output-panel {
       display: flex;
       flex: 1;
+      min-height: 0;        /* allows flex children to shrink below content size */
       overflow: hidden;
       gap: 0;
-      min-height: 0; /* critical: allows flex children to shrink + scroll */
     }
 
     /* ── Main content column ── */
     #main-content-col {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 1.75rem 1.5rem;
       display: flex;
@@ -694,7 +694,6 @@
       gap: 1.25rem;
       scrollbar-width: thin;
       scrollbar-color: rgba(124,255,178,.15) transparent;
-      min-height: 0; /* allow shrink */
     }
     #main-content-col::-webkit-scrollbar { width: 4px; }
     #main-content-col::-webkit-scrollbar-track { background: transparent; }
@@ -704,6 +703,7 @@
     #side-panel {
       width: 320px;
       flex-shrink: 0;
+      min-height: 0;
       border-left: 1px solid var(--glass-border);
       background: rgba(12,12,14,0.6);
       backdrop-filter: blur(20px);
@@ -712,7 +712,6 @@
       flex-direction: column;
       overflow: hidden;
       transition: width 0.3s ease;
-      min-height: 0;
     }
     #side-panel.collapsed { width: 0; border-left: none; overflow: hidden; }
 
@@ -749,6 +748,23 @@
       to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
+  /* v2-style slide chip */
+  #screen-learning .slide-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    background: rgba(124,92,255,0.1);
+    border: 1px solid rgba(124,92,255,0.22);
+    color: #a896ff;
+    border-radius: 8px;
+    padding: 0.28rem 0.65rem;
+  }
+  #screen-learning .slide-chip.reteach-chip {
+    background: rgba(198,124,78,0.1);
+    border-color: rgba(198,124,78,0.22);
+    color: var(--teal);
+  }
+  
     /* ── Slide header ── */
     .slide-meta-row {
       display: flex;
@@ -2655,6 +2671,8 @@
     .hud-ppt-btn:hover { background: rgba(32,197,176,.1); border-color: var(--teal); }
     .hud-ppt-btn:disabled { opacity: .35; cursor: not-allowed; }
 
+    /* hud-chat-bar removed */
+
     /* ---- HUD Inline AI Tutor chat bar ---- */
     .hud-chat-bar {
       display: none;
@@ -2685,9 +2703,7 @@
       0%, 100% { opacity: 1; transform: scale(1); }
       50%       { opacity: .4; transform: scale(.7); }
     }
-    .hud-chat-inner {
-      display: flex; gap: .4rem; align-items: center;
-    }
+    .hud-chat-inner { display: flex; gap: .4rem; align-items: center; }
     .hud-chat-input {
       flex: 1;
       background: var(--surface);
@@ -2704,12 +2720,8 @@
       transition: border-color .2s, box-shadow .2s;
       box-shadow: 0 0 0 2px rgba(180,83,9,.08);
     }
-    .hud-chat-input:focus {
-      border-color: #b45309;
-      box-shadow: 0 0 0 3px rgba(180,83,9,.15);
-    }
+    .hud-chat-input:focus { border-color: #b45309; box-shadow: 0 0 0 3px rgba(180,83,9,.15); }
     .hud-chat-input::placeholder { color: var(--text-3); }
-    /* UPDATED: hud-chat-send-btn mint */
     .hud-chat-send-btn {
       padding: .5rem 1.1rem;
       border-radius: 9px;
@@ -2727,8 +2739,6 @@
     .hud-chat-send-btn:hover { box-shadow: 0 0 14px rgba(124,255,178,.3); }
     .hud-chat-send-btn:active { transform: scale(.96); }
     .hud-chat-send-btn:disabled { opacity: .4; cursor: not-allowed; }
-
-    /* UPDATED: hud-chat-answer glass dark */
     .hud-chat-answer {
       display: none;
       background: rgba(20,20,22,0.9);
@@ -2744,21 +2754,8 @@
       word-break: break-word;
       backdrop-filter: blur(12px);
     }
-    .hud-chat-answer {
-    border-radius: 10px;
-    padding: .65rem 1rem;
-    font-size: .82rem;
-    line-height: 1.6;
-    color: var(--text-2);
-    animation: fadeSlideIn .3s ease;
-    position: relative;
-    word-break: break-word;
-    } /* ← this was missing */
     .hud-chat-answer.visible { display: block; }
-    .hud-chat-answer.loading-state {
-      color: var(--text-3);
-      font-style: italic;
-    }
+    .hud-chat-answer.loading-state { color: var(--text-3); font-style: italic; }
     .hud-chat-answer-close {
       position: absolute;
       top: .35rem; right: .5rem;
@@ -3552,6 +3549,284 @@
       box-sizing: border-box;
     }
   
+
+  /* ===== INTEGRATION: NEW DESIGN TOKENS FROM v2 ===== */
+  :root {
+    --v2-surface: #ffffff;
+    --v2-muted: rgba(109,74,255,0.06);
+    --v2-primary: #7c5cff;
+    --v2-primary-soft: rgba(124,92,255,0.12);
+    --v2-radius-md: 12px;
+    --v2-radius-lg: 16px;
+    --v2-radius-xl: 20px;
+    --v2-shadow-sm: 0 1px 3px rgba(20,20,35,0.06);
+    --v2-shadow-md: 0 4px 16px rgba(20,20,35,0.08);
+    --v2-font-body: 'Plus Jakarta Sans', 'Syne', sans-serif;
+  }
+
+  /* Override body font for learning screen */
+  #screen-learning,
+  #screen-learning * {
+    font-family: var(--v2-font-body);
+  }
+
+  /* ===== IMPROVED SLIDE CARD ===== */
+  #screen-learning .slide-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--v2-radius-xl);
+    padding: 2rem 2.25rem;
+    box-shadow: var(--shadow-deep), inset 0 1px 0 rgba(255,255,255,0.07);
+    position: relative;
+    overflow: hidden;
+    animation: v2CardReveal 0.45s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  @keyframes v2CardReveal {
+    from { opacity: 0; transform: translateY(14px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  #screen-learning .slide-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(124,92,255,0.35), rgba(124,255,178,0.25), transparent);
+  }
+
+  /* ===== IMPROVED SLIDE TITLE ===== */
+  #screen-learning .slide-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 1.75rem;
+  }
+
+  /* ===== IMPROVED CONTENT BLOCKS ===== */
+  #screen-learning .content-block {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--v2-radius-md);
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+    animation: v2BlockIn 0.4s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  #screen-learning .content-block:hover {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(124,92,255,0.22);
+    transform: translateX(3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+  }
+  @keyframes v2BlockIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  #screen-learning .block-icon {
+    flex-shrink: 0;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--v2-primary-soft);
+    border: 1px solid rgba(124,92,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem;
+  }
+  #screen-learning .reteach-block .block-icon {
+    background: rgba(198,124,78,0.1);
+    border-color: rgba(198,124,78,0.2);
+  }
+  #screen-learning .block-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--v2-primary);
+    background: var(--v2-primary-soft);
+    border: 1px solid rgba(124,92,255,0.18);
+    border-radius: 5px;
+    padding: 0.1rem 0.45rem;
+    margin-bottom: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+  }
+  #screen-learning .reteach-block .block-label {
+    color: var(--teal);
+    background: rgba(32,197,176,0.08);
+    border-color: rgba(32,197,176,0.2);
+  }
+  #screen-learning .block-text {
+    font-size: 0.925rem;
+    line-height: 1.72;
+    color: var(--text-2);
+  }
+
+  /* ===== IMPROVED HUD ===== */
+  #screen-learning .hud {
+    background: rgba(12,12,16,0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    padding: 0.9rem 1.5rem;
+  }
+  #screen-learning .hud-topic {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: -0.01em;
+  }
+
+  /* ===== IMPROVED SLIDE NAV BUTTONS ===== */
+  #screen-learning .slide-nav-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.04);
+    color: var(--text-2);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.18s;
+  }
+  #screen-learning .slide-nav-btn:hover:not(:disabled) {
+    background: var(--v2-primary-soft);
+    border-color: var(--v2-primary);
+    color: var(--v2-primary);
+    transform: scale(1.08);
+  }
+
+  /* ===== IMPROVED QUIZ ===== */
+  #screen-learning .quiz-section {
+    border-radius: var(--v2-radius-xl);
+  }
+  #screen-learning .quiz-option {
+    border-radius: 10px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.875rem;
+    transition: all 0.18s;
+  }
+  #screen-learning .quiz-option:hover:not([disabled]) {
+    background: var(--v2-primary-soft);
+    border-color: rgba(124,92,255,0.35);
+    transform: translateX(3px);
+  }
+  #screen-learning .quiz-option.correct {
+    border-color: var(--green);
+    background: rgba(22,163,74,0.1);
+    color: #4ade80;
+  }
+  #screen-learning .quiz-option.wrong {
+    border-color: var(--red);
+    background: rgba(239,68,68,0.1);
+    color: var(--red);
+  }
+  #screen-learning .quiz-option.selected {
+    border-color: var(--v2-primary);
+    background: var(--v2-primary-soft);
+    color: var(--v2-primary);
+  }
+  #screen-learning .btn-quiz-next {
+    background: var(--v2-primary);
+    color: #fff;
+    border-radius: 10px;
+  }
+  #screen-learning .btn-quiz-next:hover {
+    box-shadow: 0 0 20px rgba(124,92,255,0.35);
+    transform: translateY(-1px);
+  }
+
+  /* ===== IMPROVED SEND BUTTON (start screen) ===== */
+  .send-btn.ready {
+    background: var(--v2-primary) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 20px rgba(124,92,255,0.3) !important;
+  }
+  .send-btn.ready:hover {
+    box-shadow: 0 6px 28px rgba(124,92,255,0.45) !important;
+  }
+
+  /* ===== IMPROVED PROGRESS BAR ===== */
+  .progress-bar-fill {
+    background: linear-gradient(90deg, var(--v2-primary), var(--accent-primary)) !important;
+  }
+
+  /* ===== IMPROVED OUTLINE ITEMS (sidebar) ===== */
+  .outline-item,
+  #screen-learning .outline-item {
+    transition: background 0.15s, color 0.15s, transform 0.15s;
+  }
+  #screen-learning .outline-item:hover {
+    transform: translateX(3px);
+  }
+  #screen-learning .outline-item.active {
+    background: var(--v2-primary-soft);
+    color: var(--v2-primary);
+  }
+
+  /* ===== SIDE PANEL IMPROVEMENTS ===== */
+  #side-panel {
+    background: rgba(10,10,14,0.7) !important;
+  }
+  #notes-panel .panel-header,
+  #summary-panel .panel-header {
+    background: rgba(255,255,255,0.03);
+  }
+  .notes-textarea-new {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 0.855rem;
+  }
+
+  /* ===== IMPROVED LOADING SCREEN ===== */
+  #screen-loading .loading-text {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .loading-dot-pulse {
+    background: var(--v2-primary) !important;
+  }
+  .loading-dot-pulse:nth-child(2) { background: rgba(124,92,255,0.7) !important; }
+  .loading-dot-pulse:nth-child(3) { background: rgba(124,92,255,0.45) !important; }
+
+  /* ===== IMPROVED STATS SCREEN ===== */
+  #screen-stats .stat-value.gold { color: var(--v2-primary) !important; }
+  #screen-stats .btn-restart {
+    background: var(--v2-primary) !important;
+    box-shadow: 0 4px 16px rgba(124,92,255,0.3) !important;
+  }
+  #screen-stats .btn-restart:hover {
+    box-shadow: 0 6px 24px rgba(124,92,255,0.45) !important;
+  }
+
+  /* ===== IMPROVED UNDERSTANDING BAR ===== */
+  .understanding-section .u-btn.yes:hover,
+  .understanding-section .u-btn.yes.selected {
+    background: rgba(22,163,74,0.18);
+    border-color: var(--green);
+    box-shadow: 0 0 12px rgba(22,163,74,0.25);
+  }
+
+  /* ===== ADAPTIVE BANNER COLORS ===== */
+  .adaptive-banner.advanced { color: #7fff6a; }
+
+  /* ===== GLOBAL FONT UPGRADE ===== */
+  .brand-sub,
+  .lc-label,
+  .slide-chip,
+  .block-label,
+  .point-idx-tag,
+  .quiz-label,
+  .quiz-q-text,
+  .hud-search-input,
+  .notes-textarea-new {
+    font-family: 'Plus Jakarta Sans', 'Syne', sans-serif;
+  }
+
+
     /* ===================== NEW UI CHANGES ===================== */
     /* Splash Screen */
     #splash-screen {
@@ -4033,7 +4308,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
           <textarea
             class="topic-input"
             id="topic-input"
-            placeholder="Ask anything — e.g. Quantum Entanglement, French Revolution, Neural Networks…"
+            placeholder="What do you want to master today? Try: Quantum Entanglement, CRISPR, Keynesian Economics…"
             maxlength="200"
             rows="2"
           ></textarea>
@@ -4289,7 +4564,8 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         <div class="timer-badge" id="timer-badge">⏱ 0s</div>
       </div>
     </div>
-    <!-- Inline AI Tutor bar -->
+    <!-- AI Tutor chat bar removed -->
+    <!-- Inline AI Tutor bar (HUD — top of learning screen) -->
     <div class="hud-chat-bar" id="hud-chat-bar">
       <span class="hud-chat-label">🤖 Ask AI Tutor</span>
       <div class="hud-chat-inner">
@@ -4301,7 +4577,6 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
         ></textarea>
         <button class="hud-chat-send-btn" id="hud-chat-send-btn" onclick="sendHudChatMessage()">Ask →</button>
       </div>
-      <!-- Inline answer shown directly below the input -->
       <div class="hud-chat-answer" id="hud-chat-answer">
         <button class="hud-chat-answer-close" onclick="document.getElementById('hud-chat-answer').classList.remove('visible')" title="Dismiss">✕</button>
         <span id="hud-chat-answer-text"></span>
@@ -4338,7 +4613,7 @@ body::before{content:'';position:fixed;inset:0;background-image:url("data:image/
   <div id="ai-output-panel">
 
     <!-- ── Main content column ── -->
-    <div id="learning-body" class="learning-body" style="flex:1;overflow-y:auto;padding:1.75rem 1.5rem 3rem;display:flex;flex-direction:column;gap:1.25rem;min-height:0;">
+    <div id="learning-body" class="learning-body" style="flex:1;min-height:0;overflow-y:auto;padding:1.75rem 1.5rem 3rem;display:flex;flex-direction:column;gap:1.25rem;">
 
       <!-- Adaptive banner (conditionally shown) -->
       <div id="adaptive-banner" class="adaptive-banner" style="display:none;"></div>
@@ -4528,19 +4803,18 @@ function _loadSidebarNote(index) {
   document.addEventListener('DOMContentLoaded', attempt);
 })();
 
-// ── Generate Summary (pure JS — no external API) ─────────────────────────
+// ── Generate Summary — pure JS, no external API ──────────────────────────
 async function _generateSummary() {
   const btn     = document.getElementById('summary-gen-btn');
   const spinner = document.getElementById('summary-spinner');
   const card    = document.getElementById('summary-card');
 
-  // Collect content from state.slides (most reliable)
   let allText = '';
   let topicLabel = 'this lesson';
 
   if (typeof state !== 'undefined' && state.slides && state.slides.length > 0) {
     topicLabel = state.topic || topicLabel;
-    allText = state.slides.map((s, i) => {
+    allText = state.slides.map(s => {
       const pts = (s.points || []).map(p =>
         (typeof p === 'object' && p !== null) ? (p.text || '') : String(p)
       ).filter(Boolean);
@@ -4548,7 +4822,6 @@ async function _generateSummary() {
     }).join(' ');
   }
 
-  // Fallback: scrape rendered DOM
   if (!allText.trim()) {
     const nodes = document.querySelectorAll('#learning-body .block-text, #learning-body .point-text-body, #learning-body .slide-title');
     const parts = [];
@@ -4566,12 +4839,38 @@ async function _generateSummary() {
   spinner.classList.add('show');
   card.classList.remove('show');
 
-  // Simulate brief processing delay for UX
-  await new Promise(r => setTimeout(r, 420));
+  await new Promise(r => setTimeout(r, 380));
 
   try {
-    // Pure JS summarization: extract key sentences, cap at ~200 words
-    const summary = _buildSummaryFromText(allText, topicLabel);
+    // Extract key sentences, score by topic relevance + position, cap ~200 words
+    const text = allText.replace(/\s+/g, ' ').trim();
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+    let summary = '';
+
+    if (sentences.length === 0) {
+      summary = text.split(' ').slice(0, 200).join(' ') + '…';
+    } else {
+      const topicWords = topicLabel.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      const scored = sentences.map((s, i) => {
+        const lower = s.toLowerCase();
+        let score = 1 / (i + 1);
+        topicWords.forEach(w => { if (lower.includes(w)) score += 0.5; });
+        const wc = s.split(' ').length;
+        if (wc < 5 || wc > 60) score *= 0.4;
+        return { s: s.trim(), i, score };
+      });
+      const top = scored.sort((a, b) => b.score - a.score).slice(0, 12);
+      top.sort((a, b) => a.i - b.i);
+      let wordCount = 0;
+      for (const { s } of top) {
+        const wc = s.split(' ').length;
+        if (wordCount + wc > 200) break;
+        summary += (summary ? ' ' : '') + s;
+        wordCount += wc;
+      }
+      if (!summary) summary = text.split(' ').slice(0, 200).join(' ') + '…';
+    }
+
     card.textContent = summary;
     card.classList.add('show');
   } catch(err) {
@@ -4581,47 +4880,6 @@ async function _generateSummary() {
     spinner.classList.remove('show');
     btn.disabled = false;
   }
-}
-
-function _buildSummaryFromText(rawText, topic) {
-  // Clean up text
-  const text = rawText.replace(/\s+/g, ' ').trim();
-
-  // Split into sentences
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
-  if (sentences.length === 0) {
-    // No sentences found — just truncate to 200 words
-    const words = text.split(' ');
-    return words.slice(0, 200).join(' ') + (words.length > 200 ? '…' : '');
-  }
-
-  // Score sentences: prefer ones with topic keywords and earlier positions
-  const topicWords = topic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-
-  const scored = sentences.map((s, i) => {
-    const lower = s.toLowerCase();
-    let score = 1 / (i + 1); // position score: earlier = higher
-    topicWords.forEach(w => { if (lower.includes(w)) score += 0.5; });
-    // Penalise very short or very long sentences
-    const wc = s.split(' ').length;
-    if (wc < 5 || wc > 60) score *= 0.4;
-    return { s: s.trim(), i, score };
-  });
-
-  // Pick top sentences by score, keep original order, stop at ~200 words
-  const top = scored.sort((a,b) => b.score - a.score).slice(0, 12);
-  top.sort((a,b) => a.i - b.i); // restore original order
-
-  let result = '';
-  let wordCount = 0;
-  for (const { s } of top) {
-    const wc = s.split(' ').length;
-    if (wordCount + wc > 200) break;
-    result += (result ? ' ' : '') + s;
-    wordCount += wc;
-  }
-
-  return result || text.split(' ').slice(0, 200).join(' ') + '…';
 }
 </script>
 
@@ -4650,7 +4908,7 @@ function _buildSummaryFromText(rawText, topic) {
     </div>
 
     <!-- AI Summary Panel -->
-    <div class="summary-panel" id="stats-summary-panel">
+    <div class="summary-panel" id="summary-panel">
       <div class="summary-panel-header">
         <div class="summary-panel-title">✨ AI Session Summary</div>
         <button class="btn-gen-summary" id="btn-gen-summary" onclick="generateSummary()">Generate Summary</button>
@@ -5397,22 +5655,25 @@ function loadSlide(index, overrideSlide = null) {
   qs.style.display = 'none';
   qs.innerHTML = '';
 
-  // Show chat section (reset messages for new slide)
+  // Bottom chat-section kept hidden — HUD bar handles chat
   const chatSection = document.getElementById('chat-section');
-  chatSection.style.display = 'block';
+  if (chatSection) chatSection.style.display = 'none';
   document.getElementById('chat-messages').innerHTML = '';
   document.getElementById('chat-input').value = '';
 
-  // Show HUD inline chat bar
+  // (AI Tutor chat bar removed)
+  // Show HUD inline chat bar (top)
   const hudChatBar = document.getElementById('hud-chat-bar');
   if (hudChatBar) { hudChatBar.classList.add('visible'); }
   const hudChatInput = document.getElementById('hud-chat-input');
   if (hudChatInput) hudChatInput.value = '';
-  // Clear the inline answer from the previous slide
   const hudChatAnswer = document.getElementById('hud-chat-answer');
   if (hudChatAnswer) { hudChatAnswer.classList.remove('visible', 'loading-state'); }
   const hudChatAnswerText = document.getElementById('hud-chat-answer-text');
   if (hudChatAnswerText) hudChatAnswerText.textContent = '';
+  // Bottom chat-section permanently hidden — HUD bar is the only chat UI
+  const bottomChat = document.getElementById('chat-section');
+  if (bottomChat) bottomChat.style.display = 'none';
 
   // Show notes section and load saved note for this slide
   const notesSection = document.getElementById('notes-section');
@@ -5727,9 +5988,9 @@ async function _doSendChat(question, inputEl, sendBtnEl) {
   sendBtnEl.disabled = true;
   inputEl.value = '';
 
-  // Ensure the slide-body chat section is visible to show replies
+  // Ensure the slide-body chat section stays hidden
   const chatSection = document.getElementById('chat-section');
-  chatSection.style.display = 'block';
+  // chatSection intentionally kept hidden — do not call style.display = 'block'
 
   const msgs = document.getElementById('chat-messages');
 
@@ -5781,6 +6042,8 @@ async function _doSendChat(question, inputEl, sendBtnEl) {
   }
 }
 
+async function sendHudChatMessage() { /* hud chat bar removed */ }
+
 async function sendHudChatMessage() {
   const input      = document.getElementById('hud-chat-input');
   const btn        = document.getElementById('hud-chat-send-btn');
@@ -5789,41 +6052,24 @@ async function sendHudChatMessage() {
   const question   = input.value.trim();
   if (!question) return;
 
-  // Show loading state inline in HUD
   answerBox.classList.remove('loading-state');
   answerBox.classList.add('visible', 'loading-state');
   answerText.textContent = '🤖 Tutor is thinking…';
-
   btn.disabled = true;
   input.value  = '';
 
   try {
-    const res  = await fetch(apiPath('/chat'), {
+    const res = await fetch(apiPath('/chat'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        session_id:  state.sessionId,
-        slide_index: state.currentIndex,
-        question,
-      }),
+      body: JSON.stringify({ session_id: state.sessionId, slide_index: state.currentIndex, question }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Tutor unavailable.');
     answerBox.classList.remove('loading-state');
     answerText.textContent = data.answer;
     mathRenderKatex(answerBox);
-
-    // Also append to the full chat-section below for history
-    const chatSection = document.getElementById('chat-section');
-    chatSection.style.display = 'block';
-    const msgs = document.getElementById('chat-messages');
-    msgs.innerHTML += `<div class="chat-bubble user">${escHtml(question)}</div>`;
-    const tutorBubble2 = document.createElement('div');
-    tutorBubble2.className = 'chat-bubble tutor';
-    tutorBubble2.textContent = data.answer;
-    msgs.appendChild(tutorBubble2);
-    mathRenderKatex(tutorBubble2);
-    msgs.scrollTop = msgs.scrollHeight;
+    // Bottom chat-section intentionally kept hidden — answers shown in HUD only
   } catch (err) {
     answerBox.classList.remove('loading-state');
     answerText.textContent = '⚠️ ' + err.message;
@@ -8797,4 +9043,4 @@ window.addEventListener('scroll', function() {
 </script>
 
 </body>
-</html>
+</html><!-- ===== NEW UI INTEGRATION STYLES ===== -->
