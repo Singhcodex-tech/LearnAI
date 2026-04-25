@@ -9148,99 +9148,241 @@ window.addEventListener('scroll', function() {
 
 </body>
 </html><!-- ===== NEW UI INTEGRATION STYLES ===== -->
+
+
 <!-- ======================================================================
-     FEATURE PACK: Flashcards · Concept Map · Voice · Highlight · Streak
+     FEATURE PACK v2: Flashcards · Concept Map · Voice · Highlight · Streak
      ====================================================================== -->
 <style>
 /* ── SHARED MODAL BASE ─────────────────────────────────────────────────── */
 .fp-overlay {
   position: fixed; inset: 0; z-index: 9000;
-  background: rgba(0,0,0,.72); backdrop-filter: blur(6px);
+  background: rgba(0,0,0,.78); backdrop-filter: blur(8px);
   display: flex; align-items: center; justify-content: center;
   opacity: 0; pointer-events: none;
-  transition: opacity .25s ease;
+  transition: opacity .28s ease;
 }
 .fp-overlay.open { opacity: 1; pointer-events: all; }
 .fp-modal {
-  background: #15151a; border: 1px solid rgba(255,255,255,.1);
-  border-radius: 18px; padding: 2rem; position: relative;
-  box-shadow: 0 24px 80px rgba(0,0,0,.6);
-  max-height: 90vh; overflow-y: auto;
+  background: linear-gradient(160deg,#16161d,#1a1a22);
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 22px; padding: 2rem; position: relative;
+  box-shadow: 0 32px 100px rgba(0,0,0,.7);
+  max-height: 92vh; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(124,255,178,.2) transparent;
 }
+.fp-modal::-webkit-scrollbar { width: 5px; }
+.fp-modal::-webkit-scrollbar-thumb { background: rgba(124,255,178,.2); border-radius: 99px; }
 .fp-close {
-  position: absolute; top: 1rem; right: 1rem;
-  background: rgba(255,255,255,.08); border: none; border-radius: 50%;
-  color: var(--text-2); font-size: 1.1rem; width: 32px; height: 32px;
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: background .15s;
+  position: sticky; top: 0; float: right; margin: -1rem -1rem 0 0;
+  background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.13);
+  border-radius: 50%; color: var(--text-2); font-size: 1rem;
+  width: 34px; height: 34px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s; z-index: 2;
 }
-.fp-close:hover { background: rgba(255,255,255,.16); }
+.fp-close:hover { background: rgba(255,255,255,.18); color: #fff; }
 .fp-title {
-  font-family: 'DM Serif Display', serif; font-size: 1.45rem;
-  color: var(--gold); margin-bottom: 1.2rem;
+  font-family: 'DM Serif Display', serif; font-size: 1.5rem;
+  color: var(--gold); margin-bottom: 1.4rem; letter-spacing: -.01em;
 }
 
-/* ── 1. FLASHCARD ──────────────────────────────────────────────────────── */
-#fc-overlay .fp-modal { width: min(540px, 95vw); }
-.fc-card-wrap {
-  perspective: 1000px; width: 100%; height: 240px;
-  cursor: pointer; margin-bottom: 1.2rem;
+/* ══════════════════════════════════════════════════════════════════════
+   1. FLASHCARD — ALL CARDS DISPLAYED AT ONCE (scrollable grid)
+   ══════════════════════════════════════════════════════════════════════ */
+#fc-overlay .fp-modal { width: min(900px, 96vw); }
+
+/* Top bar: filter + export */
+.fc-topbar {
+  display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+  margin-bottom: 1.2rem;
 }
-.fc-card {
+.fc-filter-btns { display: flex; gap: .4rem; }
+.fc-filter-btn {
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.13);
+  color: var(--text-3); border-radius: 8px; padding: .3rem .75rem;
+  font-size: .78rem; cursor: pointer; transition: all .15s;
+}
+.fc-filter-btn.active {
+  background: rgba(124,255,178,.15); border-color: rgba(124,255,178,.35);
+  color: var(--gold);
+}
+.fc-export-btn {
+  margin-left: auto; padding: .38rem 1rem;
+  background: rgba(124,255,178,.1); border: 1px solid rgba(124,255,178,.25);
+  color: var(--gold); border-radius: 9px; font-size: .8rem; cursor: pointer;
+  transition: background .15s; white-space: nowrap;
+}
+.fc-export-btn:hover { background: rgba(124,255,178,.2); }
+
+/* Card grid */
+.fc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  max-height: 62vh; overflow-y: auto; padding: .25rem .15rem 1rem;
+  scrollbar-width: thin; scrollbar-color: rgba(124,255,178,.18) transparent;
+}
+.fc-grid::-webkit-scrollbar { width: 4px; }
+.fc-grid::-webkit-scrollbar-thumb { background: rgba(124,255,178,.18); border-radius: 99px; }
+
+/* Individual card */
+.fc-item {
+  perspective: 900px; cursor: pointer; height: 200px;
+}
+.fc-item-inner {
   width: 100%; height: 100%;
   position: relative; transform-style: preserve-3d;
   transition: transform .5s cubic-bezier(.4,0,.2,1);
-  border-radius: 14px;
+  border-radius: 16px;
 }
-.fc-card.flipped { transform: rotateY(180deg); }
+.fc-item.flipped .fc-item-inner { transform: rotateY(180deg); }
 .fc-face {
   position: absolute; inset: 0; backface-visibility: hidden;
-  border-radius: 14px; display: flex; align-items: center;
-  justify-content: center; padding: 1.5rem; text-align: center;
+  border-radius: 16px; padding: 1.1rem; display: flex;
+  flex-direction: column; overflow: hidden;
 }
-.fc-front {
-  background: linear-gradient(135deg, rgba(124,255,178,.12), rgba(198,124,78,.08));
-  border: 1px solid rgba(124,255,178,.25);
-  font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: var(--text);
+.fc-front-face {
+  background: linear-gradient(145deg, rgba(124,255,178,.1) 0%, rgba(198,124,78,.06) 100%);
+  border: 1px solid rgba(124,255,178,.22);
+  align-items: center; justify-content: center; text-align: center;
 }
-.fc-back {
-  background: linear-gradient(135deg, rgba(198,124,78,.12), rgba(124,255,178,.08));
-  border: 1px solid rgba(198,124,78,.3);
+.fc-back-face {
+  background: linear-gradient(145deg, rgba(30,30,40,.95) 0%, rgba(25,25,35,.98) 100%);
+  border: 1px solid rgba(198,124,78,.28);
   transform: rotateY(180deg);
-  font-size: .92rem; color: var(--text-2); line-height: 1.6;
+  overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: rgba(198,124,78,.2) transparent;
 }
-.fc-hint { font-size: .75rem; color: var(--text-3); text-align: center; margin-bottom: 1rem; }
-.fc-nav { display: flex; gap: .75rem; justify-content: center; align-items: center; }
-.fc-nav button {
-  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
-  color: var(--text); padding: .5rem 1.2rem; border-radius: 10px;
-  font-size: .88rem; cursor: pointer; transition: background .15s;
-}
-.fc-nav button:hover { background: rgba(255,255,255,.14); }
-.fc-progress { color: var(--text-3); font-size: .85rem; font-variant-numeric: tabular-nums; }
-.fc-export-btn {
-  width: 100%; margin-top: 1rem; padding: .6rem;
-  background: rgba(124,255,178,.1); border: 1px solid rgba(124,255,178,.25);
-  color: var(--gold); border-radius: 10px; font-size: .85rem; cursor: pointer;
-  transition: background .15s;
-}
-.fc-export-btn:hover { background: rgba(124,255,178,.18); }
+.fc-back-face::-webkit-scrollbar { width: 3px; }
+.fc-back-face::-webkit-scrollbar-thumb { background: rgba(198,124,78,.25); border-radius: 99px; }
 
-/* ── 2. CONCEPT MAP ────────────────────────────────────────────────────── */
-#cm-overlay .fp-modal { width: min(720px, 95vw); padding: 1.5rem; }
-#cm-svg-wrap {
-  width: 100%; height: 360px; overflow: hidden;
-  border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
-  background: rgba(10,10,14,.6); position: relative;
+.fc-slide-num {
+  font-size: .65rem; font-family: var(--mono); color: var(--text-3);
+  margin-bottom: .4rem; letter-spacing: .06em; text-transform: uppercase;
 }
-#cm-svg { width: 100%; height: 100%; }
-.cm-node { cursor: pointer; transition: opacity .15s; }
-.cm-node:hover circle { filter: brightness(1.3); }
-.cm-legend {
-  font-size: .76rem; color: var(--text-3); margin-top: .75rem; text-align: center;
+.fc-slide-title {
+  font-family: 'DM Serif Display', serif; font-size: 1.05rem;
+  color: var(--text); line-height: 1.3;
+}
+.fc-flip-hint {
+  font-size: .64rem; color: rgba(124,255,178,.45); margin-top: auto;
+  padding-top: .5rem; letter-spacing: .04em;
+}
+.fc-back-label {
+  font-size: .63rem; color: rgba(198,124,78,.6); font-family: var(--mono);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: .5rem;
+}
+.fc-back-point {
+  font-size: .82rem; color: var(--text-2); line-height: 1.55;
+  padding: .28rem 0; border-bottom: 1px solid rgba(255,255,255,.05);
+}
+.fc-back-point:last-child { border-bottom: none; }
+.fc-back-point::before { content: '▸ '; color: #C67C4E; font-size: .7rem; }
+
+/* Slide count badge */
+.fc-count-badge {
+  font-size: .76rem; color: var(--text-3); margin-bottom: 1rem;
 }
 
-/* ── 3. VOICE NARRATION HUD BUTTON ────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   2. CONCEPT MAP — Big interactive tiles (not tiny SVG circles)
+   ══════════════════════════════════════════════════════════════════════ */
+#cm-overlay .fp-modal { width: min(860px, 96vw); padding: 1.75rem; }
+
+/* Topic header */
+.cm-topic-header {
+  text-align: center; margin-bottom: 1.2rem;
+}
+.cm-topic-pill {
+  display: inline-block;
+  background: linear-gradient(90deg, rgba(124,255,178,.15), rgba(198,124,78,.12));
+  border: 1px solid rgba(124,255,178,.3); border-radius: 99px;
+  padding: .45rem 1.4rem; font-size: .95rem; color: var(--gold);
+  font-family: 'DM Serif Display', serif; letter-spacing: .01em;
+}
+.cm-subtitle {
+  font-size: .75rem; color: var(--text-3); margin-top: .5rem;
+  letter-spacing: .03em;
+}
+
+/* Tile grid */
+.cm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: .85rem;
+  max-height: 62vh; overflow-y: auto; padding: .2rem .1rem 1rem;
+  scrollbar-width: thin; scrollbar-color: rgba(124,255,178,.15) transparent;
+}
+.cm-grid::-webkit-scrollbar { width: 4px; }
+.cm-grid::-webkit-scrollbar-thumb { background: rgba(124,255,178,.15); border-radius: 99px; }
+
+/* Individual tile */
+.cm-tile {
+  background: rgba(255,255,255,.04);
+  border: 1.5px solid rgba(255,255,255,.09);
+  border-radius: 16px; padding: 1.1rem .95rem;
+  cursor: pointer; position: relative; overflow: hidden;
+  transition: transform .2s ease, border-color .2s ease,
+              box-shadow .2s ease, background .2s ease;
+  display: flex; flex-direction: column; gap: .4rem;
+  min-height: 120px;
+}
+.cm-tile::before {
+  content: ''; position: absolute; inset: 0; border-radius: 16px;
+  background: linear-gradient(135deg, rgba(124,255,178,.06) 0%, transparent 60%);
+  opacity: 0; transition: opacity .2s;
+}
+.cm-tile:hover { transform: translateY(-4px) scale(1.02);
+  border-color: rgba(124,255,178,.4);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(124,255,178,.15);
+  background: rgba(124,255,178,.06);
+}
+.cm-tile:hover::before { opacity: 1; }
+
+.cm-tile.active-tile {
+  border-color: rgba(198,124,78,.55);
+  background: rgba(198,124,78,.08);
+  box-shadow: 0 0 0 2px rgba(198,124,78,.25), 0 8px 32px rgba(0,0,0,.4);
+}
+.cm-tile.active-tile::before {
+  background: linear-gradient(135deg, rgba(198,124,78,.1) 0%, transparent 60%);
+  opacity: 1;
+}
+
+.cm-tile-num {
+  font-family: var(--mono); font-size: .68rem; color: var(--text-3);
+  letter-spacing: .05em;
+}
+.cm-tile.active-tile .cm-tile-num { color: #C67C4E; }
+
+.cm-tile-title {
+  font-size: .9rem; font-weight: 600; color: var(--text);
+  line-height: 1.35; flex: 1;
+}
+.cm-tile.active-tile .cm-tile-title { color: #e8a87c; }
+
+.cm-tile-preview {
+  font-size: .72rem; color: var(--text-3); line-height: 1.4;
+  overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+.cm-tile-arrow {
+  font-size: .8rem; color: rgba(124,255,178,.35);
+  align-self: flex-end; transition: color .15s, transform .15s;
+}
+.cm-tile:hover .cm-tile-arrow { color: var(--gold); transform: translateX(3px); }
+.cm-tile.active-tile .cm-tile-arrow { color: rgba(198,124,78,.6); }
+
+.cm-active-badge {
+  position: absolute; top: .6rem; right: .6rem;
+  background: rgba(198,124,78,.2); border: 1px solid rgba(198,124,78,.35);
+  border-radius: 99px; font-size: .6rem; color: #C67C4E;
+  padding: .1rem .45rem; font-family: var(--mono); letter-spacing: .04em;
+}
+
+/* ── 3. VOICE (unchanged) ───────────────────────────────────────────── */
 #voice-btn {
   background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
   color: var(--text-2); border-radius: 10px; padding: .38rem .7rem;
@@ -9258,7 +9400,7 @@ window.addEventListener('scroll', function() {
 }
 @keyframes pulse-dot { to { opacity: .3; transform: scale(.6); } }
 
-/* ── 4. HIGHLIGHT / ANNOTATE ───────────────────────────────────────────── */
+/* ── 4. HIGHLIGHT / ANNOTATE (unchanged) ────────────────────────────── */
 .ha-tooltip {
   position: absolute; z-index: 8000;
   background: #1e1e24; border: 1px solid rgba(124,255,178,.3);
@@ -9278,11 +9420,10 @@ window.addEventListener('scroll', function() {
   display: inline-flex; align-items: center; gap: .25rem;
   background: rgba(198,124,78,.18); border: 1px solid rgba(198,124,78,.3);
   border-radius: 6px; padding: .15rem .5rem; font-size: .78rem;
-  color: #e8a87c; cursor: pointer; margin-left: .25rem;
-  vertical-align: middle;
+  color: #e8a87c; cursor: pointer; margin-left: .25rem; vertical-align: middle;
 }
 
-/* ── 5. STREAK CALENDAR ────────────────────────────────────────────────── */
+/* ── 5. STREAK CALENDAR (unchanged) ─────────────────────────────────── */
 #streak-overlay .fp-modal { width: min(560px, 95vw); }
 .sc-grid {
   display: grid; grid-template-columns: repeat(52, 1fr);
@@ -9290,8 +9431,7 @@ window.addEventListener('scroll', function() {
 }
 .sc-cell {
   aspect-ratio: 1; border-radius: 3px;
-  background: rgba(255,255,255,.06);
-  transition: transform .1s;
+  background: rgba(255,255,255,.06); transition: transform .1s;
 }
 .sc-cell:hover { transform: scale(1.3); }
 .sc-cell[data-level="1"] { background: rgba(124,255,178,.2); }
@@ -9307,14 +9447,12 @@ window.addEventListener('scroll', function() {
 .sc-stat-lbl { font-size: .74rem; color: var(--text-3); margin-top: .2rem; }
 .sc-months {
   display: flex; justify-content: space-between;
-  font-size: .72rem; color: var(--text-3); margin-bottom: .25rem;
-  padding: 0 1px;
+  font-size: .72rem; color: var(--text-3); margin-bottom: .25rem; padding: 0 1px;
 }
 
-/* ── FEATURE TOOLBAR (injected into HUD) ──────────────────────────────── */
+/* ── FEATURE TOOLBAR ────────────────────────────────────────────────── */
 #fp-toolbar {
-  display: flex; gap: .45rem; align-items: center; flex-wrap: wrap;
-  padding: .3rem .5rem;
+  display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; padding: .3rem .5rem;
 }
 .fp-tool-btn {
   background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
@@ -9328,38 +9466,38 @@ window.addEventListener('scroll', function() {
 }
 </style>
 
-<!-- ── FLASHCARD MODAL ────────────────────────────────────────────────── -->
+<!-- ── FLASHCARD MODAL (all cards at once) ────────────────────────────── -->
 <div id="fc-overlay" class="fp-overlay" onclick="if(event.target===this)closeFc()">
   <div class="fp-modal">
     <button class="fp-close" onclick="closeFc()">✕</button>
     <div class="fp-title">🃏 Flashcards</div>
-    <div class="fc-card-wrap" onclick="flipFc()">
-      <div class="fc-card" id="fc-card">
-        <div class="fc-face fc-front" id="fc-front">Click to load</div>
-        <div class="fc-face fc-back"  id="fc-back">—</div>
+    <div class="fc-topbar">
+      <div class="fc-filter-btns">
+        <button class="fc-filter-btn active" onclick="fcFilter('all',this)">All</button>
+        <button class="fc-filter-btn" onclick="fcFilter('unflipped',this)">Unreviewed</button>
+        <button class="fc-filter-btn" onclick="fcFilter('flipped',this)">Reviewed</button>
       </div>
+      <button class="fc-export-btn" onclick="exportFcAnki()">⬇ Anki CSV</button>
     </div>
-    <p class="fc-hint">Click card to flip &nbsp;·&nbsp; use arrows to navigate</p>
-    <div class="fc-nav">
-      <button onclick="stepFc(-1)">← Prev</button>
-      <span class="fc-progress" id="fc-prog">0 / 0</span>
-      <button onclick="stepFc(1)">Next →</button>
-    </div>
-    <button class="fc-export-btn" onclick="exportFcAnki()">⬇ Export as Anki CSV</button>
+    <div class="fc-count-badge" id="fc-count">0 cards</div>
+    <div class="fc-grid" id="fc-grid"></div>
   </div>
 </div>
 
-<!-- ── CONCEPT MAP MODAL ─────────────────────────────────────────────── -->
+<!-- ── CONCEPT MAP MODAL (big tiles) ─────────────────────────────────── -->
 <div id="cm-overlay" class="fp-overlay" onclick="if(event.target===this)closeCm()">
   <div class="fp-modal">
     <button class="fp-close" onclick="closeCm()">✕</button>
     <div class="fp-title">🗺️ Concept Map</div>
-    <div id="cm-svg-wrap"><svg id="cm-svg"></svg></div>
-    <p class="cm-legend">Click any node to jump to that slide</p>
+    <div class="cm-topic-header">
+      <div class="cm-topic-pill" id="cm-topic-pill">Topic</div>
+      <div class="cm-subtitle">Click any tile to jump to that slide</div>
+    </div>
+    <div class="cm-grid" id="cm-grid"></div>
   </div>
 </div>
 
-<!-- ── STREAK CALENDAR MODAL ─────────────────────────────────────────── -->
+<!-- ── STREAK MODAL ───────────────────────────────────────────────────── -->
 <div id="streak-overlay" class="fp-overlay" onclick="if(event.target===this)closeStreak()">
   <div class="fp-modal">
     <button class="fp-close" onclick="closeStreak()">✕</button>
@@ -9370,8 +9508,8 @@ window.addEventListener('scroll', function() {
   </div>
 </div>
 
-<!-- ── HIGHLIGHT TOOLTIP (repositioned by JS) ────────────────────────── -->
-<div class="ha-tooltip" id="ha-tooltip" style="display:none; position:fixed;">
+<!-- ── HIGHLIGHT TOOLTIP ──────────────────────────────────────────────── -->
+<div class="ha-tooltip" id="ha-tooltip" style="display:none;position:fixed;">
   <button onclick="haHighlight()">🖊 Highlight</button>
   <button onclick="haAnnotate()">📌 Note</button>
   <button onclick="haTooltipHide()">✕</button>
@@ -9379,423 +9517,339 @@ window.addEventListener('scroll', function() {
 
 <script>
 /* ======================================================================
-   FEATURE PACK — self-contained, uses existing `state` object
+   FEATURE PACK v2 — refined flashcards + concept map tiles
    ====================================================================== */
 
-// ── INJECT TOOLBAR INTO HUD ──────────────────────────────────────────────
+// ── INJECT TOOLBAR ───────────────────────────────────────────────────────
 (function injectToolbar() {
-  // Wait for DOM ready
   function tryInject() {
     const hud = document.querySelector('.hud-controls');
     if (!hud) { setTimeout(tryInject, 200); return; }
     if (document.getElementById('fp-toolbar')) return;
-
     const bar = document.createElement('div');
     bar.id = 'fp-toolbar';
     bar.innerHTML = `
-      <button class="fp-tool-btn" onclick="openFc()"      title="Flashcard mode">🃏 Cards</button>
-      <button class="fp-tool-btn" onclick="openCm()"      title="Concept map">🗺️ Map</button>
+      <button class="fp-tool-btn" onclick="openFc()"     title="All flashcards">🃏 Cards</button>
+      <button class="fp-tool-btn" onclick="openCm()"     title="Concept map tiles">🗺️ Map</button>
       <button id="voice-btn" class="fp-tool-btn"
-              onclick="toggleVoice()"                      title="Read slide aloud">🔊 Listen</button>
-      <button class="fp-tool-btn" onclick="openStreak()"  title="Study calendar">📅 Streak</button>
-    `;
+              onclick="toggleVoice()"                    title="Read slide aloud">🔊 Listen</button>
+      <button class="fp-tool-btn" onclick="openStreak()" title="Study calendar">📅 Streak</button>`;
     hud.appendChild(bar);
-
-    // Also update feature pills
     const pills = document.querySelector('.feature-pills');
     if (pills) {
-      ['🃏 Flashcards','🗺️ Concept Map','🔊 Voice','🖊️ Highlight','📅 Streak Calendar'].forEach(t => {
+      ['🃏 Flashcards','🗺️ Concept Map','🔊 Voice','🖊️ Highlight','📅 Streak'].forEach(t => {
         const s = document.createElement('span');
-        s.className = 'pill';
-        s.textContent = t;
-        pills.appendChild(s);
+        s.className = 'pill'; s.textContent = t; pills.appendChild(s);
       });
     }
   }
   tryInject();
 })();
 
-/* ── 1. FLASHCARD MODE ──────────────────────────────────────────────────── */
-let _fcIdx = 0;
-let _fcFlipped = false;
-let _fcCards = [];  // [{q, a}]
+/* ══════════════════════════════════════════════════════════════════════
+   1. FLASHCARD — ALL CARDS VISIBLE, SCROLLABLE, INDIVIDUALLY FLIPPABLE
+   ══════════════════════════════════════════════════════════════════════ */
+const _fcFlipped = new Set();   // tracks which card indices are flipped
+let _fcFilterMode = 'all';
 
-function _buildFcCards() {
-  _fcCards = [];
-  (state.slides || []).forEach(sl => {
-    const pts = (sl.points || []);
-    const body = pts.map(p => (typeof p === 'object' ? p.text : p)).filter(Boolean).join(' ');
-    if (sl.title && body) _fcCards.push({ q: sl.title, a: body });
+function _buildFcData() {
+  return (state.slides || []).map((sl, i) => {
+    const pts = (sl.points || []).map(p => typeof p === 'object' ? (p.text||'') : String(p)).filter(Boolean);
+    return { idx: i, title: sl.title || `Slide ${i+1}`, points: pts };
   });
 }
 
 function openFc() {
-  _buildFcCards();
-  _fcIdx = 0; _fcFlipped = false;
-  document.getElementById('fc-card').classList.remove('flipped');
-  _renderFcCard();
+  _fcFlipped.clear();
+  _fcFilterMode = 'all';
+  document.querySelectorAll('.fc-filter-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  _renderFcGrid();
   document.getElementById('fc-overlay').classList.add('open');
 }
 function closeFc() { document.getElementById('fc-overlay').classList.remove('open'); }
 
-function _renderFcCard() {
-  if (!_fcCards.length) return;
-  const c = _fcCards[_fcIdx];
-  document.getElementById('fc-front').textContent = c.q;
-  const back = document.getElementById('fc-back');
-  // truncate to 280 chars for readability
-  back.textContent = c.a.length > 280 ? c.a.slice(0, 277) + '…' : c.a;
-  document.getElementById('fc-prog').textContent = `${_fcIdx + 1} / ${_fcCards.length}`;
+function fcFilter(mode, btn) {
+  _fcFilterMode = mode;
+  document.querySelectorAll('.fc-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _renderFcGrid();
 }
 
-function flipFc() {
-  _fcFlipped = !_fcFlipped;
-  document.getElementById('fc-card').classList.toggle('flipped', _fcFlipped);
-}
+function _renderFcGrid() {
+  const cards = _buildFcData();
+  const grid  = document.getElementById('fc-grid');
+  const countEl = document.getElementById('fc-count');
+  let visible = cards;
+  if (_fcFilterMode === 'flipped')   visible = cards.filter(c => _fcFlipped.has(c.idx));
+  if (_fcFilterMode === 'unflipped') visible = cards.filter(c => !_fcFlipped.has(c.idx));
 
-function stepFc(dir) {
-  if (!_fcCards.length) return;
-  _fcIdx = (_fcIdx + dir + _fcCards.length) % _fcCards.length;
-  _fcFlipped = false;
-  document.getElementById('fc-card').classList.remove('flipped');
-  _renderFcCard();
+  countEl.textContent = `${visible.length} card${visible.length !== 1 ? 's' : ''}`;
+  grid.innerHTML = '';
+
+  if (!visible.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:2rem;">No cards match this filter.</div>';
+    return;
+  }
+
+  visible.forEach(c => {
+    const isFlipped = _fcFlipped.has(c.idx);
+    const item = document.createElement('div');
+    item.className = 'fc-item' + (isFlipped ? ' flipped' : '');
+    item.dataset.cardIdx = c.idx;
+    item.title = 'Click to flip';
+
+    const pointsHtml = c.points.map(p =>
+      `<div class="fc-back-point">${p}</div>`
+    ).join('');
+
+    item.innerHTML = `
+      <div class="fc-item-inner">
+        <div class="fc-face fc-front-face">
+          <div class="fc-slide-num">Slide ${c.idx + 1}</div>
+          <div class="fc-slide-title">${c.title}</div>
+          <div class="fc-flip-hint">TAP TO REVEAL ↩</div>
+        </div>
+        <div class="fc-face fc-back-face">
+          <div class="fc-back-label">Key Points</div>
+          ${pointsHtml || '<div class="fc-back-point">No points available.</div>'}
+        </div>
+      </div>`;
+
+    item.addEventListener('click', () => {
+      const idx = parseInt(item.dataset.cardIdx);
+      if (_fcFlipped.has(idx)) _fcFlipped.delete(idx);
+      else _fcFlipped.add(idx);
+      item.classList.toggle('flipped');
+      // re-count badge
+      const cnt = _buildFcData().length;
+      const rev = _fcFlipped.size;
+      document.getElementById('fc-count').textContent =
+        _fcFilterMode === 'all' ? `${cnt} cards · ${rev} reviewed` :
+        _fcFilterMode === 'flipped' ? `${rev} reviewed` :
+        `${cnt - rev} unreviewed`;
+    });
+
+    grid.appendChild(item);
+  });
 }
 
 function exportFcAnki() {
-  if (!_fcCards.length) { alert('No slides loaded yet.'); return; }
-  const csv = _fcCards.map(c =>
-    `"${c.q.replace(/"/g,'""')}","${c.a.replace(/"/g,'""').slice(0,400)}"`
+  const cards = _buildFcData();
+  if (!cards.length) { alert('No slides loaded.'); return; }
+  const csv = cards.map(c =>
+    `"${c.title.replace(/"/g,'""')}","${c.points.join(' | ').replace(/"/g,'""').slice(0,500)}"`
   ).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
   const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(blob),
-    download: `learnai_flashcards_${(state.topic||'topic').slice(0,30)}.csv`
+    href: URL.createObjectURL(new Blob([csv], {type:'text/csv'})),
+    download: `learnai_flashcards_${(state.topic||'topic').slice(0,30).replace(/[^a-z0-9]/gi,'_')}.csv`
   });
-  a.click();
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
-// Keyboard: ← → space on flashcard modal
-document.addEventListener('keydown', e => {
-  const fc = document.getElementById('fc-overlay');
-  if (!fc.classList.contains('open')) return;
-  if (e.key === 'ArrowRight') stepFc(1);
-  else if (e.key === 'ArrowLeft') stepFc(-1);
-  else if (e.key === ' ') { e.preventDefault(); flipFc(); }
-});
-
-/* ── 2. CONCEPT MAP ─────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   2. CONCEPT MAP — big interactive tiles, scrollable grid
+   ══════════════════════════════════════════════════════════════════════ */
 function openCm() {
+  document.getElementById('cm-topic-pill').textContent = state.topic || 'Topic';
+  _renderCmTiles();
   document.getElementById('cm-overlay').classList.add('open');
-  _renderConceptMap();
 }
 function closeCm() { document.getElementById('cm-overlay').classList.remove('open'); }
 
-function _renderConceptMap() {
-  const svg = document.getElementById('cm-svg');
-  const wrap = document.getElementById('cm-svg-wrap');
-  svg.innerHTML = '';
+function _renderCmTiles() {
+  const grid = document.getElementById('cm-grid');
   const slides = state.slides || [];
-  if (!slides.length) { svg.innerHTML = '<text x="50%" y="50%" fill="#888" text-anchor="middle">No slides loaded</text>'; return; }
+  grid.innerHTML = '';
 
-  const W = wrap.clientWidth || 680;
-  const H = 340;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-
-  // Center node
-  const cx = W / 2, cy = H / 2;
-  const R = Math.min(W, H) * 0.38;
-  const N = slides.length;
-
-  // Draw edges first (behind nodes)
-  slides.forEach((_, i) => {
-    const angle = (2 * Math.PI * i / N) - Math.PI / 2;
-    const nx = cx + R * Math.cos(angle);
-    const ny = cy + R * Math.sin(angle);
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', cx); line.setAttribute('y1', cy);
-    line.setAttribute('x2', nx); line.setAttribute('y2', ny);
-    line.setAttribute('stroke', 'rgba(255,255,255,0.07)');
-    line.setAttribute('stroke-width', '1.5');
-    svg.appendChild(line);
-    // edge to adjacent node
-    if (i > 0) {
-      const pa = (2 * Math.PI * (i-1) / N) - Math.PI / 2;
-      const px = cx + R * Math.cos(pa);
-      const py = cy + R * Math.sin(pa);
-      const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      l2.setAttribute('x1', px); l2.setAttribute('y1', py);
-      l2.setAttribute('x2', nx); l2.setAttribute('y2', ny);
-      l2.setAttribute('stroke', 'rgba(124,255,178,0.09)');
-      l2.setAttribute('stroke-width', '1');
-      svg.appendChild(l2);
-    }
-  });
-
-  // Center topic node
-  _cmCircle(svg, cx, cy, 34, '#7CFFB2', state.topic || 'Topic', null, true);
-
-  // Slide nodes
-  slides.forEach((sl, i) => {
-    const angle = (2 * Math.PI * i / N) - Math.PI / 2;
-    const nx = cx + R * Math.cos(angle);
-    const ny = cy + R * Math.sin(angle);
-    const isActive = i === state.currentIndex;
-    _cmCircle(svg, nx, ny, isActive ? 22 : 17,
-      isActive ? '#C67C4E' : 'rgba(124,255,178,0.55)',
-      sl.title || `Slide ${i+1}`, i, false);
-  });
-}
-
-function _cmCircle(svg, x, y, r, fill, label, slideIdx, isCenter) {
-  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  g.setAttribute('class', 'cm-node');
-  if (slideIdx !== null && !isCenter) {
-    g.style.cursor = 'pointer';
-    g.addEventListener('click', () => {
-      closeCm();
-      if (typeof loadSlide === 'function') {
-        state.currentIndex = slideIdx;
-        loadSlide(slideIdx);
-      }
-    });
+  if (!slides.length) {
+    grid.innerHTML = '<div style="color:var(--text-3);padding:2rem;text-align:center;">No slides loaded yet.</div>';
+    return;
   }
 
-  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', r);
-  circle.setAttribute('fill', fill); circle.setAttribute('opacity', isCenter ? '0.9' : '0.75');
-  g.appendChild(circle);
+  slides.forEach((sl, i) => {
+    const isActive = i === state.currentIndex;
+    const pts = (sl.points || []).map(p => typeof p === 'object' ? (p.text||'') : String(p)).filter(Boolean);
+    const preview = pts[0] ? pts[0].slice(0, 90) + (pts[0].length > 90 ? '…' : '') : '';
 
-  const words = (label || '').split(' ').slice(0, 3);
-  words.forEach((w, wi) => {
-    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    t.setAttribute('x', x); t.setAttribute('y', y + (wi - (words.length-1)/2) * 11);
-    t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'middle');
-    t.setAttribute('fill', isCenter ? '#0A0A0B' : '#F5F5F5');
-    t.setAttribute('font-size', isCenter ? '9' : '7');
-    t.setAttribute('font-weight', '600');
-    t.textContent = w.slice(0, 10);
-    g.appendChild(t);
+    const tile = document.createElement('div');
+    tile.className = 'cm-tile' + (isActive ? ' active-tile' : '');
+
+    tile.innerHTML = `
+      ${isActive ? '<div class="cm-active-badge">CURRENT</div>' : ''}
+      <div class="cm-tile-num">SLIDE ${String(i+1).padStart(2,'0')}</div>
+      <div class="cm-tile-title">${sl.title || 'Untitled'}</div>
+      ${preview ? `<div class="cm-tile-preview">${preview}</div>` : ''}
+      <div class="cm-tile-arrow">→</div>`;
+
+    tile.addEventListener('click', () => {
+      closeCm();
+      state.currentIndex = i;
+      if (typeof loadSlide === 'function') loadSlide(i);
+    });
+
+    grid.appendChild(tile);
   });
-  svg.appendChild(g);
 }
 
-/* ── 3. VOICE NARRATION ─────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   3. VOICE NARRATION
+   ══════════════════════════════════════════════════════════════════════ */
 let _voiceSpeaking = false;
 
 function toggleVoice() {
   if (_voiceSpeaking) {
-    window.speechSynthesis.cancel();
-    _setVoiceBtn(false);
-    return;
+    window.speechSynthesis.cancel(); _setVoiceBtn(false); return;
   }
   const slide = (state.slides || [])[state.currentIndex];
   if (!slide) { alert('No slide loaded.'); return; }
-
   const pts = (slide.points || []).map(p => typeof p === 'object' ? p.text : p).filter(Boolean);
-  const text = `${slide.title}. ${pts.join('. ')}`;
-  const utt = new SpeechSynthesisUtterance(text);
+  const utt = new SpeechSynthesisUtterance(`${slide.title}. ${pts.join('. ')}`);
   utt.rate = 0.92; utt.pitch = 1.0; utt.lang = 'en-US';
   utt.onstart = () => _setVoiceBtn(true);
   utt.onend = utt.onerror = () => _setVoiceBtn(false);
   window.speechSynthesis.speak(utt);
 }
-
-function _setVoiceBtn(speaking) {
-  _voiceSpeaking = speaking;
+function _setVoiceBtn(on) {
+  _voiceSpeaking = on;
   const btn = document.getElementById('voice-btn');
   if (!btn) return;
-  btn.classList.toggle('speaking', speaking);
-  btn.innerHTML = speaking
-    ? `<span class="voice-dot"></span> Stop`
-    : `🔊 Listen`;
+  btn.classList.toggle('speaking', on);
+  btn.innerHTML = on ? `<span class="voice-dot"></span> Stop` : `🔊 Listen`;
 }
 
-// Stop voice when navigating slides
-const _origLoadSlide = typeof loadSlide === 'function' ? loadSlide : null;
-if (_origLoadSlide) {
-  window.loadSlide = function(idx, override) {
+// Stop voice on slide change
+const _origLS2 = typeof loadSlide === 'function' ? loadSlide : null;
+if (_origLS2 && !_origLS2._voicePatched) {
+  window.loadSlide = function(idx, ov) {
     if (_voiceSpeaking) { window.speechSynthesis.cancel(); _setVoiceBtn(false); }
-    return _origLoadSlide(idx, override);
+    return _origLS2(idx, ov);
   };
+  window.loadSlide._voicePatched = true;
 }
 
-/* ── 4. HIGHLIGHT + ANNOTATE ────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   4. HIGHLIGHT + ANNOTATE
+   ══════════════════════════════════════════════════════════════════════ */
 let _haRange = null;
-const _haTooltip = document.getElementById('ha-tooltip');
+const _haTip = document.getElementById('ha-tooltip');
 
-// Listen for selection inside slide-card
 document.addEventListener('mouseup', e => {
-  // Small delay so selection is finalised
   setTimeout(() => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-      // hide tooltip if click was not on tooltip itself
-      if (!_haTooltip.contains(e.target)) haTooltipHide();
-      return;
+      if (!_haTip.contains(e.target)) haTooltipHide(); return;
     }
     const card = document.getElementById('slide-card');
     if (!card) return;
     const range = sel.getRangeAt(0);
-    // Only activate inside the slide card
     let node = range.commonAncestorContainer;
     while (node && node !== card) node = node.parentNode;
     if (!node) { haTooltipHide(); return; }
-
     _haRange = range.cloneRange();
     const rect = range.getBoundingClientRect();
-    _haTooltip.style.display = 'flex';
-    _haTooltip.style.left = `${rect.left + rect.width/2 - 80}px`;
-    _haTooltip.style.top  = `${rect.top - 52 + window.scrollY}px`;
+    _haTip.style.display = 'flex';
+    _haTip.style.left = `${rect.left + rect.width/2 - 80}px`;
+    _haTip.style.top  = `${rect.top - 52 + window.scrollY}px`;
   }, 10);
 });
-
-function haTooltipHide() {
-  _haTooltip.style.display = 'none';
-  _haRange = null;
-}
-
+function haTooltipHide() { _haTip.style.display = 'none'; _haRange = null; }
 function haHighlight() {
   if (!_haRange) return;
   const mark = document.createElement('mark');
   mark.className = 'ha-highlight';
   try { _haRange.surroundContents(mark); } catch(e) {
-    // surroundContents fails on partial selections spanning elements — fallback
-    const frag = _haRange.extractContents();
-    mark.appendChild(frag);
-    _haRange.insertNode(mark);
+    const frag = _haRange.extractContents(); mark.appendChild(frag); _haRange.insertNode(mark);
   }
-  haTooltipHide();
-  window.getSelection().removeAllRanges();
+  haTooltipHide(); window.getSelection().removeAllRanges();
 }
-
 function haAnnotate() {
   if (!_haRange) return;
-  const note = prompt('Add a note for this highlight:');
-  if (note === null) return;
+  const note = prompt('Add a note:'); if (note === null) return;
   const span = document.createElement('span');
-  span.className = 'ha-sticky';
-  span.title = note;
-  span.textContent = `📌 ${note.slice(0, 40)}`;
+  span.className = 'ha-sticky'; span.title = note;
+  span.textContent = `📌 ${note.slice(0,40)}`;
   span.onclick = () => { if(confirm('Remove this note?')) span.remove(); };
   try { _haRange.surroundContents(span); } catch(e) {
-    const frag = _haRange.extractContents();
-    span.appendChild(frag);
-    _haRange.insertNode(span);
+    const frag = _haRange.extractContents(); span.appendChild(frag); _haRange.insertNode(span);
   }
-  haTooltipHide();
-  window.getSelection().removeAllRanges();
+  haTooltipHide(); window.getSelection().removeAllRanges();
 }
 
-/* ── 5. STREAK CALENDAR ─────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════
+   5. STREAK CALENDAR
+   ══════════════════════════════════════════════════════════════════════ */
 const _SC_KEY = 'learnai_streak_v1';
-
-function _scLoad() {
-  try { return JSON.parse(localStorage.getItem(_SC_KEY) || '{}'); } catch(e) { return {}; }
-}
-function _scSave(data) {
-  try { localStorage.setItem(_SC_KEY, JSON.stringify(data)); } catch(e) {}
-}
+function _scLoad() { try { return JSON.parse(localStorage.getItem(_SC_KEY)||'{}'); } catch(e){return{};} }
+function _scSave(d) { try { localStorage.setItem(_SC_KEY, JSON.stringify(d)); } catch(e){} }
 function _scTodayKey() {
-  const d = new Date(); 
+  const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function scRecordSession() {
-  const data = _scLoad();
-  const key = _scTodayKey();
-  data[key] = (data[key] || 0) + 1;
-  _scSave(data);
+  const d = _scLoad(); const k = _scTodayKey();
+  d[k] = (d[k]||0) + 1; _scSave(d);
 }
-
-function openStreak() {
-  _renderStreak();
-  document.getElementById('streak-overlay').classList.add('open');
-}
+function openStreak() { _renderStreak(); document.getElementById('streak-overlay').classList.add('open'); }
 function closeStreak() { document.getElementById('streak-overlay').classList.remove('open'); }
-
 function _renderStreak() {
   const data = _scLoad();
   const grid = document.getElementById('sc-grid');
   const stats = document.getElementById('sc-stats');
   const months = document.getElementById('sc-months');
   grid.innerHTML = ''; stats.innerHTML = ''; months.innerHTML = '';
-
-  // Build 52 weeks × 7 days = 364 cells, ending today
   const today = new Date();
   const cells = [];
   for (let i = 363; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
+    const d = new Date(today); d.setDate(d.getDate()-i);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    cells.push({ date: key, count: data[key] || 0, d });
+    cells.push({date:key, count:data[key]||0, d});
   }
-
-  // Month labels
-  const shownMonths = new Set();
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  cells.forEach((c, i) => {
+  const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const shownM = new Set();
+  cells.forEach((c,i) => {
     const m = c.d.getMonth();
-    if (!shownMonths.has(m) && i % 7 === 0) {
-      shownMonths.add(m);
-      const lbl = document.createElement('span');
-      lbl.textContent = monthNames[m];
+    if (!shownM.has(m) && i%7===0) {
+      shownM.add(m);
+      const lbl = document.createElement('span'); lbl.textContent = monthNames[m];
       months.appendChild(lbl);
     }
   });
-
-  // Grid cells
   cells.forEach(c => {
-    const el = document.createElement('div');
-    el.className = 'sc-cell';
-    const lvl = c.count === 0 ? 0 : c.count === 1 ? 1 : c.count <= 3 ? 2 : c.count <= 6 ? 3 : 4;
+    const el = document.createElement('div'); el.className = 'sc-cell';
+    const lvl = c.count===0?0:c.count===1?1:c.count<=3?2:c.count<=6?3:4;
     if (lvl) el.dataset.level = lvl;
     el.title = `${c.date}: ${c.count} session${c.count!==1?'s':''}`;
     grid.appendChild(el);
   });
-
-  // Stats
   const totalDays = Object.keys(data).length;
-  const totalSess = Object.values(data).reduce((a,b) => a+b, 0);
-  let maxStreak = 0, cur = 0;
-  cells.forEach(c => {
-    if (c.count > 0) { cur++; maxStreak = Math.max(maxStreak, cur); } else cur = 0;
-  });
-
-  [
-    { val: totalSess, lbl: 'Total Sessions' },
-    { val: totalDays, lbl: 'Days Studied' },
-    { val: maxStreak, lbl: 'Best Streak 🔥' },
-  ].forEach(s => {
-    const div = document.createElement('div');
-    div.className = 'sc-stat';
+  const totalSess = Object.values(data).reduce((a,b)=>a+b,0);
+  let maxStreak=0, cur=0;
+  cells.forEach(c => { if(c.count>0){cur++;maxStreak=Math.max(maxStreak,cur);}else cur=0; });
+  [{val:totalSess,lbl:'Total Sessions'},{val:totalDays,lbl:'Days Studied'},{val:maxStreak,lbl:'Best Streak 🔥'}]
+  .forEach(s => {
+    const div = document.createElement('div'); div.className = 'sc-stat';
     div.innerHTML = `<div class="sc-stat-val">${s.val}</div><div class="sc-stat-lbl">${s.lbl}</div>`;
     stats.appendChild(div);
   });
 }
-
-/* ── WIRE: record session start into streak calendar ────────────────────── */
-// Hook into showScreen so every time user enters learning screen, record it
+// Record session on every learning screen open
 (function hookStreak() {
-  const orig = window.showScreen;
-  if (!orig) return;
-  let _lastRecorded = null;
+  const orig = window.showScreen; if (!orig) return;
+  let _lastDay = null;
   window.showScreen = function(id) {
-    if (id === 'screen-learning') {
+    if (id==='screen-learning') {
       const today = _scTodayKey();
-      if (_lastRecorded !== today) {
-        scRecordSession();
-        _lastRecorded = today;
-      }
+      if (_lastDay !== today) { scRecordSession(); _lastDay = today; }
     }
     return orig.apply(this, arguments);
   };
 })();
 
-/* ── ESC closes all modals ──────────────────────────────────────────────── */
+/* ── ESC closes all ─────────────────────────────────────────────────── */
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  ['fc-overlay','cm-overlay','streak-overlay'].forEach(id => {
-    document.getElementById(id)?.classList.remove('open');
-  });
+  ['fc-overlay','cm-overlay','streak-overlay'].forEach(id =>
+    document.getElementById(id)?.classList.remove('open'));
   haTooltipHide();
   if (_voiceSpeaking) { window.speechSynthesis.cancel(); _setVoiceBtn(false); }
 });
