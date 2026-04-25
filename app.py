@@ -37,9 +37,11 @@ def add_security_headers(response):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com cdn.jsdelivr.net; "
-        "style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; "
-        "img-src 'self' data:; connect-src 'self'"
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' fonts.googleapis.com cdn.jsdelivr.net cdnjs.cloudflare.com; "
+        "font-src fonts.gstatic.com cdn.jsdelivr.net cdnjs.cloudflare.com data:; "
+        "img-src 'self' data: blob:; connect-src 'self'"
     )
     return response
 
@@ -2275,6 +2277,7 @@ def generate():
                 "depth": depth,
                 "xp": 0,
                 "streak_slides": 0,
+                "sm2_state": {},
                 "is_solution_session": True,
             }
             return jsonify({
@@ -2329,6 +2332,7 @@ def generate():
         "depth": depth,
         "xp": 0,
         "streak_slides": 0,
+        "sm2_state": {},
         "is_solution_session": False,
     }
 
@@ -4171,6 +4175,144 @@ def assign_status(aid):
         "sections":   list(record["sections"].keys()),
         "created_at": record["created_at"],
     })
+
+
+
+# ---------------------------------------------------------------------------
+# SM-2 Spaced Repetition — update card schedule
+# ---------------------------------------------------------------------------
+@app.route("/sm2_update", methods=["POST"])
+@limiter.limit("60 per minute")
+def sm2_update():
+    """
+    Update SM-2 state for a flashcard (one per slide).
+    Body: { "session_id": "...", "slide_index": 0, "quality": 0-5 }
+      quality: 5=perfect, 4=correct hesitation, 3=correct difficult,
+               2=incorrect easy, 1=incorrect, 0=blackout
+    Returns: { "sm2": { "interval": days, "repetitions": n, "ef": float, "due": epoch } }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+    session_id = str(data.get("session_id", "")).strip()
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slide_index = int(data.get("slide_index", 0))
+    quality = max(0, min(5, int(data.get("quality", 3))))
+    key = str(slide_index)
+
+    # Load existing state or initialise
+    sm = session.setdefault("sm2_state", {}).get(key, {
+        "interval": 1, "repetitions": 0, "ef": 2.5, "due": time.time()
+    })
+
+    # SM-2 algorithm
+    ef = sm["ef"]
+    reps = sm["repetitions"]
+    interval = sm["interval"]
+
+    if quality >= 3:
+        if reps == 0:
+            interval = 1
+        elif reps == 1:
+            interval = 6
+        else:
+            interval = round(interval * ef)
+        reps += 1
+    else:
+        reps = 0
+        interval = 1
+
+    ef = max(1.3, ef + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+
+    sm_new = {
+        "interval": interval,
+        "repetitions": reps,
+        "ef": round(ef, 4),
+        "due": time.time() + interval * 86400,
+    }
+    session["sm2_state"][key] = sm_new
+    return jsonify({"sm2": sm_new})
+
+
+@app.route("/sm2_state", methods=["GET"])
+@limiter.limit("60 per minute")
+def sm2_state_route():
+    """
+    Return full SM-2 state for a session.
+    Query: ?session_id=...
+    Returns: { "sm2_state": { "0": {...}, "1": {...} } }
+    """
+    session_id = request.args.get("session_id", "")
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify({"sm2_state": session.get("sm2_state", {})})
+
+
+# ---------------------------------------------------------------------------
+# Slide understood — binary comprehension signal
+# ---------------------------------------------------------------------------
+@app.route("/understood", methods=["POST"])
+@limiter.limit("60 per minute")
+def understood():
+    """
+    Record whether the learner understood a slide.
+    Body: { "session_id": "...", "slide_index": 0, "understood": true|false }
+    Returns: { "ok": true, "xp_delta": n, "message": "..." }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+    session_id = str(data.get("session_id", "")).strip()
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
+    session = sessions.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+
+    slide_index = int(data.get("slide_index", 0))
+    got_it = bool(data.get("understood", True))
+
+    # Update or insert performance record
+    existing = next(
+        (p for p in session["performance"] if p["slide_index"] == slide_index), None
+    )
+    if existing:
+        existing["understood"] = got_it
+    else:
+        session["performance"].append({
+            "slide_index": slide_index,
+            "understood": got_it,
+            "quiz_score": 1.0 if got_it else 0.0,
+            "time_spent": 0,
+            "timestamp": time.time(),
+        })
+
+    xp_delta = 0
+    if got_it:
+        session["streak_slides"] = session.get("streak_slides", 0) + 1
+        xp_delta = XP_PER_SLIDE_UNDERSTOOD
+        if session["streak_slides"] % 5 == 0:
+            xp_delta += XP_STREAK_BONUS
+    else:
+        session["streak_slides"] = 0
+
+    session["xp"] = session.get("xp", 0) + xp_delta
+
+    msg = (
+        "Great! Keep going 🚀" if got_it and session["streak_slides"] < 5
+        else f"🔥 {session['streak_slides']} slide streak!" if got_it
+        else "No worries — click Reteach to get a simpler explanation."
+    )
+    return jsonify({"ok": True, "xp_delta": xp_delta, "message": msg,
+                    "streak": session.get("streak_slides", 0)})
 
 
 # ---------------------------------------------------------------------------
