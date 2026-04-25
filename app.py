@@ -4,7 +4,13 @@ import re
 import time
 import uuid
 import base64
+import threading
 from io import BytesIO
+
+# Compiled UUID validator — used by every session-bearing route
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+)
 
 import requests
 from flask import Flask, jsonify, render_template, request, send_file
@@ -20,6 +26,24 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "change-me-in-production")
 
 CORS(app, origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","))
+
+# ---------------------------------------------------------------------------
+# Security headers — added to every response
+# ---------------------------------------------------------------------------
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' cdnjs.cloudflare.com cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' fonts.googleapis.com; font-src fonts.gstatic.com; "
+        "img-src 'self' data:; connect-src 'self'"
+    )
+    return response
+
+
 
 # ── Law Assignment Generator (inlined) ───────────────────────────────────────
 # All blueprint code inlined below after limiter setup — see _ASSIGNMENT section
@@ -47,6 +71,7 @@ MODEL_NAME = "llama-3.3-70b-versatile"       # primary model — best quality
 FALLBACK_MODEL = "llama-3.1-8b-instant"      # fallback if primary fails / rate-limited
 MAX_TOPIC_LENGTH = 200
 LAST_GROQ_CALL_AT = 0.0
+_groq_throttle_lock = threading.Lock()   # Fix: guard LAST_GROQ_CALL_AT across threads
 
 # ---------------------------------------------------------------------------
 # XP / Gamification constants
@@ -174,12 +199,16 @@ def _call_groq(
     messages.append({"role": "user", "content": prompt})
 
     try:
-        # Throttle outbound LLM calls to reduce 429 bursts across endpoints.
-        now = time.time()
-        elapsed = now - LAST_GROQ_CALL_AT
-        min_gap = 0.9
-        if elapsed < min_gap:
-            time.sleep(min_gap - elapsed)
+        # Fix: lock throttle so concurrent threads don't race on LAST_GROQ_CALL_AT.
+        # Sleep OUTSIDE the lock so we don't hold it during the wait.
+        with _groq_throttle_lock:
+            now = time.time()
+            elapsed = now - LAST_GROQ_CALL_AT
+            min_gap = 0.9
+            sleep_for = max(0.0, min_gap - elapsed)
+            LAST_GROQ_CALL_AT = now + sleep_for  # reserve the slot immediately
+        if sleep_for:
+            time.sleep(sleep_for)
 
         response = requests.post(
             GROQ_URL,
@@ -195,7 +224,8 @@ def _call_groq(
             },
             timeout=45,   # increased from 30 — 70B is slower
         )
-        LAST_GROQ_CALL_AT = time.time()
+        with _groq_throttle_lock:
+            LAST_GROQ_CALL_AT = time.time()
 
         # Rate-limit or server error → retry with fallback
         if response.status_code in (429, 503) and not use_fallback:
@@ -1547,7 +1577,6 @@ def _topic_is_math_question(topic: str) -> bool:
     to solve rather than a concept to study (e.g. "solve x^2+5x+6=0" vs "quadratic equations").
     Combines action-verb detection with numeric / operator pattern matching.
     """
-    import re as _re
     lower = topic.lower().strip()
     # Action verbs that signal a problem to solve
     action_verbs = {
@@ -1557,7 +1586,7 @@ def _topic_is_math_question(topic: str) -> bool:
     }
     has_verb = any(lower.startswith(v) or f" {v} " in lower for v in action_verbs)
     # Numeric / operator patterns: digits with operators, equals sign, fractions, etc.
-    has_math_pattern = bool(_re.search(
+    has_math_pattern = bool(re.search(
         r'(\d[\d\s]*[+\-*/^=<>])|'   # number followed by operator
         r'([a-z]\^?\d)|'              # variable like x^2, x2
         r'(=\s*\d)|'                  # = some number
@@ -1878,6 +1907,11 @@ def _award_xp(session: dict, quiz_score: float, understood: bool) -> dict:
     }
 
 
+
+def _valid_session_id(sid: str) -> bool:
+    """Return True only for valid UUID4 session IDs."""
+    return bool(_UUID_RE.match(str(sid)))
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -2043,7 +2077,7 @@ def upload_file():
             "topic":   topic[:MAX_TOPIC_LENGTH],
             "preview": extracted[:500],
             "type":    "pdf",
-            "full_text": extracted,   # frontend can pass this back as context if needed
+            # full_text intentionally omitted — keep PDF content server-side only
         })
 
     # ── Image branch ─────────────────────────────────────────────────────────
@@ -2317,6 +2351,9 @@ def quiz():
     session_id = data.get("session_id", "")
     slide_index = data.get("slide_index", 0)
 
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
+
     session = sessions.get(session_id)
     if not session:
         return jsonify({"error": "Session not found"}), 404
@@ -2361,6 +2398,8 @@ def feedback():
         return jsonify({"error": "Invalid JSON"}), 400
 
     session_id = data.get("session_id", "")
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
     session = sessions.get(session_id)
     if not session:
         return jsonify({"error": "Session not found"}), 404
@@ -2411,6 +2450,9 @@ def reteach():
 
     session_id = data.get("session_id", "")
     slide_index = data.get("slide_index", 0)
+
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
 
     session = sessions.get(session_id)
     if not session:
@@ -2525,6 +2567,8 @@ def chat():
     slide_index = data.get("slide_index", 0)
     question = str(data.get("question", "")).strip()
 
+    if not _valid_session_id(session_id):
+        return jsonify({"error": "Invalid session ID"}), 400
     if not question:
         return jsonify({"error": "No question provided"}), 400
     if len(question) > 500:
@@ -3834,7 +3878,6 @@ def _assign_build_pdf(record: dict) -> bytes:
         )
         from reportlab.lib.styles import ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
-        import re as _re
     except ImportError:
         raise RuntimeError("reportlab not installed. Run: pip install reportlab")
 
@@ -3990,7 +4033,7 @@ def _assign_build_pdf(record: dict) -> bytes:
             if not line:
                 story.append(Spacer(1, 4))
                 continue
-            is_sub = bool(_re.match(r'^(\d+\.\d+|[IVX]+\.)\s', line))
+            is_sub = bool(re.match(r'^(\d+\.\d+|[IVX]+\.)\s', line))
             safe   = line.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
             if is_sub:
                 story.append(h2(safe))
