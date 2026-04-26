@@ -842,7 +842,7 @@ def is_math_topic(topic: str) -> bool:
 # Slide generation — 1 slide per API call (Fix #1 + #2)
 # ---------------------------------------------------------------------------
 
-TOTAL_SLIDES = 12   # target number of slides per session
+TOTAL_SLIDES = 12   # target number of slides per session (non-math)
 
 # Fix #2 — explicit role for every slide position in the 12-slide deck.
 # Each role tells the model exactly what job this slide must do, so every
@@ -886,6 +886,98 @@ _DECK_ROLES: list[tuple[str, str]] = [
      "End with practical next steps or resources for deeper study."),
 ]
 
+# ---------------------------------------------------------------------------
+# Math-specific deck roles — structured around how mathematics is actually learned.
+# Headings are math-appropriate; slide count is determined by topic complexity,
+# not a fixed number. The model is asked to decide the right count.
+# ---------------------------------------------------------------------------
+_MATH_DECK_ROLES: list[tuple[str, str]] = [
+    ("What Is It? — Intuition First",
+     "Start with the big picture: what is this mathematical concept and WHY does it exist? "
+     "Explain the intuition in plain English before any symbols. Give a real-world motivation "
+     "(e.g. 'We need derivatives to find the instantaneous speed of a moving car'). "
+     "State what problem this concept solves and why a student should care."),
+    ("Notation & Definitions",
+     "Introduce all formal notation and precise definitions used in this topic. "
+     "For every symbol, say: what it is, what it means, and give a concrete example of its value. "
+     "Explain WHY the notation is written the way it is — don't just list symbols."),
+    ("Core Theorem or Formula — Stated & Explained",
+     "State the central theorem, rule, or formula of this topic. "
+     "Explain in plain language what each part of the formula means and why it has that form. "
+     "Do NOT just write the formula — explain the logic behind it step by step."),
+    ("Derivation or Proof — Where Does It Come From?",
+     "Show HOW the main formula or theorem is derived. Walk through the logical steps. "
+     "Explain the reasoning at each step — not just the algebra, but WHY each manipulation is valid. "
+     "Use 'because', 'this works because', 'notice that' type language to build understanding."),
+    ("Step-by-Step Method — How to Use It",
+     "Give a clear, numbered procedure for applying this concept to solve problems. "
+     "State each step precisely. Explain WHAT you do at each step and WHY. "
+     "Warn about common mistakes at steps where learners go wrong."),
+    ("Worked Example 1 — Basic",
+     "Solve a straightforward, foundational example of this topic from scratch. "
+     "Show every single step. After each mathematical operation, write a sentence explaining "
+     "what just happened and why. End with a check or verification of the answer."),
+    ("Worked Example 2 — Intermediate",
+     "Solve a moderately complex example that requires combining multiple steps or rules. "
+     "This should build on Example 1. Explain the strategy before starting ('We'll use X because...'). "
+     "Show all working and narrate each step as you go."),
+    ("Worked Example 3 — Challenging",
+     "Solve a harder, exam-level example — one that requires insight, a non-obvious trick, "
+     "or connecting multiple concepts. Explain the key insight or trick clearly. "
+     "Walk through every step with reasoning. This is the 'aha moment' slide."),
+    ("Special Cases, Edge Cases & Common Mistakes",
+     "What breaks, changes, or requires special treatment in edge cases? "
+     "List the most common mistakes students make and explain WHY they happen and how to avoid them. "
+     "Cover 'what if' scenarios (what if the denominator is zero, what if n is negative, etc.)."),
+    ("Connections to Other Concepts",
+     "Show how this topic connects to other areas of mathematics. "
+     "Explain how this concept is used as a building block for more advanced topics. "
+     "Make the web of mathematics visible: 'This is needed for...', 'This generalises...'."),
+    ("Real-World Applications",
+     "Give specific, concrete real-world examples where this mathematical concept is applied. "
+     "Explain HOW the math is used — not just 'used in engineering' but the actual calculation. "
+     "Include at least one applied problem with numbers."),
+    ("Summary & What to Practise",
+     "Summarise the entire topic: the concept, the key formula, the method, and the most important insight. "
+     "List 3–5 practice problems (with difficulty labels: easy / medium / hard) that a learner should try. "
+     "Explain what each practice problem tests and where to find solutions."),
+]
+
+
+def _get_math_roles_for_topic(topic: str) -> list[tuple[str, str]]:
+    """
+    Ask the model how many slides this math topic needs (8–12 range),
+    then return the appropriate subset of _MATH_DECK_ROLES.
+    Simple topics get fewer slides (8–9); complex ones get up to 12.
+    Falls back to full 12 if model call fails.
+    """
+    prompt = (
+        f"You are a mathematics curriculum designer.\n"
+        f"Topic: {topic}\n\n"
+        f"How many slides (between 8 and 12) does a student need to fully understand this topic? "
+        f"Consider: breadth of the topic, number of distinct sub-concepts, proof complexity.\n\n"
+        f"Reply with ONLY a single integer between 8 and 12. No other text."
+    )
+    raw = _call_groq(prompt, max_tokens=10)
+    count = 12  # default
+    if raw:
+        m = re.search(r'\b(8|9|10|11|12)\b', raw.strip())
+        if m:
+            count = int(m.group(1))
+    # Always include first and last role; sample middle roles proportionally
+    if count >= 12:
+        return _MATH_DECK_ROLES
+    # Keep intro, notation, core theorem, derivation, method, summary always
+    # Fill middle slots from worked examples and edge cases
+    essential_start = _MATH_DECK_ROLES[:5]   # slots 0–4
+    essential_end   = _MATH_DECK_ROLES[11:]  # slot 11 (summary)
+    middle          = _MATH_DECK_ROLES[5:11] # worked examples + connections + apps + mistakes
+    slots_for_middle = count - len(essential_start) - len(essential_end)
+    # Distribute evenly
+    step = len(middle) / max(slots_for_middle, 1)
+    selected_middle = [middle[int(i * step)] for i in range(slots_for_middle)]
+    return essential_start + selected_middle + essential_end
+
 
 def _build_single_slide_prompt(
     topic: str,
@@ -905,7 +997,7 @@ def _build_single_slide_prompt(
     Returns (prompt_str, max_tokens).
     """
     position_ctx = (
-        f"You are building slide {slide_number} of {TOTAL_SLIDES} "
+        f"You are building slide {slide_number} "
         f"in a deck about: {topic}\n"
         f"This slide's role: {role_title}\n"
         f"What this slide must cover: {role_instruction}\n"
@@ -916,36 +1008,43 @@ def _build_single_slide_prompt(
 
     if math_topic:
         prompt = (
-            "You are an expert mathematics professor creating one rigorous, exam-quality slide.\n\n"
+            "You are an expert mathematics professor creating one rigorous, deeply explanatory slide.\n\n"
             f"{ctx_block}"
             f"{position_ctx}"
             f"{difficulty_hint}{depth_note}\n\n"
             "Return ONLY a valid JSON object (a single slide). No markdown fences. No extra text.\n\n"
+            "CRITICAL: The slide TITLE must directly reflect the role described above.\n"
+            "For example: 'What Is It? — Intuition First' → title like 'Understanding Derivatives: The Intuition'\n"
+            "             'Derivation or Proof' → title like 'Deriving the Quadratic Formula'\n"
+            "             'Worked Example 1 — Basic' → title like 'Basic Example: Solving x² − 5x + 6 = 0'\n"
+            "Do NOT use generic titles like 'Introduction', 'Overview', 'Basics', or 'Key Concepts'.\n\n"
             "Required format:\n"
             "{\n"
-            "  \"title\": \"Slide title that reflects the role\",\n"
+            "  \"title\": \"Role-specific slide title — must match the slide's actual role\",\n"
             "  \"points\": [\n"
             "    {\n"
-            "      \"text\": \"One sentence: state the rule or theorem precisely. No filler words.\",\n"
+            "      \"text\": \"EXPLANATION sentence: state the rule/theorem AND explain why it works or what it means. "
+            "At least 2 sentences — first states the math, second explains the intuition or reason.\",\n"
             "      \"source_title\": \"Real credible source (e.g. Stewart Calculus, MIT OCW, Wikipedia)\",\n"
             "      \"source_url\": \"Direct URL or empty string\",\n"
             "      \"inline_latex\": \"\\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}\",\n"
             "      \"inline_label\": \"Formula name (e.g. Quadratic Formula)\",\n"
             "      \"sub_steps\": [\n"
-            "        \"Step 1 — Identify: $$a = ...,\\\\; b = ...,\\\\; c = ...$$\",\n"
-            "        \"Step 2 — Substitute: $$x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$$\",\n"
-            "        \"Step 3 — Simplify: $$x = ...$$\",\n"
-            "        \"Step 4 — Verify: $$...$$\"\n"
+            "        \"Step 1 — Identify: $$a = ...,\\\\; b = ...,\\\\; c = ...$$ — We read these coefficients from the standard form ax² + bx + c = 0.\",\n"
+            "        \"Step 2 — Substitute: $$x = \\\\frac{-b \\\\pm \\\\sqrt{b^2-4ac}}{2a}$$ — Plug in the values directly.\",\n"
+            "        \"Step 3 — Simplify: $$x = ...$$ — Compute the discriminant first, then divide.\",\n"
+            "        \"Step 4 — Verify: $$...$$ — Substitute back to confirm both roots satisfy the original equation.\"\n"
             "      ]\n"
             "    }\n"
             "  ],\n"
             "  \"worked_example\": {\n"
             "    \"problem\": \"State the problem using LaTeX, e.g. \\\"Solve $$x^2 - 5x + 6 = 0$$\\\"\",\n"
             "    \"steps\": [\n"
-            "      \"Step 1 — Setup: $$a=1,\\\\; b=-5,\\\\; c=6$$\",\n"
-            "      \"Step 2 — Substitute: $$x = \\\\frac{5 \\\\pm \\\\sqrt{25-24}}{2}$$\",\n"
-            "      \"Step 3 — Simplify: $$x = \\\\frac{5 \\\\pm 1}{2}$$\",\n"
-            "      \"Step 4 — Solve: $$x = 3 \\\\text{ or } x = 2$$\"\n"
+            "      \"Step 1 — Setup: $$a=1,\\\\; b=-5,\\\\; c=6$$ — We identify these from the standard form.\",\n"
+            "      \"Step 2 — Substitute: $$x = \\\\frac{5 \\\\pm \\\\sqrt{25-24}}{2}$$ — Apply the quadratic formula.\",\n"
+            "      \"Step 3 — Simplify: $$x = \\\\frac{5 \\\\pm 1}{2}$$ — The discriminant evaluates to 1.\",\n"
+            "      \"Step 4 — Solve: $$x = 3 \\\\text{ or } x = 2$$ — Two distinct real roots.\",\n"
+            "      \"Step 5 — Verify: $$3^2-5(3)+6=0\\\\checkmark,\\\\; 2^2-5(2)+6=0\\\\checkmark$$\"\n"
             "    ],\n"
             "    \"answer\": \"$$x = 2$$ or $$x = 3$$\"\n"
             "  }\n"
@@ -954,23 +1053,21 @@ def _build_single_slide_prompt(
             "- Exactly 4 points\n"
             f"{point_length_rule}\n"
             "- Every point MUST be an object with: text, source_title, source_url, inline_latex, inline_label, sub_steps\n"
-            "- text: ONE sentence — state the mathematical rule, theorem, or definition precisely. "
-            "  NO long explanations. May contain inline $...$ LaTeX.\n"
+            "- text: MUST contain BOTH the mathematical statement AND a plain-English explanation of why it works. "
+            "  Format: 'The [theorem/rule] states that [math]. This works because [explanation in plain English].' "
+            "  Minimum 2 sentences. May contain inline $...$ LaTeX.\n"
             "- inline_latex: the key formula as a display LaTeX expression (double backslashes: \\\\frac, \\\\sqrt, \\\\int, \\\\pm)\n"
             "- inline_label: short name for the formula (e.g. 'Chain Rule', 'Euler's Formula')\n"
-            "- sub_steps: exactly 4 steps, EACH formatted as 'Step N — <Action>: $$<LaTeX expression>$$'. "
-            "  ZERO prose sentences — every step is a concrete mathematical operation in LaTeX. "
+            "- sub_steps: exactly 4 steps. Each step MUST include: the LaTeX calculation AND a short explanation after '—'. "
+            "  Format: 'Step N — <Action>: $$<LaTeX>$$ — <one-sentence explanation of this step>.'\n"
             "  Valid actions: Identify, Set up, Substitute, Expand, Factor, Differentiate, Integrate, "
-            "  Simplify, Solve, Apply, Verify, Evaluate, Rearrange.\n"
-            "- worked_example.problem: state clearly with LaTeX math\n"
-            "- worked_example.steps: 4–5 steps each 'Step N — <Action>: $$<LaTeX>$$' — "
-            "  every single intermediate result MUST be in $$...$$\n"
-            "- worked_example.answer: final result in LaTeX e.g. '$$x = 2$$ or $$x = 3$$'\n"
-            "- Do NOT use bullet points, prose explanations, or long sentences in sub_steps\n"
+            "  Simplify, Solve, Apply, Verify, Evaluate, Rearrange, Notice.\n"
+            "- worked_example.steps: 4–5 steps, each 'Step N — <Action>: $$<LaTeX>$$ — <explanation>.'\n"
+            "- worked_example.answer: final result in LaTeX\n"
             "- Do NOT repeat formulas or examples from other slides\n"
             "- Output ONLY the JSON object — no array wrapper, no prose\n"
         )
-        max_tok = 1600
+        max_tok = 1800
     else:
         prompt = (
             "You are an expert university professor creating one deeply detailed, lecture-quality slide.\n\n"
@@ -1134,13 +1231,23 @@ def generate_slides(
 
     math_topic = is_math_topic(topic)
 
+    # ── Choose roles based on topic type ────────────────────────────────────
+    if math_topic:
+        # Math: use math-specific roles, dynamic slide count
+        deck_roles = _get_math_roles_for_topic(topic)
+        target_slides = len(deck_roles)
+        print(f"generate_slides: math topic detected — using {target_slides} math-specific slides.")
+    else:
+        deck_roles = _DECK_ROLES
+        target_slides = TOTAL_SLIDES
+
     # ── 1-slide-per-call generation ──────────────────────────────────────────
     # Each API call requests exactly 1 slide using an explicit role from
-    # _DECK_ROLES. This guarantees:
+    # deck_roles. This guarantees:
     #   • JSON output is tiny (~300–500 tokens) — impossible to truncate/corrupt
     #   • Each slide has a distinct, purposeful job — no generic repetition
     all_slides: list = []
-    for slide_idx, (role_title, role_instruction) in enumerate(_DECK_ROLES):
+    for slide_idx, (role_title, role_instruction) in enumerate(deck_roles):
         slide_number = slide_idx + 1
         slide = _generate_single_slide(
             topic=topic,
@@ -1161,11 +1268,11 @@ def generate_slides(
         print(f"generate_slides: {len(all_slides)}/{slide_number} slides so far.")
 
     # ── Rescue: fill any missing slides via fallback model ───────────────────
-    if len(all_slides) < TOTAL_SLIDES:
-        missing = TOTAL_SLIDES - len(all_slides)
+    if len(all_slides) < target_slides:
+        missing = target_slides - len(all_slides)
         print(f"generate_slides: {missing} slides missing — running rescue pass.")
         rescue = generate_slides_rescue(topic, explanation_mode)
-        needed = TOTAL_SLIDES - len(all_slides)
+        needed = target_slides - len(all_slides)
         all_slides.extend(rescue[:needed])
 
     # Fix #3 — do NOT truncate points; audit only (normalize is now a no-op truncation-wise)
